@@ -1,26 +1,150 @@
 @import "tailwindcss";
 
+/*
+  6 configurable theme tokens — Tailwind v4 @theme generates utilities:
+    bg-accent, text-ink, border-line, bg-paper, bg-surface, text-on-accent
+  All --color-* vars are overridden at runtime by applyPalette() or custom pickers.
+*/
+@theme {
+  --color-accent:    #1A1A1A;
+  --color-on-accent: #ffffff;
+  --color-paper:     #ffffff;
+  --color-surface:   #FAFAFA;
+  --color-ink:       #1A1A1A;
+  --color-line:      #E5E5E5;
+}
+
+/*
+  Derived tokens — auto-computed from the 6 base tokens via color-mix().
+  These update automatically when any base token changes.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --color-accent-hover:  color-mix(in srgb, var(--color-accent) 82%, black);
+  --color-surface-hover: color-mix(in srgb, var(--color-surface) 88%, var(--color-ink));
+  --ink-opacity-secondary: 60%;
+  --ink-opacity-tertiary:  40%;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Tailwind utilities for derived tokens */
+@utility bg-accent-hover    { background-color: var(--color-accent-hover); }
+@utility bg-surface-hover   { background-color: var(--color-surface-hover); }
+@utility text-ink-60        { color: color-mix(in srgb, var(--color-ink) var(--ink-opacity-secondary), transparent); }
+@utility text-ink-40        { color: color-mix(in srgb, var(--color-ink) var(--ink-opacity-tertiary),  transparent); }
+@utility placeholder-ink-40 {
+  &::placeholder { color: color-mix(in srgb, var(--color-ink) 40%, transparent); }
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+@utility border-input       { border-color: color-mix(in srgb, var(--color-line) 70%, var(--color-ink)); }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ── Range input ────────────────────────────────────────── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 1px;
+  background: var(--color-line);
+  outline: none;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 9999px;
+  background: var(--color-accent);
+  border: none;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-track {
+  height: 1px;
+  background: var(--color-line);
+}
+
+/* Tiptap editor styles */
+.tiptap {
+  outline: none;
+  min-height: 80px;
+}
+
+.tiptap p {
+  margin: 0 0 0.5em;
+  line-height: 1.6;
+}
+
+.tiptap p:last-child {
+  margin-bottom: 0;
+}
+
+.tiptap ul {
+  list-style: disc;
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.tiptap ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.tiptap li {
+  line-height: 1.6;
+  display: list-item;
+}
+
+.tiptap strong {
+  font-weight: 500;
+}
+
+.tiptap em {
+  font-style: italic;
+}
+
+.tiptap.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #A0A0A0;
+  pointer-events: none;
+  height: 0;
+}
+
+/* Rich-text prose styles in QuotePreview */
+.prose-quote p { margin: 0 0 0.5em; line-height: 1.6; }
+.prose-quote p:last-child { margin-bottom: 0; }
+.prose-quote ul { list-style: disc; padding-left: 1.25em; margin: 0.5em 0; }
+.prose-quote ol { list-style: decimal; padding-left: 1.25em; margin: 0.5em 0; }
+.prose-quote li { line-height: 1.6; margin-bottom: 0.25em; }
+.prose-quote strong { font-weight: 500; }
+.prose-quote em { font-style: italic; }
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+
+  @page {
+    margin: 25mm 20mm;
+    size: A4;
+  }
 }
