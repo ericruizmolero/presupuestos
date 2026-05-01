@@ -9,7 +9,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { QuoteEditor } from '@/components/quote/QuoteEditor'
 import { getQuoteById, updateQuote } from '@/lib/firestore/quotes'
 import type { Quote, QuoteFormData } from '@/types/quote'
-import { ExternalLink, Check } from 'lucide-react'
+import { ExternalLink, Printer, Check } from 'lucide-react'
 
 export default function EditQuotePage() {
   return (
@@ -24,7 +24,7 @@ export default function EditQuotePage() {
 function EditQuoteContent() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const { user, company } = useAuth()
+  const { company } = useAuth()
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -33,7 +33,6 @@ function EditQuoteContent() {
   useEffect(() => {
     getQuoteById(id).then((q) => {
       if (!q) { router.replace('/dashboard'); return }
-      // Sync logo from company profile if quote doesn't have one
       if (!q.emitter.logoUrl && company?.logoUrl) {
         q.emitter.logoUrl = company.logoUrl
       }
@@ -66,12 +65,12 @@ function EditQuoteContent() {
 
   return (
     <div>
-      <div className="border-b border-line px-8 py-4 flex items-center justify-between">
+      <div className="border-b border-line px-8 h-16 flex items-center justify-between">
         <div>
           <h1 className="text-base font-medium text-ink">
-            {quote.quoteNumber || 'Presupuesto sin número'}
+            {quote.client?.company || quote.client?.name || 'Sin cliente'}
           </h1>
-          <p className="text-xs text-ink-40 mt-0.5">{quote.client?.company || quote.client?.name || 'Sin cliente'}</p>
+          <p className="text-xs text-ink-40 mt-0.5">{quote.quoteNumber || 'Sin número'}</p>
         </div>
         <div className="flex items-center gap-3">
           {saved && (
@@ -87,9 +86,17 @@ function EditQuoteContent() {
             <ExternalLink size={14} strokeWidth={1.5} />
             Ver presupuesto
           </Link>
+          <Link
+            href={`/dashboard/${id}/export`}
+            className="flex items-center gap-2 text-sm px-4 py-2 rounded-md transition-all hover:-translate-y-px bg-accent text-on-accent hover:bg-accent-hover"
+          >
+            <Printer size={14} strokeWidth={1.5} />
+            Exportar PDF
+          </Link>
         </div>
       </div>
-      <QuoteEditor initialData={formData as QuoteFormData} onSave={handleSave} saving={saving} />
+
+      <QuoteEditor initialData={formData as QuoteFormData} onSave={handleSave} />
     </div>
   )
 }

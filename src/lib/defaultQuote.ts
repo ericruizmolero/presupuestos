@@ -38,7 +38,15 @@ export function createDefaultQuote(company?: Partial<Company> | null): QuoteForm
       phases: [],
     },
 
-    timeline: [],
+    timeline: [
+      {
+        phase: 'Kick-off',
+        group: '',
+        icon: 'video',
+        startDate: today,
+        endDate: today,
+      },
+    ],
 
     budgetTable: {
       items: [],
@@ -65,6 +73,8 @@ export function createDefaultQuote(company?: Partial<Company> | null): QuoteForm
     },
 
     billingConditions: '',
+
+    pageBreaksBefore: [],
 
     conformity: {
       emitterData: '',

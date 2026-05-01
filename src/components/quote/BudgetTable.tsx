@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Trash2, GripVertical } from 'lucide-react'
+import React, { useState } from 'react'
+import { Plus, Trash2 } from 'lucide-react'
 import type { BudgetItem, BudgetTable as BudgetTableType } from '@/types/quote'
 import { nanoid } from 'nanoid'
 
@@ -52,29 +52,37 @@ export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true 
     <div className="border border-line rounded-md overflow-hidden">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-accent">
-            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-40 w-8" />
+          <tr className="border-b border-line">
             <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60">Concepto</th>
-            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-28">Tiempo</th>
-            <th className="text-right px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-32">Precio</th>
+            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-36">Tiempo</th>
+            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-32">Precio</th>
             <th className="w-8" />
           </tr>
         </thead>
         <tbody>
           {value.items.map((item, idx) => (
             <tr key={item.id} className={`border-b border-line ${idx % 2 === 0 ? 'bg-paper' : 'bg-surface'}`}>
-              <td className="px-2 py-2 text-center text-ink-40">
-                <GripVertical size={14} />
-              </td>
-              <td className="px-2 py-1">
+              <td className="px-2 py-1 align-top">
                 <input
                   className={INPUT + ' text-ink'}
                   placeholder="Concepto o descripción"
                   value={item.concept}
                   onChange={(e) => updateItem(item.id, 'concept', e.target.value)}
                 />
+                <textarea
+                  className="w-full px-3 pb-1 text-xs border-0 focus:outline-none bg-transparent text-ink-60 placeholder-ink-40 resize-none leading-relaxed"
+                  placeholder="Añadir descripción..."
+                  rows={1}
+                  value={item.notes || ''}
+                  ref={(el) => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' } }}
+                  onChange={(e) => {
+                    e.target.style.height = 'auto'
+                    e.target.style.height = e.target.scrollHeight + 'px'
+                    updateItem(item.id, 'notes', e.target.value)
+                  }}
+                />
               </td>
-              <td className="px-2 py-1">
+              <td className="px-2 py-1 align-top">
                 <input
                   className={INPUT + ' text-ink-60'}
                   placeholder="ej: 40h"
@@ -82,26 +90,28 @@ export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true 
                   onChange={(e) => updateItem(item.id, 'time', e.target.value)}
                 />
               </td>
-              <td className="px-2 py-1 text-right">
+              <td className="px-4 py-1 align-top">
                 <input
-                  className={INPUT + ' text-right text-ink'}
+                  className="w-full py-2 text-sm border-0 focus:outline-none bg-transparent text-left text-ink [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   type="number"
                   min={0}
                   value={item.price || ''}
                   onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
                 />
               </td>
-              <td className="px-2 py-2 text-center">
-                <button onClick={() => removeItem(item.id)} className="text-ink-40 hover:text-[#DC2626] transition-colors">
-                  <Trash2 size={13} />
-                </button>
+              <td className="px-2 py-2 text-center align-top">
+                <div className="pt-1.5">
+                  <button onClick={() => removeItem(item.id)} className="text-ink-40 hover:text-[#DC2626] transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div className="px-4 py-3 border-t border-line flex items-center justify-between">
+      <div className="px-4 py-2">
         <button
           type="button"
           onClick={addItem}
@@ -109,30 +119,16 @@ export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true 
         >
           <Plus size={14} strokeWidth={2} /> Añadir línea
         </button>
+      </div>
 
-        <div className="space-y-1 text-sm text-right min-w-[200px]">
-          <div className="flex justify-between gap-8 text-ink-60">
-            <span>Subtotal</span>
-            <span>{fmt(value.subtotal)}</span>
-          </div>
-          {showTax && (
-            <div className="flex justify-between gap-8 items-center text-ink-60">
-              <span>IVA (%)</span>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={value.taxRate}
-                onChange={(e) => updateTaxRate(parseFloat(e.target.value) || 0)}
-                className="w-16 text-right px-2 py-0.5 border border-line rounded text-sm focus:outline-none focus:border-accent"
-              />
-            </div>
-          )}
-          <div className="flex justify-between gap-8 font-medium text-ink pt-1 border-t border-line">
-            <span>Total</span>
-            <span>{fmt(value.total)}</span>
-          </div>
-        </div>
+      <div className="px-4 py-3 border-t border-line flex items-center justify-between">
+        <input
+          className="px-3 py-2 text-sm border-0 focus:outline-none bg-transparent text-ink min-w-0"
+          value={value.totalLabel ?? 'Total (IVA no incluido)'}
+          placeholder="Total (IVA no incluido)"
+          onChange={(e) => onChange({ ...value, totalLabel: e.target.value })}
+        />
+        <span className="text-sm font-medium text-ink shrink-0">{fmt(value.subtotal)}</span>
       </div>
     </div>
   )

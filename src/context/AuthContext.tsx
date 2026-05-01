@@ -28,21 +28,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   async function loadCompany(uid: string) {
-    const companyId = await getUserCompanyId(uid)
-    if (!companyId) return
-    const c = await getCompany(companyId)
-    setCompany(c)
-    if (c) {
-      if (c.themeColors) applyThemeColors(c.themeColors)
-      else if (c.paletteId) applyPalette(c.paletteId)
-      if (c.inkOpacitySecondary != null || c.inkOpacityTertiary != null) {
-        applyInkOpacities(c.inkOpacitySecondary ?? 60, c.inkOpacityTertiary ?? 40)
+    try {
+      const companyId = await getUserCompanyId(uid)
+      if (!companyId) return
+      const c = await getCompany(companyId)
+      setCompany(c)
+      if (c) {
+        if (c.themeColors) applyThemeColors(c.themeColors)
+        else if (c.paletteId) applyPalette(c.paletteId)
+        if (c.inkOpacitySecondary != null || c.inkOpacityTertiary != null) {
+          applyInkOpacities(c.inkOpacitySecondary ?? 60, c.inkOpacityTertiary ?? 40)
+        }
+        if (c.defaultFontName) {
+          const uploadedFont = c.fonts.find((f) => f.name === c.defaultFontName)
+          if (uploadedFont) injectFont(uploadedFont)
+          else applySystemFont(c.defaultFontName)
+        }
       }
-      if (c.defaultFontName) {
-        const uploadedFont = c.fonts.find((f) => f.name === c.defaultFontName)
-        if (uploadedFont) injectFont(uploadedFont)
-        else applySystemFont(c.defaultFontName)
-      }
+    } catch (err) {
+      // Firestore may be temporarily unreachable (offline, slow network).
+      // Don't crash — the app continues with company = null.
+      console.warn('[AuthContext] loadCompany failed:', err)
     }
   }
 
@@ -58,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setCompany(null)
       }
-      setLoading(false)
+      setLoading(false)  // always unblock, even if loadCompany failed
     })
   }, [])
 

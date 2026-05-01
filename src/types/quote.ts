@@ -93,6 +93,7 @@ export interface BudgetTable {
   subtotal: number
   taxRate: number
   total: number
+  totalLabel?: string
 }
 
 export interface BudgetTableAdditional {
@@ -143,6 +144,8 @@ export interface Quote {
   acceptanceConditions: AcceptanceConditions
   billingConditions: string
   conformity: Conformity
+  pageBreaksBefore?: string[]
+  sectionOrder?: string[]
 }
 
 export type QuoteFormData = Omit<Quote, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'companyId'>

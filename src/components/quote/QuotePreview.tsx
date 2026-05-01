@@ -7,6 +7,20 @@ import { FeatherIcon } from '@/components/ui/IconPicker'
 
 interface Props {
   quote: Quote
+  pageBreaksBefore?: string[]
+  onTogglePageBreak?: (sectionId: string) => void
+}
+
+function PageBreakControl({ sectionId, active, onToggle }: { sectionId: string; active: boolean; onToggle: (id: string) => void }) {
+  return (
+    <div className="no-print flex items-center gap-3 my-1 group cursor-pointer" onClick={() => onToggle(sectionId)}>
+      <div className={`flex-1 border-t border-dashed transition-colors ${active ? 'border-accent' : 'border-line group-hover:border-input'}`} />
+      <span className={`text-[10px] font-medium tracking-widest uppercase shrink-0 transition-colors ${active ? 'text-accent' : 'text-ink-40 group-hover:text-ink-60'}`}>
+        {active ? '↵ Nueva página' : '+ Salto de página'}
+      </span>
+      <div className={`flex-1 border-t border-dashed transition-colors ${active ? 'border-accent' : 'border-line group-hover:border-input'}`} />
+    </div>
+  )
 }
 
 function RichContent({ html }: { html: string }) {
@@ -86,7 +100,10 @@ function TableOfContents({ items, activeId }: { items: TocItem[]; activeId: stri
   )
 }
 
-export function QuotePreview({ quote }: Props) {
+export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }: Props) {
+  const breaks = new Set(pageBreaksBefore)
+  const pageBreakStyle = (id: string): React.CSSProperties =>
+    breaks.has(id) ? { breakBefore: 'page' } : {}
   const [activeId, setActiveId] = useState('header')
   const tocItems = buildToc(quote)
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -126,72 +143,56 @@ export function QuotePreview({ quote }: Props) {
 
       <article className="flex-1 max-w-2xl mx-auto px-8 py-20 print:py-0 print:max-w-none print:mx-0">
 
-        {/* ── 1. Header ── */}
-        <section id="header" className="mb-20">
-          <div className="flex items-start justify-between mb-16">
-            {quote.emitter.logoUrl
-              ? <img src={quote.emitter.logoUrl} alt={quote.emitter.companyName} style={{ maxWidth: '12rem', maxHeight: '3rem' }} className="object-contain" />
-              : <span className="text-sm font-medium text-ink">{quote.emitter.companyName}</span>
-            }
-            <div />
-          </div>
-
-          <div className="space-y-2">
+        {/* ── 1. Header — cover page ── */}
+        <section id="header" className="mb-20" style={{ minHeight: '72vh', paddingTop: '28vh' }}>
+          <div className="space-y-3">
+            <p className="text-sm text-ink">Presupuesto</p>
             {clientName && (
-              <p className="text-3xl font-medium tracking-tight text-ink leading-tight">{clientName}</p>
+              <p className="text-[1.625rem] font-medium tracking-tight text-ink leading-snug">{clientName}</p>
             )}
             {quote.date && (
-              <p className="text-sm text-ink-40">{formatDate(quote.date)}</p>
-            )}
-            {quote.validUntil && (
-              <p className="text-xs text-ink-40">{`Válido hasta ${formatDate(quote.validUntil)}`}</p>
+              <p className="text-sm text-ink">{formatDate(quote.date)}</p>
             )}
           </div>
         </section>
 
+        {onTogglePageBreak && <PageBreakControl sectionId="emitter" active={breaks.has('emitter')} onToggle={onTogglePageBreak} />}
         <Divider />
 
         {/* ── 2. Empresa emisora ── */}
         {(quote.emitter.companyName || quote.emitter.description) && (
           <>
-            <section id="emitter" className="mb-20">
+            <section id="emitter" className="mb-20" style={pageBreakStyle('emitter')}>
               <SectionLabel>{quote.emitter.companyName}</SectionLabel>
               {quote.emitter.description && <RichContent html={quote.emitter.description} />}
             </section>
+            {onTogglePageBreak && <PageBreakControl sectionId="project" active={breaks.has('project')} onToggle={onTogglePageBreak} />}
             <Divider />
           </>
         )}
 
-        {/* ── 3. Proyecto (sección unificada) ── */}
-        <section id="project" className="mb-20">
+        {/* ── 3. Proyecto ── */}
+        <section id="project" className="mb-20" style={pageBreakStyle('project')}>
           <SectionLabel>Proyecto</SectionLabel>
-
           <div className="space-y-12">
-            {/* Descripción cliente */}
             {quote.client.description && (
               <div>
                 <SubLabel>Sobre {clientName || 'el cliente'}</SubLabel>
                 <RichContent html={quote.client.description} />
               </div>
             )}
-
-            {/* Objetivo */}
             {quote.project.mainObjective && (
               <div>
                 <SubLabel>Objetivo principal</SubLabel>
                 <RichContent html={quote.project.mainObjective} />
               </div>
             )}
-
-            {/* Modelo de colaboración */}
             {quote.project.collaborationModel && (
               <div>
                 <SubLabel>Modelo de colaboración</SubLabel>
                 <RichContent html={quote.project.collaborationModel} />
               </div>
             )}
-
-            {/* Alcance */}
             {quote.project.scope && (
               <div>
                 <SubLabel>Alcance</SubLabel>
@@ -204,8 +205,9 @@ export function QuotePreview({ quote }: Props) {
         {/* ── 4. Fases ── */}
         {quote.project.phases.length > 0 && (
           <>
+            {onTogglePageBreak && <PageBreakControl sectionId="phases" active={breaks.has('phases')} onToggle={onTogglePageBreak} />}
             <Divider />
-            <section id="phases" className="mb-20">
+            <section id="phases" className="mb-20" style={pageBreakStyle('phases')}>
               <SectionLabel>Fases del proyecto</SectionLabel>
               <div className="space-y-10">
                 {quote.project.phases.map((phase, i) => (
@@ -237,19 +239,21 @@ export function QuotePreview({ quote }: Props) {
         {/* ── 5. Timeline Gantt ── */}
         {phasesHaveDates(quote) && (
           <>
+            {onTogglePageBreak && <PageBreakControl sectionId="timeline" active={breaks.has('timeline')} onToggle={onTogglePageBreak} />}
             <Divider />
-            <section id="timeline" className="mb-20">
+            <section id="timeline" className="mb-20" style={pageBreakStyle('timeline')}>
               <SectionLabel>Timeline</SectionLabel>
               <GanttTimeline entries={quote.timeline.filter((e) => e.startDate && e.endDate)} />
             </section>
           </>
         )}
 
+        {onTogglePageBreak && <PageBreakControl sectionId="budget" active={breaks.has('budget')} onToggle={onTogglePageBreak} />}
         <Divider />
 
         {/* ── 6. Presupuesto ── */}
         {quote.budgetTable.items.length > 0 && (
-          <section id="budget" className="mb-20">
+          <section id="budget" className="mb-20" style={pageBreakStyle('budget')}>
             <SectionLabel>Presupuesto</SectionLabel>
             <table className="w-full text-sm">
               <thead>
@@ -295,8 +299,9 @@ export function QuotePreview({ quote }: Props) {
         {/* ── 7. Tabla adicional ── */}
         {quote.budgetTableAdditional.enabled && quote.budgetTableAdditional.items.length > 0 && (
           <>
+            {onTogglePageBreak && <PageBreakControl sectionId="budget-additional" active={breaks.has('budget-additional')} onToggle={onTogglePageBreak} />}
             <Divider />
-            <section id="budget-additional" className="mb-20">
+            <section id="budget-additional" className="mb-20" style={pageBreakStyle('budget-additional')}>
               <SectionLabel>{quote.budgetTableAdditional.label || 'Servicios adicionales'}</SectionLabel>
               <table className="w-full text-sm">
                 <thead>
@@ -318,11 +323,12 @@ export function QuotePreview({ quote }: Props) {
           </>
         )}
 
+        {onTogglePageBreak && <PageBreakControl sectionId="conditions" active={breaks.has('conditions')} onToggle={onTogglePageBreak} />}
         <Divider />
 
         {/* ── 8. Condiciones de aceptación ── */}
         {Object.values(quote.acceptanceConditions).some(Boolean) && (
-          <section id="conditions" className="mb-20">
+          <section id="conditions" className="mb-20" style={pageBreakStyle('conditions')}>
             <SectionLabel>Aceptación y facturación</SectionLabel>
             <div className="space-y-10">
               {([
@@ -347,18 +353,20 @@ export function QuotePreview({ quote }: Props) {
         {/* ── 9. Facturación ── */}
         {quote.billingConditions && (
           <>
+            {onTogglePageBreak && <PageBreakControl sectionId="billing" active={breaks.has('billing')} onToggle={onTogglePageBreak} />}
             <Divider />
-            <section id="billing" className="mb-20">
+            <section id="billing" className="mb-20" style={pageBreakStyle('billing')}>
               <SectionLabel>Facturación</SectionLabel>
               <RichContent html={quote.billingConditions} />
             </section>
           </>
         )}
 
+        {onTogglePageBreak && <PageBreakControl sectionId="conformity" active={breaks.has('conformity')} onToggle={onTogglePageBreak} />}
         <Divider />
 
         {/* ── 10. Conformidad ── */}
-        <section id="conformity" className="mb-20">
+        <section id="conformity" className="mb-20" style={pageBreakStyle('conformity')}>
           <SectionLabel>Conformidad</SectionLabel>
           <p className="text-sm text-ink-60 mb-16 leading-relaxed">
             La firma del presente documento se interpreta como la conformidad y la aceptación de todas las condiciones expuestas en él y el cumplimiento de las mismas.

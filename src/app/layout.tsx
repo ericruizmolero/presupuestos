@@ -10,14 +10,14 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Presupuestos',
+  title: '¿Has hecho el presu?',
   description: 'Crea y gestiona presupuestos profesionales',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={inter.variable}>
-      <body>
+    <html lang="es" className={inter.variable} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

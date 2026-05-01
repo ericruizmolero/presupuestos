@@ -2,9 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { signOut } from '@/lib/auth'
 import { FileText, Settings, LogOut, Plus, Palette } from 'lucide-react'
+import { getQuotes } from '@/lib/firestore/quotes'
+import { getUserCompanyId } from '@/lib/firestore/companies'
 
 const navLinks = [
   { href: '/dashboard', label: 'Presupuestos', icon: FileText },
@@ -15,7 +18,23 @@ const navLinks = [
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, company } = useAuth()
+  const [quoteCount, setQuoteCount] = useState<number | null>(null)
+
+  function refreshCount() {
+    if (!user) return
+    getUserCompanyId(user.uid).then((cid) => {
+      if (!cid) return
+      getQuotes(cid).then((qs) => setQuoteCount(qs.length))
+    })
+  }
+
+  useEffect(() => { refreshCount() }, [user, pathname])
+
+  useEffect(() => {
+    window.addEventListener('quotes-changed', refreshCount)
+    return () => window.removeEventListener('quotes-changed', refreshCount)
+  }, [user])
 
   async function handleSignOut() {
     await signOut()
@@ -24,14 +43,24 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex">
-      <aside className="w-56 shrink-0 border-r border-line bg-surface flex flex-col">
-        <div className="px-6 py-8 border-b border-line">
-          <span className="text-sm font-medium tracking-widest uppercase text-ink">
-            Presupuestos
-          </span>
+      <aside className="w-56 shrink-0 fixed top-0 left-0 h-screen border-r border-line bg-surface flex flex-col z-30">
+        <div className="px-6 h-16 flex items-center gap-[6px] border-b border-line shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="18" viewBox="4 2 16 20" aria-hidden="true">
+            <path d="M5 3 L19 3 L19 20 L5 16 Z"
+              fill="none" stroke="currentColor" strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         </div>
 
         <nav className="flex-1 px-3 py-6 space-y-1">
+          <Link
+            href="/dashboard/nuevo"
+            className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors text-ink-60 hover:bg-surface-hover hover:text-ink"
+          >
+            <Plus size={15} strokeWidth={1.5} />
+            Nuevo presupuesto
+          </Link>
+          <div className="my-4 border-t border-line" />
           {navLinks.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + '/')
             return (
@@ -46,6 +75,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={15} strokeWidth={1.5} />
                 {label}
+                {href === '/dashboard' && quoteCount ? (
+                  <span className="ml-auto text-xs opacity-50">{quoteCount}</span>
+                ) : null}
               </Link>
             )
           })}
@@ -63,18 +95,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-line flex items-center justify-between px-8">
-          <div />
-          <Link
-            href="/dashboard/nuevo"
-            className="flex items-center gap-2 text-sm px-4 py-2 rounded-md transition-all hover:-translate-y-px bg-accent text-on-accent hover:bg-accent-hover"
-          >
-            <Plus size={14} strokeWidth={2} />
-            Nuevo presupuesto
-          </Link>
-        </header>
-
+      <div className="flex-1 flex flex-col min-w-0 ml-56">
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>

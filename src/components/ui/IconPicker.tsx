@@ -4,25 +4,52 @@ import { useState, useRef, useEffect } from 'react'
 import * as Icons from 'react-feather'
 import { Search, X } from 'lucide-react'
 
-// Curated set of icons useful for project phases
+// All available Feather icons
 const PHASE_ICONS = [
-  'Compass', 'Map', 'Layout', 'Layers', 'Grid', 'Sliders',
-  'Pen', 'Edit2', 'Edit3', 'Feather', 'Type', 'AlignLeft',
-  'Code', 'Code2', 'Terminal', 'Cpu', 'Server', 'Database',
-  'Globe', 'Monitor', 'Smartphone', 'Tablet', 'Wifi',
-  'Search', 'Eye', 'EyeOff', 'Zap', 'Star', 'Award',
-  'CheckCircle', 'CheckSquare', 'Check', 'Flag',
-  'Package', 'Box', 'Archive', 'Inbox', 'Send',
-  'Users', 'User', 'UserCheck', 'MessageSquare', 'MessageCircle',
-  'Clock', 'Calendar', 'Watch', 'Activity',
-  'TrendingUp', 'BarChart2', 'PieChart', 'Target',
-  'Settings', 'Tool', 'Wrench', 'Scissors',
-  'Image', 'Video', 'Film', 'Camera', 'Aperture',
-  'Music', 'Headphones', 'Volume2',
-  'Lock', 'Shield', 'Key',
-  'Heart', 'Smile', 'Coffee', 'Book', 'BookOpen',
-  'Truck', 'Navigation', 'Anchor', 'Rocket',
-  'Sun', 'Moon', 'Cloud', 'Wind', 'Leaf', 'Crop',
+  'Activity', 'Airplay', 'AlertCircle', 'AlertOctagon', 'AlertTriangle',
+  'AlignCenter', 'AlignJustify', 'AlignLeft', 'AlignRight', 'Anchor', 'Aperture',
+  'Archive', 'ArrowDown', 'ArrowDownCircle', 'ArrowDownLeft', 'ArrowDownRight',
+  'ArrowLeft', 'ArrowLeftCircle', 'ArrowRight', 'ArrowRightCircle', 'ArrowUp',
+  'ArrowUpCircle', 'ArrowUpLeft', 'ArrowUpRight', 'AtSign', 'Award',
+  'BarChart', 'BarChart2', 'Battery', 'BatteryCharging', 'Bell', 'BellOff',
+  'Bluetooth', 'Bold', 'Book', 'BookOpen', 'Bookmark', 'Box', 'Briefcase',
+  'Calendar', 'Camera', 'CameraOff', 'Cast', 'Check', 'CheckCircle', 'CheckSquare',
+  'ChevronDown', 'ChevronLeft', 'ChevronRight', 'ChevronUp',
+  'Chrome', 'Circle', 'Clipboard', 'Clock', 'Cloud', 'CloudDrizzle',
+  'CloudLightning', 'CloudOff', 'CloudRain', 'CloudSnow', 'Code', 'Codepen',
+  'Codesandbox', 'Coffee', 'Columns', 'Command', 'Compass', 'Copy', 'Cpu',
+  'CreditCard', 'Crop', 'Crosshair', 'Database', 'Delete', 'Disc',
+  'DollarSign', 'Download', 'DownloadCloud', 'Droplet', 'Edit', 'Edit2', 'Edit3',
+  'ExternalLink', 'Eye', 'EyeOff', 'Facebook', 'FastForward', 'Feather',
+  'Figma', 'File', 'FileMinus', 'FilePlus', 'FileText', 'Film', 'Filter',
+  'Flag', 'Folder', 'FolderMinus', 'FolderPlus', 'Framer', 'Frown',
+  'Gift', 'GitBranch', 'GitCommit', 'GitHub', 'GitMerge', 'GitPullRequest',
+  'Gitlab', 'Globe', 'Grid', 'HardDrive', 'Hash', 'Headphones', 'Heart',
+  'HelpCircle', 'Hexagon', 'Home', 'Image', 'Inbox', 'Info', 'Instagram',
+  'Italic', 'Key', 'Layers', 'Layout', 'LifeBuoy', 'Link', 'Link2',
+  'Linkedin', 'List', 'Loader', 'Lock', 'LogIn', 'LogOut', 'Mail', 'Map',
+  'MapPin', 'Maximize', 'Maximize2', 'Meh', 'Menu', 'MessageCircle',
+  'MessageSquare', 'Mic', 'MicOff', 'Minimize', 'Minimize2', 'Minus',
+  'MinusCircle', 'MinusSquare', 'Monitor', 'Moon', 'MoreHorizontal',
+  'MoreVertical', 'MousePointer', 'Move', 'Music', 'Navigation', 'Navigation2',
+  'Octagon', 'Package', 'Paperclip', 'Pause', 'PauseCircle', 'PenTool',
+  'Percent', 'Phone', 'PhoneCall', 'PhoneForwarded', 'PhoneIncoming',
+  'PhoneMissed', 'PhoneOff', 'PhoneOutgoing', 'PieChart', 'Play', 'PlayCircle',
+  'Plus', 'PlusCircle', 'PlusSquare', 'Pocket', 'Power', 'Printer',
+  'Radio', 'RefreshCcw', 'RefreshCw', 'Repeat', 'Rewind', 'RotateCcw',
+  'RotateCw', 'Rss', 'Save', 'Scissors', 'Search', 'Send', 'Server',
+  'Settings', 'Share', 'Share2', 'Shield', 'ShieldOff', 'ShoppingBag',
+  'ShoppingCart', 'Shuffle', 'Sidebar', 'SkipBack', 'SkipForward', 'Slack',
+  'Sliders', 'Smartphone', 'Smile', 'Speaker', 'Square', 'Star', 'StopCircle',
+  'Sun', 'Sunrise', 'Sunset', 'Table', 'Tablet', 'Tag', 'Target', 'Terminal',
+  'Thermometer', 'ThumbsDown', 'ThumbsUp', 'ToggleLeft', 'ToggleRight',
+  'Tool', 'Trash', 'Trash2', 'Trello', 'TrendingDown', 'TrendingUp',
+  'Triangle', 'Truck', 'Tv', 'Twitch', 'Twitter', 'Type', 'Umbrella',
+  'Underline', 'Unlock', 'Upload', 'UploadCloud', 'User', 'UserCheck',
+  'UserMinus', 'UserPlus', 'UserX', 'Users', 'Video', 'VideoOff', 'Voicemail',
+  'Volume', 'Volume1', 'Volume2', 'VolumeX', 'Watch', 'Wifi', 'WifiOff',
+  'Wind', 'X', 'XCircle', 'XOctagon', 'XSquare', 'Youtube', 'Zap', 'ZapOff',
+  'ZoomIn', 'ZoomOut',
 ]
 
 interface Props {
@@ -39,25 +66,41 @@ export function FeatherIcon({ name, size = 16, className = '' }: { name: string;
 export function IconPicker({ value, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popupRef  = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (
+        popupRef.current && !popupRef.current.contains(e.target as Node) &&
+        triggerRef.current && !triggerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  function handleOpen() {
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect()
+      setPos({ top: r.bottom + 4, left: r.left })
+    }
+    setOpen((o) => !o)
+  }
 
   const filtered = search
     ? PHASE_ICONS.filter((n) => n.toLowerCase().includes(search.toLowerCase()))
     : PHASE_ICONS
 
   return (
-    <div ref={ref} className="relative">
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleOpen}
         className={`w-9 h-9 flex items-center justify-center rounded-md border transition-colors ${
           value
             ? 'border-accent bg-accent text-on-accent'
@@ -72,8 +115,12 @@ export function IconPicker({ value, onChange }: Props) {
         )}
       </button>
 
-      {open && (
-        <div className="absolute left-0 top-11 z-50 w-72 bg-paper border border-line rounded-md shadow-[0_4px_6px_rgba(0,0,0,0.07),0_2px_4px_rgba(0,0,0,0.05)] overflow-hidden">
+      {open && pos && (
+        <div
+          ref={popupRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 50 }}
+          className="w-72 bg-paper border border-line rounded-md shadow-[0_4px_6px_rgba(0,0,0,0.07),0_2px_4px_rgba(0,0,0,0.05)] overflow-hidden"
+        >
           <div className="p-2 border-b border-line flex items-center gap-2">
             <div className="flex items-center gap-2 flex-1 bg-surface rounded px-3 py-1.5">
               <Search size={12} className="text-ink-40 shrink-0" />

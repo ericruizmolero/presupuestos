@@ -22,6 +22,11 @@ export default function PublicQuotePage() {
       .then(async (q) => {
         if (!q) { setNotFound(true); return }
         setQuote(q)
+        const client = q.client?.company || q.client?.name || ''
+        const emitter = q.emitter?.companyName || ''
+        const date = q.date ? new Date(q.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+        const parts = [client, emitter, date].filter(Boolean)
+        document.title = parts.length ? `${parts.join(' · ')} — Presu` : 'Presupuesto — Presu'
         if (q.companyId) {
           const company = await getCompany(q.companyId)
           if (company) {
@@ -68,9 +73,10 @@ export default function PublicQuotePage() {
       {/* Top bar */}
       <header className="no-print sticky top-0 z-20 bg-paper border-b border-line h-14 flex items-center justify-between px-8">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-ink">{quote.emitter.companyName}</span>
-          <span className="text-line">·</span>
-          <span className="text-sm text-ink-60">{quote.quoteNumber}</span>
+          {quote.emitter.logoUrl
+            ? <img src={quote.emitter.logoUrl} alt={quote.emitter.companyName} className="object-contain" style={{ maxHeight: '1.25rem', maxWidth: '6rem' }} />
+            : <span className="text-sm font-medium text-ink">{quote.emitter.companyName}</span>
+          }
         </div>
         <button
           onClick={() => window.print()}
@@ -83,7 +89,7 @@ export default function PublicQuotePage() {
 
       {/* Body */}
       <div className="flex">
-        <QuotePreview quote={quote} />
+        <QuotePreview quote={quote} pageBreaksBefore={quote.pageBreaksBefore ?? []} />
       </div>
     </div>
   )

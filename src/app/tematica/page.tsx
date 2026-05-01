@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { FontPicker } from '@/components/settings/FontPicker'
-import { ThemePicker } from '@/components/settings/ThemePicker'
 import { upsertCompany, getUserCompanyId, setUserCompanyId } from '@/lib/firestore/companies'
 import { applySystemFont, injectFont } from '@/lib/fonts'
 import { applyThemeColors, applyInkOpacities, paletteToColors, type ThemeColors } from '@/lib/theme'
 import { nanoid } from 'nanoid'
-import { Check } from 'lucide-react'
+import { Check, Loader2, RotateCcw } from 'lucide-react'
+import { ColorPicker } from '@/components/ui/ColorPicker'
+
+type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
 const DEFAULT_COLORS: ThemeColors = {
   accent:   '#1A1A1A',
@@ -62,18 +64,7 @@ function ColorToken({
 }) {
   return (
     <div className="flex items-center gap-4">
-      <label className="relative cursor-pointer shrink-0">
-        <div
-          className="w-10 h-10 rounded-md border border-line transition-transform hover:scale-105"
-          style={{ background: value }}
-        />
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-        />
-      </label>
+      <ColorPicker value={value} onChange={onChange} />
       <div className="min-w-0">
         <p className="text-sm font-medium text-ink leading-none mb-0.5">{label}</p>
         <p className="text-xs text-ink-40">{description}</p>
@@ -116,17 +107,27 @@ function OpacitySlider({
 
 function TematicaContent() {
   const { user, company, refreshCompany } = useAuth()
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [paletteId, setPaletteId] = useState('noir')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [colors, setColors] = useState<ThemeColors>(DEFAULT_COLORS)
   const [fontName, setFontName] = useState('')
-  const [inkSecondary, setInkSecondary] = useState(60)
-  const [inkTertiary, setInkTertiary] = useState(40)
+  const [inkSecondary, setInkSecondary] = useState(73)
+  const [inkTertiary, setInkTertiary] = useState(67)
+
+  const [statusVisible, setStatusVisible] = useState(false)
+  const isFirstRender = useRef(true)
+  const pendingLoad = useRef(false)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const latestData = useRef({ colors, fontName, inkSecondary, inkTertiary })
+
+  useEffect(() => {
+    const t = setTimeout(() => setStatusVisible(true), 5000)
+    return () => clearTimeout(t)
+  }, [])
 
   useEffect(() => {
     if (company) {
-      setPaletteId(company.paletteId || 'noir')
+      pendingLoad.current = true
       setColors(company.themeColors ?? paletteToColors(company.paletteId || 'noir'))
       setFontName(company.defaultFontName || '')
       setInkSecondary(company.inkOpacitySecondary ?? 60)
@@ -134,35 +135,39 @@ function TematicaContent() {
     }
   }, [company])
 
-  async function getOrCreateCompanyId(): Promise<string> {
-    if (!user) throw new Error('No user')
-    let cid = await getUserCompanyId(user.uid)
-    if (!cid) {
-      cid = `company_${nanoid(10)}`
-      await setUserCompanyId(user.uid, cid)
-    }
-    return cid
-  }
+  // Keep latestData in sync
+  useEffect(() => {
+    latestData.current = { colors, fontName, inkSecondary, inkTertiary }
+  }, [colors, fontName, inkSecondary, inkTertiary])
 
-  async function handleSave() {
-    setSaving(true)
-    try {
-      const cid = await getOrCreateCompanyId()
-      await upsertCompany(cid, { paletteId, themeColors: colors, defaultFontName: fontName, inkOpacitySecondary: inkSecondary, inkOpacityTertiary: inkTertiary })
-      await refreshCompany()
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } finally {
-      setSaving(false)
-    }
-  }
+  // Auto-save
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    if (pendingLoad.current) { pendingLoad.current = false; return }
 
-  function handlePaletteChange(id: string) {
-    const next = paletteToColors(id)
-    setPaletteId(id)
-    setColors(next)
-    applyThemeColors(next)
-  }
+    setSaveStatus('pending')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    if (clearTimer.current) clearTimeout(clearTimer.current)
+
+    saveTimer.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      try {
+        if (!user) throw new Error('No user')
+        let cid = await getUserCompanyId(user.uid)
+        if (!cid) {
+          cid = `company_${nanoid(10)}`
+          await setUserCompanyId(user.uid, cid)
+        }
+        const { colors: c, fontName: fn, inkSecondary: is, inkTertiary: it } = latestData.current
+        await upsertCompany(cid, { themeColors: c, defaultFontName: fn, inkOpacitySecondary: is, inkOpacityTertiary: it })
+        await refreshCompany()
+        setSaveStatus('saved')
+        clearTimer.current = setTimeout(() => setSaveStatus('idle'), 2000)
+      } catch {
+        setSaveStatus('error')
+      }
+    }, 1200)
+  }, [colors, fontName, inkSecondary, inkTertiary]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleColorChange(key: keyof ThemeColors, value: string) {
     const next = { ...colors, [key]: value }
@@ -185,29 +190,37 @@ function TematicaContent() {
     <div className="max-w-2xl mx-auto px-8 py-12">
       <div className="flex items-center justify-between mb-12">
         <h1 className="text-2xl font-medium tracking-tight text-ink">Temática</h1>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-md hover:-translate-y-px transition-all disabled:opacity-50 shadow-[0_1px_2px_rgba(0,0,0,0.05)] bg-accent text-on-accent hover:bg-accent-hover"
-        >
-          {saved ? <><Check size={14} /> Guardado</> : saving ? 'Guardando...' : 'Guardar cambios'}
-        </button>
+        <span className={`flex items-center gap-1.5 text-xs text-ink-40 h-8 transition-opacity duration-300 ${statusVisible ? 'opacity-100' : 'opacity-0'}`}>
+          {saveStatus === 'saving' || saveStatus === 'pending' ? (
+            <><Loader2 size={12} className="animate-spin" /> Guardando…</>
+          ) : saveStatus === 'saved' ? (
+            <><Check size={12} /> Guardado</>
+          ) : saveStatus === 'error' ? (
+            <span className="text-red-500">Error al guardar</span>
+          ) : null}
+        </span>
       </div>
 
       <div className="space-y-12">
 
-        {/* Paletas */}
-        <section>
-          <p className="text-sm font-medium text-ink mb-2">Paletas</p>
-          <p className="text-sm text-ink-60 mb-6">Punto de partida. Selecciona una para cargar sus 6 valores.</p>
-          <ThemePicker value={paletteId} onChange={handlePaletteChange} />
-        </section>
-
-        <hr className="border-t border-line" />
-
         {/* Custom tokens */}
         <section>
-          <p className="text-sm font-medium text-ink mb-2">Personalizar</p>
+          <div className="flex items-baseline justify-between mb-2">
+            <p className="text-sm font-medium text-ink">Personalizar</p>
+            <button
+              onClick={() => {
+                setColors(DEFAULT_COLORS)
+                applyThemeColors(DEFAULT_COLORS)
+                setInkSecondary(73)
+                setInkTertiary(67)
+                applyInkOpacities(73, 67)
+              }}
+              className="flex items-center gap-1.5 text-xs text-ink-40 hover:text-ink transition-colors"
+            >
+              <RotateCcw size={11} strokeWidth={1.5} />
+              Restablecer
+            </button>
+          </div>
           <p className="text-sm text-ink-60 mb-6">Ajusta cada token de color a tu gusto. Los cambios se aplican en tiempo real.</p>
           <div className="space-y-5">
             {(Object.keys(COLOR_LABELS) as (keyof ThemeColors)[]).map((key) => (

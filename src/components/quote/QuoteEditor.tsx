@@ -1,15 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import gsap from 'gsap'
 import { RichTextEditor } from './RichTextEditor'
 import { BudgetTable } from './BudgetTable'
 import type { Quote, QuoteFormData, ProjectPhase } from '@/types/quote'
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Check } from 'lucide-react'
 import { IconPicker } from '@/components/ui/IconPicker'
 import { Select } from '@/components/ui/Select'
 import { DatePicker } from '@/components/ui/DatePicker'
-import { EditableGantt } from './GanttTimeline'
-import { nanoid } from 'nanoid'
+import { EditableGantt, InteractiveGantt } from './GanttTimeline'
 
 interface Props {
   initialData: QuoteFormData
@@ -18,29 +18,136 @@ interface Props {
   saving?: boolean
 }
 
-const SECTION = 'mb-10'
-const SECTION_LABEL = 'text-xs font-medium tracking-widest uppercase text-ink-40 mb-6 flex items-center justify-between'
+const SECTION_LABEL = 'text-xs font-medium tracking-widest uppercase text-ink-40 flex items-center justify-between'
 const FIELD_LABEL = 'block text-sm font-medium text-ink mb-2'
 const INPUT = 'w-full px-4 py-3 border border-input rounded-md text-base text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
 const GRID2 = 'grid grid-cols-1 sm:grid-cols-2 gap-6'
 
-function SectionHeader({ label, open, onToggle, optional }: { label: string; open: boolean; onToggle: () => void; optional?: boolean }) {
+type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
+
+// ── Collapsible animated section ──────────────────────────────────────────────
+function CollapsibleSection({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const initialOpen = useRef(open)
+  const initialized = useRef(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+
+    if (!initialized.current) {
+      initialized.current = true
+      return // initial state already set via inline style
+    }
+
+    if (open) {
+      gsap.fromTo(
+        el,
+        { height: 0, opacity: 0 },
+        { height: 'auto', opacity: 1, duration: 0.38, ease: 'power3.out' }
+      )
+    } else {
+      gsap.to(el, { height: 0, opacity: 0, duration: 0.24, ease: 'power3.in' })
+    }
+  }, [open])
+
   return (
-    <button type="button" onClick={onToggle} className={SECTION_LABEL + ' w-full text-left cursor-pointer hover:text-ink-60'}>
-      <span>{label}{optional && <span className="ml-2 text-ink-40 normal-case font-normal tracking-normal text-xs">(opcional)</span>}</span>
-      {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+    <div
+      ref={ref}
+      className="overflow-hidden"
+      style={initialOpen.current ? undefined : { height: 0, opacity: 0 }}
+    >
+      <div className="pb-8">{children}</div>
+    </div>
+  )
+}
+
+// ── Section header ─────────────────────────────────────────────────────────────
+function SectionHeader({
+  label, open, onToggle, optional, saveStatus,
+}: {
+  label: string; open: boolean; onToggle: () => void
+  optional?: boolean; saveStatus?: SaveStatus
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={SECTION_LABEL + ' w-full text-left cursor-pointer hover:text-ink-60 py-6'}
+    >
+      <span>
+        {label}
+        {optional && (
+          <span className="ml-2 text-ink-40 normal-case font-normal tracking-normal text-xs">(opcional)</span>
+        )}
+      </span>
+      <div className="flex items-center gap-2 shrink-0">
+        {open && saveStatus === 'saving' && (
+          <span className="w-2.5 h-2.5 border border-ink-40 border-t-transparent rounded-full animate-spin" />
+        )}
+        {open && saveStatus === 'saved' && (
+          <span className="flex items-center gap-1 text-[10px] text-ink-40 font-normal tracking-normal normal-case">
+            <Check size={10} strokeWidth={2.5} />
+            Guardado
+          </span>
+        )}
+        {open && saveStatus === 'error' && (
+          <span className="text-[10px] font-normal tracking-normal normal-case" style={{ color: 'var(--color-error, #dc2626)' }}>
+            Error al guardar
+          </span>
+        )}
+        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+      </div>
     </button>
   )
 }
 
-export function QuoteEditor({ initialData, onSave, saving }: Props) {
+export function QuoteEditor({ initialData, onSave }: Props) {
   const [form, setForm] = useState<QuoteFormData>(initialData)
   const [open, setOpen] = useState<Record<string, boolean>>({
-    meta: true, emitter: false, client: false,
+    meta: false, emitter: false, client: false,
     project: false, phases: false, timeline: false,
     budget: false, budgetAdditional: false,
     acceptance: false, billing: false, conformity: false,
   })
+
+  // ── Auto-save ──────────────────────────────────────────────────────────────
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const isFirstRender = useRef(true)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const SECTION_KEYS = ['meta','emitter','client','project','phases','timeline','budget','budgetAdditional','acceptance','billing','conformity']
+  const allOpen = SECTION_KEYS.every((k) => open[k])
+
+  function toggleAll() {
+    const next = !allOpen
+    setOpen(Object.fromEntries(SECTION_KEYS.map((k) => [k, next])))
+  }
+
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+
+    setSaveStatus('pending')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    if (clearTimer.current) clearTimeout(clearTimer.current)
+
+    saveTimer.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      try {
+        await onSave(form)
+        setSaveStatus('saved')
+        clearTimer.current = setTimeout(() => setSaveStatus('idle'), 2000)
+      } catch {
+        setSaveStatus('error')
+      }
+    }, 1200)
+
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form])
 
   function toggle(key: string) {
     setOpen((o) => ({ ...o, [key]: !o[key] }))
@@ -76,18 +183,24 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
     setNested('project', 'phases', form.project.phases.filter((_, idx) => idx !== i))
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    await onSave(form)
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="max-w-3xl mx-auto px-8 py-12">
+    <div className="max-w-3xl mx-auto px-8 py-12">
+
+      {/* Header row */}
+      <div className="flex items-center justify-end mb-2">
+        <button
+          type="button"
+          onClick={toggleAll}
+          className="text-xs text-ink-40 hover:text-ink-60 transition-colors"
+        >
+          {allOpen ? 'Plegar todo' : 'Desplegar todo'}
+        </button>
+      </div>
 
       {/* Meta */}
-      <div className={SECTION}>
-        <SectionHeader label="Datos del presupuesto" open={open.meta} onToggle={() => toggle('meta')} />
-        {open.meta && (
+      <div id="meta">
+        <SectionHeader label="Datos del presupuesto" open={open.meta} onToggle={() => toggle('meta')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.meta}>
           <div className="space-y-6">
             <div className={GRID2}>
               <div>
@@ -112,15 +225,15 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
               </div>
             </div>
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Empresa emisora */}
-      <div className={SECTION}>
-        <SectionHeader label="Empresa emisora" open={open.emitter} onToggle={() => toggle('emitter')} />
-        {open.emitter && (
+      <div id="emitter">
+        <SectionHeader label="Empresa emisora" open={open.emitter} onToggle={() => toggle('emitter')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.emitter}>
           <div className="space-y-6">
             <div className={GRID2}>
               <div>
@@ -145,15 +258,15 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
               <RichTextEditor value={form.emitter.description} onChange={(v) => setNested('emitter', 'description', v)} placeholder="Descripción de tu empresa..." minHeight="80px" />
             </div>
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Cliente */}
-      <div className={SECTION}>
-        <SectionHeader label="Empresa receptora / Cliente" open={open.client} onToggle={() => toggle('client')} />
-        {open.client && (
+      <div id="client">
+        <SectionHeader label="Empresa receptora / Cliente" open={open.client} onToggle={() => toggle('client')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.client}>
           <div className="space-y-6">
             <div className={GRID2}>
               <div>
@@ -182,15 +295,15 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
               <RichTextEditor value={form.client.description} onChange={(v) => setNested('client', 'description', v)} placeholder="Contexto del cliente..." minHeight="80px" />
             </div>
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Proyecto */}
-      <div className={SECTION}>
-        <SectionHeader label="Proyecto" open={open.project} onToggle={() => toggle('project')} />
-        {open.project && (
+      <div id="project">
+        <SectionHeader label="Proyecto" open={open.project} onToggle={() => toggle('project')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.project}>
           <div className="space-y-6">
             <div>
               <label className={FIELD_LABEL}>Objetivo principal</label>
@@ -208,15 +321,15 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
               <RichTextEditor value={form.project.scope} onChange={(v) => setNested('project', 'scope', v)} placeholder="¿Qué incluye y qué no incluye este presupuesto?" minHeight="80px" />
             </div>
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Fases */}
-      <div className={SECTION}>
-        <SectionHeader label="Fases" open={open.phases} onToggle={() => toggle('phases')} />
-        {open.phases && (
+      <div id="phases">
+        <SectionHeader label="Fases" open={open.phases} onToggle={() => toggle('phases')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.phases}>
           <div className="space-y-4">
             {form.project.phases.map((phase, i) => (
               <div key={i} className="border border-line rounded-md p-4 space-y-3">
@@ -247,50 +360,61 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
               <Plus size={14} strokeWidth={2} /> Añadir fase
             </button>
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Tareas y tiempos */}
-      <div className={SECTION}>
-        <SectionHeader label="Tareas y tiempos" open={open.timeline} onToggle={() => toggle('timeline')} />
-        {open.timeline && (
-          <EditableGantt
-            entries={form.timeline}
-            phases={form.project.phases}
-            onChange={(v) => set('timeline', v)}
-          />
-        )}
+      <div id="timeline">
+        <SectionHeader label="Tareas y tiempos" open={open.timeline} onToggle={() => toggle('timeline')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.timeline}>
+          <div className="space-y-6">
+            {form.timeline.some(e => e.startDate && e.endDate) && (
+              <div className="border border-line rounded-md p-4 bg-surface">
+                <p className="text-[10px] font-medium tracking-widest uppercase text-ink-40 mb-4">Vista previa interactiva — arrastra para ajustar fechas</p>
+                <InteractiveGantt
+                  entries={form.timeline}
+                  onChange={(t) => set('timeline', t)}
+                />
+              </div>
+            )}
+            <EditableGantt
+              entries={form.timeline}
+              phases={form.project.phases}
+              onChange={(v) => set('timeline', v)}
+            />
+          </div>
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Presupuesto principal */}
-      <div className={SECTION}>
-        <SectionHeader label="Tabla de presupuesto" open={open.budget} onToggle={() => toggle('budget')} />
-        {open.budget && (
+      <div id="budget">
+        <SectionHeader label="Tabla de presupuesto" open={open.budget} onToggle={() => toggle('budget')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.budget}>
           <BudgetTable value={form.budgetTable} onChange={(v) => set('budgetTable', v)} currency={form.currency} />
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Presupuesto adicional */}
-      <div className={SECTION}>
+      <div id="budget-additional">
         <SectionHeader label="Tabla adicional" open={open.budgetAdditional} onToggle={() => toggle('budgetAdditional')} optional />
-        {open.budgetAdditional && (
+        <CollapsibleSection open={open.budgetAdditional}>
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="additionalEnabled"
-                checked={form.budgetTableAdditional.enabled}
-                onChange={(e) => setNested('budgetTableAdditional', 'enabled', e.target.checked)}
-                className="w-4 h-4 accent-accent"
-              />
-              <label htmlFor="additionalEnabled" className="text-sm text-ink">Incluir tabla adicional</label>
-            </div>
+            <button
+              type="button"
+              onClick={() => setNested('budgetTableAdditional', 'enabled', !form.budgetTableAdditional.enabled)}
+              className="flex items-center gap-3 group"
+            >
+              <span className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${form.budgetTableAdditional.enabled ? 'bg-ink border-ink' : 'bg-transparent border-line group-hover:border-ink-60'}`}>
+                {form.budgetTableAdditional.enabled && <Check size={10} strokeWidth={2.5} className="text-paper" />}
+              </span>
+              <span className="text-sm text-ink">Incluir tabla adicional</span>
+            </button>
             {form.budgetTableAdditional.enabled && (
               <>
                 <div>
@@ -306,15 +430,15 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
               </>
             )}
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Condiciones de aceptación */}
-      <div className={SECTION}>
-        <SectionHeader label="Condiciones de aceptación" open={open.acceptance} onToggle={() => toggle('acceptance')} />
-        {open.acceptance && (
+      <div id="acceptance">
+        <SectionHeader label="Condiciones de aceptación" open={open.acceptance} onToggle={() => toggle('acceptance')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.acceptance}>
           <div className="space-y-6">
             {([
               ['paymentTerms', 'Forma de pago'],
@@ -330,25 +454,25 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
               </div>
             ))}
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Condiciones de facturación */}
-      <div className={SECTION}>
-        <SectionHeader label="Condiciones de facturación y pagos" open={open.billing} onToggle={() => toggle('billing')} />
-        {open.billing && (
+      <div id="billing">
+        <SectionHeader label="Condiciones de facturación y pagos" open={open.billing} onToggle={() => toggle('billing')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.billing}>
           <RichTextEditor value={form.billingConditions} onChange={(v) => set('billingConditions', v)} placeholder="Detalle de los pagos, plazos, facturación..." minHeight="100px" />
-        )}
+        </CollapsibleSection>
       </div>
 
-      <hr className="border-t border-line mb-10" />
+      <hr className="border-t border-line" />
 
       {/* Conformidad */}
-      <div className={SECTION}>
-        <SectionHeader label="Conformidad y firmas" open={open.conformity} onToggle={() => toggle('conformity')} />
-        {open.conformity && (
+      <div id="conformity">
+        <SectionHeader label="Conformidad y firmas" open={open.conformity} onToggle={() => toggle('conformity')} saveStatus={saveStatus} />
+        <CollapsibleSection open={open.conformity}>
           <div className="space-y-6">
             <div>
               <label className={FIELD_LABEL}>Datos empresa emisora (para firma)</label>
@@ -360,18 +484,34 @@ export function QuoteEditor({ initialData, onSave, saving }: Props) {
             </div>
             <p className="text-xs text-ink-40">Integración con DocuSign disponible próximamente.</p>
           </div>
-        )}
+        </CollapsibleSection>
       </div>
 
-      <div className="sticky bottom-0 bg-paper border-t border-line py-4 flex justify-end gap-3 -mx-8 px-8">
-        <button
-          type="submit"
-          disabled={saving}
-          className="text-sm font-medium px-6 py-2.5 rounded-md hover:-translate-y-px transition-all disabled:opacity-50 shadow-[0_1px_2px_rgba(0,0,0,0.05)] bg-accent text-on-accent hover:bg-accent-hover"
-        >
-          {saving ? 'Guardando...' : 'Guardar presupuesto'}
-        </button>
-      </div>
-    </form>
+      <hr className="border-t border-line" />
+
+      {/* Bottom spacer */}
+      <div className="h-10" />
+
+      {/* Fixed toast */}
+      {saveStatus !== 'idle' && saveStatus !== 'pending' && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 px-3 py-2 bg-paper border border-line rounded-md shadow-sm text-xs text-ink-40 transition-opacity">
+          {saveStatus === 'saving' && (
+            <>
+              <span className="w-2.5 h-2.5 border border-ink-40 border-t-transparent rounded-full animate-spin shrink-0" />
+              Guardando…
+            </>
+          )}
+          {saveStatus === 'saved' && (
+            <>
+              <Check size={11} strokeWidth={2.5} />
+              Guardado
+            </>
+          )}
+          {saveStatus === 'error' && (
+            <span style={{ color: 'var(--color-error, #dc2626)' }}>Error al guardar</span>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

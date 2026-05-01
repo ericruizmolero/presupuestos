@@ -8,8 +8,10 @@ import { RichTextEditor } from '@/components/quote/RichTextEditor'
 import { upsertCompany, getUserCompanyId, setUserCompanyId } from '@/lib/firestore/companies'
 import { uploadLogo } from '@/lib/storage'
 import { nanoid } from 'nanoid'
-import { Check } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import type { Company } from '@/types/quote'
+
+type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error'
 
 const SECTION_LABEL = 'text-xs font-medium tracking-widest uppercase text-ink-40 mb-6'
 const FIELD_LABEL = 'block text-sm font-medium text-ink mb-2'
@@ -27,10 +29,20 @@ export default function SettingsPage() {
 
 function SettingsContent() {
   const { user, company, refreshCompany } = useAuth()
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
+
+  const [statusVisible, setStatusVisible] = useState(false)
+  const isFirstRender = useRef(true)
+  const pendingLoad = useRef(false)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const t = setTimeout(() => setStatusVisible(true), 5000)
+    return () => clearTimeout(t)
+  }, [])
 
   const [form, setForm] = useState<Omit<Company, 'id'>>({
     name: '',
@@ -53,6 +65,7 @@ function SettingsContent() {
 
   useEffect(() => {
     if (company) {
+      pendingLoad.current = true
       setForm({
         name: company.name || '',
         logoUrl: company.logoUrl || '',
@@ -74,35 +87,45 @@ function SettingsContent() {
     }
   }, [company])
 
-  async function getOrCreateCompanyId(): Promise<string> {
-    if (!user) throw new Error('No user')
-    let cid = await getUserCompanyId(user.uid)
-    if (!cid) {
-      cid = `company_${nanoid(10)}`
-      await setUserCompanyId(user.uid, cid)
-    }
-    return cid
-  }
+  // Auto-save
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    if (pendingLoad.current) { pendingLoad.current = false; return }
 
-  async function handleSave() {
-    setSaving(true)
-    try {
-      const cid = await getOrCreateCompanyId()
-      await upsertCompany(cid, form)
-      await refreshCompany()
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } finally {
-      setSaving(false)
-    }
-  }
+    setSaveStatus('pending')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    if (clearTimer.current) clearTimeout(clearTimer.current)
+
+    saveTimer.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      try {
+        if (!user) throw new Error('No user')
+        let cid = await getUserCompanyId(user.uid)
+        if (!cid) {
+          cid = `company_${nanoid(10)}`
+          await setUserCompanyId(user.uid, cid)
+        }
+        await upsertCompany(cid, form)
+        await refreshCompany()
+        setSaveStatus('saved')
+        clearTimer.current = setTimeout(() => setSaveStatus('idle'), 2000)
+      } catch {
+        setSaveStatus('error')
+      }
+    }, 1200)
+  }, [form]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !user) return
     setUploadingLogo(true)
     try {
-      const cid = await getOrCreateCompanyId()
+      if (!user) throw new Error('No user')
+      let cid = await getUserCompanyId(user.uid)
+      if (!cid) {
+        cid = `company_${nanoid(10)}`
+        await setUserCompanyId(user.uid, cid)
+      }
       const url = await uploadLogo(cid, file)
       setForm((f) => ({ ...f, logoUrl: url }))
     } finally {
@@ -122,13 +145,15 @@ function SettingsContent() {
     <div className="max-w-2xl mx-auto px-8 py-12">
       <div className="flex items-center justify-between mb-12">
         <h1 className="text-2xl font-medium tracking-tight text-ink">Configuración</h1>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 text-sm font-medium px-5 py-2.5 rounded-md hover:-translate-y-px transition-all disabled:opacity-50 shadow-[0_1px_2px_rgba(0,0,0,0.05)] bg-accent text-on-accent hover:bg-accent-hover"
-        >
-          {saved ? <><Check size={14} /> Guardado</> : saving ? 'Guardando...' : 'Guardar cambios'}
-        </button>
+        <span className={`flex items-center gap-1.5 text-xs text-ink-40 h-8 transition-opacity duration-300 ${statusVisible ? 'opacity-100' : 'opacity-0'}`}>
+          {saveStatus === 'saving' || saveStatus === 'pending' ? (
+            <><Loader2 size={12} className="animate-spin" /> Guardando…</>
+          ) : saveStatus === 'saved' ? (
+            <><Check size={12} /> Guardado</>
+          ) : saveStatus === 'error' ? (
+            <span className="text-red-500">Error al guardar</span>
+          ) : null}
+        </span>
       </div>
 
       {/* Empresa emisora */}
@@ -181,7 +206,6 @@ function SettingsContent() {
           </div>
         </div>
       </section>
-
 
       <hr className="border-t border-line mb-12" />
 
