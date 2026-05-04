@@ -6,8 +6,10 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { getQuotes, deleteQuote, duplicateQuote, updateQuoteStatus } from '@/lib/firestore/quotes'
-import { getUserCompanyId } from '@/lib/firestore/companies'
+import { getQuotes, createQuote, deleteQuote, duplicateQuote, updateQuoteStatus } from '@/lib/firestore/quotes'
+import { getUserCompanyId, setUserCompanyId } from '@/lib/firestore/companies'
+import { createDemoQuote } from '@/lib/demoQuote'
+import { nanoid } from 'nanoid'
 import type { Quote, QuoteStatus } from '@/types/quote'
 import { ExternalLink, Copy, Trash2, MoreHorizontal, X, ArrowDown } from 'lucide-react'
 
@@ -58,10 +60,24 @@ function DashboardContent() {
   async function load() {
     if (!user) return
     try {
-      const cid = await getUserCompanyId(user.uid)
-      if (!cid) { setLoading(false); return }
+      // Ensure the user always has a companyId
+      let cid = await getUserCompanyId(user.uid)
+      if (!cid) {
+        cid = `company_${nanoid(10)}`
+        await setUserCompanyId(user.uid, cid)
+      }
+
       const data = await getQuotes(cid)
-      setQuotes(data)
+
+      // First time ever (or all quotes deleted) → seed a demo quote
+      if (data.length === 0) {
+        await createQuote(createDemoQuote(), user.uid, cid)
+        const seeded = await getQuotes(cid)
+        setQuotes(seeded)
+        window.dispatchEvent(new Event('quotes-changed'))
+      } else {
+        setQuotes(data)
+      }
     } catch (e) {
       console.error('Error loading quotes:', e)
     } finally {
@@ -145,20 +161,7 @@ function DashboardContent() {
     )
   }
 
-  if (quotes.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-center px-8">
-        <p className="text-ink font-medium mb-2">Sin presupuestos aún</p>
-        <p className="text-sm text-ink-60 mb-6">Crea tu primer presupuesto para comenzar.</p>
-        <Link
-          href="/dashboard/nuevo"
-          className="text-sm font-medium px-5 py-2.5 rounded-md transition-all bg-accent text-on-accent hover:bg-accent-hover"
-        >
-          Crear presupuesto
-        </Link>
-      </div>
-    )
-  }
+
 
   function SortTh({ label, sortKey }: { label: string; sortKey: SortKey }) {
     const active = sort.key === sortKey

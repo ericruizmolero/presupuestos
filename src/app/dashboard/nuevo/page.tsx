@@ -6,8 +6,9 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { createQuote } from '@/lib/firestore/quotes'
-import { getUserCompanyId } from '@/lib/firestore/companies'
+import { getUserCompanyId, setUserCompanyId } from '@/lib/firestore/companies'
 import { createDefaultQuote } from '@/lib/defaultQuote'
+import { nanoid } from 'nanoid'
 
 export default function NewQuotePage() {
   return (
@@ -38,9 +39,13 @@ function NewQuoteContent() {
           getUserCompanyId(user!.uid),
           new Promise((r) => setTimeout(r, 2000)),
         ])
-        if (!cid) { router.replace('/dashboard'); return }
+        let companyId = cid
+        if (!companyId) {
+          companyId = `company_${nanoid(10)}`
+          await setUserCompanyId(user!.uid, companyId)
+        }
         const defaultData = createDefaultQuote(company ?? undefined)
-        const id = await createQuote(defaultData, user!.uid, cid)
+        const id = await createQuote(defaultData, user!.uid, companyId)
         router.replace(`/dashboard/${id}`)
       } catch {
         router.replace('/dashboard')
