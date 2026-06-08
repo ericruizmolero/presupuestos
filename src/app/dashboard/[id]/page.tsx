@@ -7,9 +7,9 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { QuoteEditor } from '@/components/quote/QuoteEditor'
-import { getQuoteById, updateQuote } from '@/lib/firestore/quotes'
+import { getQuoteById, updateQuote, regenerateQuoteSlug } from '@/lib/firestore/quotes'
 import type { Quote, QuoteFormData } from '@/types/quote'
-import { ExternalLink, Printer, Check } from 'lucide-react'
+import { ExternalLink, Printer, Check, RefreshCw } from 'lucide-react'
 
 export default function EditQuotePage() {
   return (
@@ -30,6 +30,20 @@ function EditQuoteContent() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+
+  async function handleRegenerateSlug() {
+    if (!quote || regenerating) return
+    const clientName = quote.client.company || quote.client.name
+    if (!clientName) return
+    setRegenerating(true)
+    try {
+      const newSlug = await regenerateQuoteSlug(id, clientName)
+      setQuote(q => q ? { ...q, slug: newSlug } : q)
+    } finally {
+      setRegenerating(false)
+    }
+  }
 
   // Step 1: load quote from Firestore (once)
   useEffect(() => {
@@ -107,6 +121,14 @@ function EditQuoteContent() {
               <Check size={12} /> Guardado
             </span>
           )}
+          <button
+            onClick={handleRegenerateSlug}
+            disabled={regenerating}
+            title="Regenerar URL del enlace público"
+            className="flex items-center gap-2 border border-line text-sm text-ink-60 px-3 py-2 rounded-md hover:border-input hover:text-ink transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={14} strokeWidth={1.5} className={regenerating ? 'animate-spin' : ''} />
+          </button>
           <Link
             href={`/client/${quote.slug}`}
             target="_blank"

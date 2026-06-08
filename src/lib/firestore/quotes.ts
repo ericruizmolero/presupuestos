@@ -87,6 +87,13 @@ export async function updateQuote(id: string, data: Partial<QuoteFormData>) {
   })
 }
 
+/** Regenerate a clean slug from the client name and save it. Returns the new slug. */
+export async function regenerateQuoteSlug(id: string, clientName: string): Promise<string> {
+  const slug = await generateUniqueSlug(clientName)
+  await updateDoc(doc(db, 'quotes', id), { slug, updatedAt: serverTimestamp() })
+  return slug
+}
+
 export async function updateQuoteStatus(id: string, status: QuoteStatus) {
   await updateDoc(doc(db, 'quotes', id), { status, updatedAt: serverTimestamp() })
 }
