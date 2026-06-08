@@ -12,12 +12,19 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import type { Quote, QuoteFormData, QuoteStatus } from '@/types/quote'
-import { nanoid } from 'nanoid'
+import { customAlphabet } from 'nanoid'
 
-function generateSlug(quoteNumber: string, clientName: string): string {
-  const parts = [quoteNumber, clientName].filter(Boolean).join('-')
-  const base = parts.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-  return base ? `${base}-${nanoid(6)}` : nanoid(10)
+// lowercase alphanumeric only — clean URLs
+const shortId = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6)
+
+function generateSlug(clientName: string): string {
+  const base = (clientName || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40)
+  return base ? `${base}-${shortId()}` : shortId()
 }
 
 export async function getQuotes(companyId: string): Promise<Quote[]> {
@@ -53,7 +60,7 @@ export async function createQuote(
   userId: string,
   companyId: string
 ): Promise<string> {
-  const slug = generateSlug(formData.quoteNumber, formData.client.company || formData.client.name)
+  const slug = generateSlug(formData.client.company || formData.client.name)
   const ref = await addDoc(collection(db, 'quotes'), {
     ...formData,
     slug,
@@ -85,7 +92,7 @@ export async function duplicateQuote(id: string, userId: string, companyId: stri
   if (!original) throw new Error('Quote not found')
   const { id: _id, createdAt: _ca, updatedAt: _ua, slug: _slug, ...data } = original
   const newNumber = `${original.quoteNumber}-copia`
-  const newSlug = generateSlug(newNumber, original.client.company || original.client.name)
+  const newSlug = generateSlug(original.client.company || original.client.name)
   const ref = await addDoc(collection(db, 'quotes'), {
     ...data,
     quoteNumber: newNumber,
