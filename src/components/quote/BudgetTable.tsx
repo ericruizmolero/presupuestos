@@ -77,11 +77,15 @@ export function BudgetTable({ value, onChange, currency = 'EUR' }: Props) {
         <thead>
           <tr className="border-b border-line">
             <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60">Concepto</th>
-            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-36">
-              {isHourly ? 'Horas est.' : 'Tiempo'}
-            </th>
-            {!isHourly && (
-              <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-32">Precio</th>
+            {isHourly ? (
+              <th className="px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-44 text-center">
+                Horas (mín — máx)
+              </th>
+            ) : (
+              <>
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-36">Tiempo</th>
+                <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-32">Precio</th>
+              </>
             )}
             <th className="w-8" />
           </tr>
@@ -109,24 +113,45 @@ export function BudgetTable({ value, onChange, currency = 'EUR' }: Props) {
                   }}
                 />
               </td>
-              <td className="px-2 py-1 align-top">
-                <input
-                  className={INPUT + ' text-ink-60'}
-                  placeholder={isHourly ? 'ej: 4–6h' : 'ej: 40h'}
-                  value={item.time}
-                  onChange={(e) => updateItem(item.id, 'time', e.target.value)}
-                />
-              </td>
-              {!isHourly && (
+              {isHourly ? (
+                /* Min / Max hours inputs */
                 <td className="px-4 py-1 align-top">
-                  <input
-                    className="w-full py-2 text-sm border-0 focus:outline-none bg-transparent text-left text-ink [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    type="number"
-                    min={0}
-                    value={item.price || ''}
-                    onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
-                  />
+                  <div className="flex items-center gap-1.5 pt-2">
+                    <input
+                      className="w-14 py-1 px-2 text-sm border border-line rounded focus:border-ink focus:outline-none bg-paper text-ink text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      type="number" min={0} placeholder="0"
+                      value={item.minHours ?? ''}
+                      onChange={(e) => updateItem(item.id, 'minHours', parseFloat(e.target.value) || 0)}
+                    />
+                    <span className="text-ink-40 text-xs">—</span>
+                    <input
+                      className="w-14 py-1 px-2 text-sm border border-line rounded focus:border-ink focus:outline-none bg-paper text-ink text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      type="number" min={0} placeholder="0"
+                      value={item.maxHours ?? ''}
+                      onChange={(e) => updateItem(item.id, 'maxHours', parseFloat(e.target.value) || 0)}
+                    />
+                    <span className="text-ink-40 text-xs">h</span>
+                  </div>
                 </td>
+              ) : (
+                <>
+                  <td className="px-2 py-1 align-top">
+                    <input
+                      className={INPUT + ' text-ink-60'}
+                      placeholder="ej: 40h"
+                      value={item.time}
+                      onChange={(e) => updateItem(item.id, 'time', e.target.value)}
+                    />
+                  </td>
+                  <td className="px-4 py-1 align-top">
+                    <input
+                      className="w-full py-2 text-sm border-0 focus:outline-none bg-transparent text-left text-ink [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      type="number" min={0}
+                      value={item.price || ''}
+                      onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
+                    />
+                  </td>
+                </>
               )}
               <td className="px-2 py-2 text-center align-top">
                 <div className="pt-1.5">
@@ -152,33 +177,38 @@ export function BudgetTable({ value, onChange, currency = 'EUR' }: Props) {
 
       {/* Footer */}
       {isHourly ? (
-        /* Hourly mode footer: rate + estimated total */
-        <div className="border-t border-line">
-          <div className="px-4 py-3 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm text-ink-60 shrink-0">Tarifa</span>
-              <div className="flex items-center gap-1">
-                <input
-                  className="w-20 py-1 px-2 text-sm border border-line rounded focus:border-ink focus:outline-none bg-paper text-ink [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  type="number"
-                  min={0}
-                  placeholder="90"
-                  value={value.hourlyRate ?? ''}
-                  onChange={(e) => onChange({ ...value, hourlyRate: parseFloat(e.target.value) || undefined })}
-                />
-                <span className="text-sm text-ink-60">€/h</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-ink-40">Total est.</span>
-              <input
-                className="text-sm font-medium text-ink text-right bg-transparent border-0 focus:outline-none w-40"
-                value={value.manualTotal ?? ''}
-                placeholder="ej: €2,700–4,500"
-                onChange={(e) => onChange({ ...value, manualTotal: e.target.value || undefined })}
-              />
-            </div>
+        /* Hourly mode footer: rate input + auto-calculated range */
+        <div className="border-t border-line px-4 py-3 flex items-center justify-between gap-4">
+          {/* Rate input */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-ink-60 shrink-0">Tarifa</span>
+            <input
+              className="w-16 py-1 px-2 text-sm border border-line rounded focus:border-ink focus:outline-none bg-paper text-ink text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              type="number" min={0} placeholder="90"
+              value={value.hourlyRate ?? ''}
+              onChange={(e) => onChange({ ...value, hourlyRate: parseFloat(e.target.value) || undefined })}
+            />
+            <span className="text-sm text-ink-60">€/h</span>
           </div>
+          {/* Auto-calculated total range */}
+          {(() => {
+            const rate = value.hourlyRate ?? 0
+            const minH = value.items.reduce((s, i) => s + (i.minHours ?? 0), 0)
+            const maxH = value.items.reduce((s, i) => s + (i.maxHours ?? 0), 0)
+            if (!minH && !maxH) return null
+            const hoursLabel = minH === maxH ? `${minH}h` : `${minH}–${maxH}h`
+            const totalLabel = rate
+              ? (minH === maxH
+                  ? fmt(minH * rate)
+                  : `${fmt(minH * rate)} – ${fmt(maxH * rate)}`)
+              : hoursLabel
+            return (
+              <div className="text-right">
+                <p className="text-xs text-ink-40">{hoursLabel}</p>
+                <p className="text-sm font-medium text-ink">{totalLabel}</p>
+              </div>
+            )
+          })()}
         </div>
       ) : (
         /* Fixed price footer */

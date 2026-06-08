@@ -272,40 +272,59 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                     </p>
                   )}
 
-                  {/* Items — concept + notes, hours as subtle inline tag */}
+                  {/* Items */}
                   <div className="border-t border-line">
-                    {quote.budgetTable.items.map((item, i) => (
-                      <div key={i} className="flex items-start gap-4 py-4 sm:py-5 border-b border-line">
-                        <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
-                          {String(i + 1).padStart(2, '0')}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-3 flex-wrap">
-                            <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
-                            {item.time && (
-                              <span className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 shrink-0">{item.time}</span>
+                    {quote.budgetTable.items.map((item, i) => {
+                      const hasRange = (item.minHours ?? 0) > 0 || (item.maxHours ?? 0) > 0
+                      const hoursLabel = hasRange
+                        ? (item.minHours === item.maxHours
+                            ? `${item.minHours}h`
+                            : `${item.minHours ?? 0}–${item.maxHours ?? 0}h`)
+                        : item.time || null
+                      return (
+                        <div key={i} className="flex items-start gap-4 py-4 sm:py-5 border-b border-line">
+                          <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
+                            {String(i + 1).padStart(2, '0')}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-3 flex-wrap">
+                              <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                              {hoursLabel && (
+                                <span className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 shrink-0">{hoursLabel}</span>
+                              )}
+                            </div>
+                            {item.notes && (
+                              <p className="text-xs text-ink-40 mt-1.5 leading-relaxed">{item.notes}</p>
                             )}
                           </div>
-                          {item.notes && (
-                            <p className="text-xs text-ink-40 mt-1.5 leading-relaxed">{item.notes}</p>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
 
-                  {/* Estimated total */}
-                  {quote.budgetTable.manualTotal && (
-                    <div className="flex items-baseline justify-between pt-4 sm:pt-5">
-                      <span className="w-6 shrink-0 hidden xs:block" />
-                      <span className="flex-1 text-sm font-medium text-ink">
-                        {quote.language === 'en' ? 'Estimated total' : 'Total estimado'}
-                      </span>
-                      <span className="text-sm font-medium text-ink text-right shrink-0">
-                        {quote.budgetTable.manualTotal}
-                      </span>
-                    </div>
-                  )}
+                  {/* Auto-calculated total from min/max hours × rate */}
+                  {(() => {
+                    const rate = quote.budgetTable.hourlyRate ?? 0
+                    const minH = quote.budgetTable.items.reduce((s, i) => s + (i.minHours ?? 0), 0)
+                    const maxH = quote.budgetTable.items.reduce((s, i) => s + (i.maxHours ?? 0), 0)
+                    const hasHours = minH > 0 || maxH > 0
+                    if (!hasHours && !quote.budgetTable.manualTotal) return null
+                    const totalStr = quote.budgetTable.manualTotal
+                      ?? (rate && hasHours
+                          ? (minH === maxH ? fmt(minH * rate) : `${fmt(minH * rate)} – ${fmt(maxH * rate)}`)
+                          : (minH === maxH ? `${minH}h` : `${minH}–${maxH}h`))
+                    return (
+                      <div className="flex items-baseline justify-between pt-4 sm:pt-5">
+                        <span className="w-6 shrink-0 hidden xs:block" />
+                        <span className="flex-1 text-sm font-medium text-ink">
+                          {quote.language === 'en' ? 'Estimated total' : 'Total estimado'}
+                        </span>
+                        <span className="text-sm font-medium text-ink text-right shrink-0">
+                          {totalStr}
+                        </span>
+                      </div>
+                    )
+                  })()}
                 </>
               ) : (
                 /* ── Fixed price mode ── */

@@ -94,6 +94,8 @@ export interface BudgetItem {
   time: string
   price: number
   notes: string
+  minHours?: number   // hourly mode: low estimate
+  maxHours?: number   // hourly mode: high estimate
 }
 
 export interface BudgetTable {
