@@ -298,7 +298,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                 )}
               </span>
               <span className="text-sm font-medium text-ink tabular-nums w-20 sm:w-28 text-right shrink-0">
-                {fmt(quote.budgetTable.subtotal)}
+                {quote.budgetTable.manualTotal ?? fmt(quote.budgetTable.subtotal)}
               </span>
             </div>
           </section>

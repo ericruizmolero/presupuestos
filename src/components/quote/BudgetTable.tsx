@@ -121,14 +121,19 @@ export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true 
         </button>
       </div>
 
-      <div className="px-4 py-3 border-t border-line flex items-center justify-between">
+      <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-4">
         <input
           className="px-3 py-2 text-sm border-0 focus:outline-none bg-transparent text-ink min-w-0"
           value={value.totalLabel ?? 'Total (IVA no incluido)'}
           placeholder="Total (IVA no incluido)"
           onChange={(e) => onChange({ ...value, totalLabel: e.target.value })}
         />
-        <span className="text-sm font-medium text-ink shrink-0">{fmt(value.subtotal)}</span>
+        <input
+          className="text-sm font-medium text-ink text-right bg-transparent border-0 focus:outline-none w-40 shrink-0"
+          value={value.manualTotal ?? ''}
+          placeholder={fmt(value.subtotal)}
+          onChange={(e) => onChange({ ...value, manualTotal: e.target.value || undefined })}
+        />
       </div>
     </div>
   )

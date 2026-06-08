@@ -102,6 +102,7 @@ export interface BudgetTable {
   taxRate: number
   total: number
   totalLabel?: string
+  manualTotal?: string   // overrides calculated total when set (e.g. "2,700–4,500 est.")
 }
 
 export interface BudgetTableAdditional {
