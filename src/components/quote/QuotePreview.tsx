@@ -262,51 +262,50 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
               const isHourly = quote.budgetTable.mode === 'hourly'
 
               return isHourly ? (
-                /* ── Hourly / T&M mode ── */
+                /* ── Hourly / T&M mode — clean list, no price column ── */
                 <>
-                  {/* Header */}
-                  <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line">
-                    <span className="w-6 shrink-0 hidden xs:block" />
-                    <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
-                    <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">
-                      {quote.language === 'en' ? 'Est. hours' : 'Horas est.'}
-                    </span>
-                  </div>
+                  {/* Rate badge */}
+                  {quote.budgetTable.hourlyRate && (
+                    <p className="text-xs text-ink-60 mb-6">
+                      {quote.language === 'en' ? 'Rate' : 'Tarifa'}{' '}
+                      <span className="font-medium text-ink">{fmt(quote.budgetTable.hourlyRate)}/h</span>
+                    </p>
+                  )}
 
-                  {/* Items */}
-                  <div>
+                  {/* Items — concept + notes, hours as subtle inline tag */}
+                  <div className="border-t border-line">
                     {quote.budgetTable.items.map((item, i) => (
-                      <div key={i} className="flex items-start gap-3 sm:gap-6 py-4 sm:py-5 border-b border-line">
+                      <div key={i} className="flex items-start gap-4 py-4 sm:py-5 border-b border-line">
                         <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
                           {String(i + 1).padStart(2, '0')}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                          <div className="flex items-baseline gap-3 flex-wrap">
+                            <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                            {item.time && (
+                              <span className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 shrink-0">{item.time}</span>
+                            )}
+                          </div>
                           {item.notes && (
-                            <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
+                            <p className="text-xs text-ink-40 mt-1.5 leading-relaxed">{item.notes}</p>
                           )}
                         </div>
-                        <span className="text-sm text-ink-60 tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
-                          {item.time || '—'}
-                        </span>
                       </div>
                     ))}
                   </div>
 
-                  {/* Footer: rate + estimated total */}
-                  <div className="pt-4 sm:pt-5 flex items-baseline justify-between gap-3 sm:gap-6">
-                    <span className="w-6 shrink-0 hidden xs:block" />
-                    <span className="flex-1 text-sm text-ink-60">
-                      {quote.budgetTable.hourlyRate
-                        ? `${quote.language === 'en' ? 'Rate' : 'Tarifa'}: ${fmt(quote.budgetTable.hourlyRate!)}/h`
-                        : (quote.language === 'en' ? 'Hourly rate' : 'Tarifa horaria')}
-                    </span>
-                    {quote.budgetTable.manualTotal && (
-                      <span className="text-sm font-medium text-ink w-20 sm:w-28 text-right shrink-0">
+                  {/* Estimated total */}
+                  {quote.budgetTable.manualTotal && (
+                    <div className="flex items-baseline justify-between pt-4 sm:pt-5">
+                      <span className="w-6 shrink-0 hidden xs:block" />
+                      <span className="flex-1 text-sm font-medium text-ink">
+                        {quote.language === 'en' ? 'Estimated total' : 'Total estimado'}
+                      </span>
+                      <span className="text-sm font-medium text-ink text-right shrink-0">
                         {quote.budgetTable.manualTotal}
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 /* ── Fixed price mode ── */
