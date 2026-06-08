@@ -258,49 +258,58 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
           <section id="budget" className="mb-16 sm:mb-32" style={pageBreakStyle('budget')}>
             <SectionLabel>{l.budget}</SectionLabel>
 
-            {/* Column headers */}
-            <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line mb-0">
-              <span className="w-6 shrink-0 hidden xs:block" />
-              <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
-              <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">{l.price}</span>
-            </div>
-
-            {/* Items */}
-            <div>
-              {quote.budgetTable.items.map((item, i) => (
-                <div key={i} className="flex items-start gap-3 sm:gap-6 py-4 sm:py-5 border-b border-line">
-                  <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
-                    {item.time && (
-                      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 mt-1">{item.time}</p>
-                    )}
-                    {item.notes && (
-                      <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
-                    )}
+            {/* Column headers — hide Price column when all items are €0 (T&M mode) */}
+            {(() => {
+              const hasAnyPrice = quote.budgetTable.items.some(it => it.price > 0)
+              const showPriceCol = hasAnyPrice || !quote.budgetTable.manualTotal
+              return (
+                <>
+                  <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line mb-0">
+                    <span className="w-6 shrink-0 hidden xs:block" />
+                    <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
+                    {showPriceCol && <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">{l.price}</span>}
                   </div>
-                  <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
-                    {fmt(item.price)}
-                  </span>
-                </div>
-              ))}
-            </div>
 
-            {/* Totals */}
-            <div className="flex items-baseline gap-3 sm:gap-6 pt-4 sm:pt-5">
-              <span className="w-6 shrink-0 hidden xs:block" />
-              <span className="flex-1 text-sm font-medium text-ink">
-                {quote.budgetTable.totalLabel || 'Total'}
-                {quote.budgetTable.taxRate > 0 && (
-                  <span className="font-normal text-ink-40 ml-1">{l.vatNotIncluded}</span>
-                )}
-              </span>
-              <span className="text-sm font-medium text-ink tabular-nums w-20 sm:w-28 text-right shrink-0">
-                {quote.budgetTable.manualTotal ?? fmt(quote.budgetTable.subtotal)}
-              </span>
-            </div>
+                  <div>
+                    {quote.budgetTable.items.map((item, i) => (
+                      <div key={i} className="flex items-start gap-3 sm:gap-6 py-4 sm:py-5 border-b border-line">
+                        <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                          {item.time && (
+                            <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 mt-1">{item.time}</p>
+                          )}
+                          {item.notes && (
+                            <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
+                          )}
+                        </div>
+                        {showPriceCol && (
+                          <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
+                            {item.price > 0 ? fmt(item.price) : '—'}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-baseline gap-3 sm:gap-6 pt-4 sm:pt-5">
+                    <span className="w-6 shrink-0 hidden xs:block" />
+                    <span className="flex-1 text-sm font-medium text-ink">
+                      {quote.budgetTable.totalLabel || 'Total'}
+                      {/* Only show tax note when there's a numeric total (not manual override) */}
+                      {!quote.budgetTable.manualTotal && quote.budgetTable.taxRate > 0 && (
+                        <span className="font-normal text-ink-40 ml-1">{l.vatNotIncluded}</span>
+                      )}
+                    </span>
+                    <span className="text-sm font-medium text-ink tabular-nums w-20 sm:w-28 text-right shrink-0">
+                      {quote.budgetTable.manualTotal ?? fmt(quote.budgetTable.subtotal)}
+                    </span>
+                  </div>
+                </>
+              )
+            })()}
           </section>
         )}
 
