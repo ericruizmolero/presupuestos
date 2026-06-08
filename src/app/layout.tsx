@@ -10,7 +10,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: '¿Has hecho el presu?',
+  title: 'treseiscero',
   description: 'Crea y gestiona presupuestos profesionales',
 }
 

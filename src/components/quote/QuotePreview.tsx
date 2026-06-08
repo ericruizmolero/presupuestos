@@ -149,7 +149,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
       <article className="print-article flex-1 min-w-0 max-w-4xl mx-auto px-4 sm:px-8 py-12 sm:py-20 print:py-0 print:px-0 print:max-w-none print:mx-0">
 
         {/* ── 1. Header — cover page ── */}
-        <section id="header" className="mb-12 sm:mb-20" style={{ minHeight: '70vh', paddingTop: '22vh' }}>
+        <section id="header" className="mb-16 sm:mb-32" style={{ minHeight: '70vh', paddingTop: '22vh' }}>
           <div className="space-y-3">
             <p className="text-sm text-ink">{l.quoteWord}</p>
             {clientName && (
@@ -166,7 +166,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         {/* ── 2. Empresa emisora ── */}
         {(quote.emitter.companyName || quote.emitter.description) && (
           <>
-            <section id="emitter" className="mb-12 sm:mb-20" style={pageBreakStyle('emitter')}>
+            <section id="emitter" className="mb-16 sm:mb-32" style={pageBreakStyle('emitter')}>
               <SectionLabel>{quote.emitter.companyName}</SectionLabel>
               {quote.emitter.description && <RichContent html={quote.emitter.description} />}
             </section>
@@ -175,7 +175,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         )}
 
         {/* ── 3. Proyecto ── */}
-        <section id="project" className="mb-12 sm:mb-20" style={pageBreakStyle('project')}>
+        <section id="project" className="mb-16 sm:mb-32" style={pageBreakStyle('project')}>
           <SectionLabel>{l.project}</SectionLabel>
           <div className="space-y-12">
             {quote.client.description && (
@@ -209,7 +209,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         {quote.project.phases.length > 0 && (
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="phases" active={breaks.has('phases')} onToggle={onTogglePageBreak} />}
-            <section id="phases" className="mb-12 sm:mb-20" style={pageBreakStyle('phases')}>
+            <section id="phases" className="mb-16 sm:mb-32" style={pageBreakStyle('phases')}>
               <SectionLabel>{l.projectPhases}</SectionLabel>
               <div className="space-y-10">
                 {quote.project.phases.map((phase, i) => (
@@ -242,7 +242,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         {phasesHaveDates(quote) && (
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="timeline" active={breaks.has('timeline')} onToggle={onTogglePageBreak} />}
-            <section id="timeline" className="mb-12 sm:mb-20" style={pageBreakStyle('timeline')}>
+            <section id="timeline" className="mb-16 sm:mb-32" style={pageBreakStyle('timeline')}>
               <SectionLabel>{l.timeline}</SectionLabel>
               {/* Break out of article's max-w-3xl on larger screens for a wider Gantt */}
               <GanttTimeline entries={quote.timeline.filter((e) => e.startDate && e.endDate)} lang={quote.language} />
@@ -255,7 +255,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
 
         {/* ── 6. Presupuesto ── */}
         {quote.budgetTable.items.length > 0 && (
-          <section id="budget" className="mb-12 sm:mb-20" style={pageBreakStyle('budget')}>
+          <section id="budget" className="mb-16 sm:mb-32" style={pageBreakStyle('budget')}>
             <SectionLabel>{l.budget}</SectionLabel>
 
             {/* Column headers */}
@@ -309,7 +309,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="budget-additional" active={breaks.has('budget-additional')} onToggle={onTogglePageBreak} />}
             <Divider />
-            <section id="budget-additional" className="mb-12 sm:mb-20" style={pageBreakStyle('budget-additional')}>
+            <section id="budget-additional" className="mb-16 sm:mb-32" style={pageBreakStyle('budget-additional')}>
               <SectionLabel>{quote.budgetTableAdditional.label || 'Servicios adicionales'}</SectionLabel>
 
               <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line mb-0">
@@ -343,7 +343,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
 
         {/* ── 8. Condiciones de aceptación ── */}
         {Object.values(quote.acceptanceConditions).some(Boolean) && (
-          <section id="conditions" className="mb-12 sm:mb-20" style={pageBreakStyle('conditions')}>
+          <section id="conditions" className="mb-16 sm:mb-32" style={pageBreakStyle('conditions')}>
             <SectionLabel>{l.acceptanceAndBilling}</SectionLabel>
             <div className="space-y-10">
               {([
@@ -369,7 +369,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         {(quote.billingMilestones?.length || quote.billingConditions) && (
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="billing" active={breaks.has('billing')} onToggle={onTogglePageBreak} />}
-            <section id="billing" className="mb-12 sm:mb-20" style={pageBreakStyle('billing')}>
+            <section id="billing" className="mb-16 sm:mb-32" style={pageBreakStyle('billing')}>
               <SectionLabel>{l.billing}</SectionLabel>
               {quote.billingMilestones?.length ? (
                 <div className="space-y-8">
@@ -400,7 +400,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         {onTogglePageBreak && <PageBreakControl sectionId="conformity" active={breaks.has('conformity')} onToggle={onTogglePageBreak} />}
 
         {/* ── 10. Conformidad ── */}
-        <section id="conformity" className="mb-12 sm:mb-20" style={pageBreakStyle('conformity')}>
+        <section id="conformity" className="mb-16 sm:mb-32" style={pageBreakStyle('conformity')}>
           <SectionLabel>{l.conformity}</SectionLabel>
           <p className="text-sm text-ink-60 mb-16 leading-relaxed">
             {l.conformityIntro}
