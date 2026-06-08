@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { getCompany } from '@/lib/firestore/companies'
+
 
 // ── Firestore REST fetch (bypasses SDK auth requirement for public pages) ──────
 
@@ -33,10 +33,12 @@ function fromFS(v: FSValue): unknown {
   return null
 }
 
+const FS_BASE = () =>
+  `https://firestore.googleapis.com/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents`
+const FS_KEY = () => process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+
 async function fetchQuoteBySlug(slug: string) {
-  const pid = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-  const url = `https://firestore.googleapis.com/v1/projects/${pid}/databases/(default)/documents:runQuery?key=${key}`
+  const url = `${FS_BASE()}:runQuery?key=${FS_KEY()}`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -55,6 +57,17 @@ async function fetchQuoteBySlug(slug: string) {
   const fields: Record<string, unknown> = {}
   for (const [k, fv] of Object.entries(doc.fields)) fields[k] = fromFS(fv)
   return { id, ...fields } as import('@/types/quote').Quote
+}
+
+async function fetchCompanyById(companyId: string) {
+  const url = `${FS_BASE()}/companies/${companyId}?key=${FS_KEY()}`
+  const res = await fetch(url)
+  if (!res.ok) return null
+  const doc: { fields: Record<string, FSValue> } = await res.json()
+  if (!doc.fields) return null
+  const fields: Record<string, unknown> = {}
+  for (const [k, fv] of Object.entries(doc.fields)) fields[k] = fromFS(fv)
+  return fields as import('@/types/quote').Company
 }
 import { applySystemFont, injectFont } from '@/lib/fonts'
 import { applyPalette, applyThemeColors, applyInkOpacities } from '@/lib/theme'
@@ -187,10 +200,10 @@ export function QuotePageClient() {
         const date = q.date ? new Date(q.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
         const parts = [client, emitter, date].filter(Boolean)
         document.title = parts.length ? `${parts.join(' · ')} — Presu` : 'Presupuesto — Presu'
-        // Company data is optional — if it fails (unauthenticated) just skip theming
+        // Load company via REST API so it works for unauthenticated visitors too
         try {
           if (q.companyId) {
-            const company = await getCompany(q.companyId)
+            const company = await fetchCompanyById(q.companyId)
             if (company) {
               if (company.themeColors) applyThemeColors(company.themeColors)
               else if (company.paletteId) applyPalette(company.paletteId)
