@@ -14,6 +14,22 @@ import { db } from '../firebase'
 import type { Quote, QuoteFormData, QuoteStatus } from '@/types/quote'
 import { nanoid } from 'nanoid'
 
+/** Returns the next sequential quote number for a company: "2026-001", "2026-002", … */
+export async function getNextQuoteNumber(companyId: string): Promise<string> {
+  const year = new Date().getFullYear()
+  const snap = await getDocs(
+    query(collection(db, 'quotes'), where('companyId', '==', companyId))
+  )
+  // Extract any trailing integer from existing quoteNumbers to find the max
+  const nums = snap.docs
+    .map(d => d.data().quoteNumber as string | undefined)
+    .filter(Boolean)
+    .map(n => { const m = (n as string).match(/(\d+)\s*$/); return m ? parseInt(m[1], 10) : 0 })
+    .filter(n => n > 0)
+  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1
+  return `${year}-${String(next).padStart(3, '0')}`
+}
+
 function toSlugBase(clientName: string): string {
   return (clientName || '')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')  // strip accents

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { createQuote } from '@/lib/firestore/quotes'
+import { createQuote, getNextQuoteNumber } from '@/lib/firestore/quotes'
 import { getUserCompanyId, setUserCompanyId } from '@/lib/firestore/companies'
 import { createDefaultQuote } from '@/lib/defaultQuote'
 import { nanoid } from 'nanoid'
@@ -44,7 +44,11 @@ function NewQuoteContent() {
           companyId = `company_${nanoid(10)}`
           await setUserCompanyId(user!.uid, companyId)
         }
-        const defaultData = createDefaultQuote(company ?? undefined)
+        const [defaultData, quoteNumber] = await Promise.all([
+          Promise.resolve(createDefaultQuote(company ?? undefined)),
+          getNextQuoteNumber(companyId),
+        ])
+        defaultData.quoteNumber = quoteNumber
         const id = await createQuote(defaultData, user!.uid, companyId)
         router.replace(`/dashboard/${id}`)
       } catch {
