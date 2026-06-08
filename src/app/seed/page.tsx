@@ -11,9 +11,12 @@ const EMITTER = {
   companyName: 'treseiscero',
   email: 'hola@treseiscero.app',
   address: 'Barcelona, España',
+  city: 'Barcelona',
   taxId: 'B12345678',
   description: '<p>Estudio de diseño y desarrollo digital especializado en identidad de marca, experiencias digitales y estrategia creativa.</p>',
   logoUrl: '',
+  representativeName: '',
+  representativeRole: '',
 }
 
 const DEMO_QUOTES: QuoteFormData[] = [
@@ -33,6 +36,8 @@ const DEMO_QUOTES: QuoteFormData[] = [
       email: 'marta@casabrava.es',
       address: 'Carrer de Provença 88, Barcelona',
       taxId: 'B98765432',
+      city: '',
+      role: '',
       description: '<p>Restaurante de cocina catalana contemporánea con dos locales en Barcelona y uno en Girona.</p>',
     },
     project: {
@@ -78,6 +83,7 @@ const DEMO_QUOTES: QuoteFormData[] = [
       annexes: '',
       dataProtection: '<p>Los datos facilitados serán tratados conforme al RGPD.</p>',
     },
+    billingMilestones: [],
     billingConditions: '<p>Facturas emitidas en euros. Pago por transferencia bancaria en un plazo máximo de 15 días desde la emisión.</p>',
     conformity: {
       emitterData: '<p>Eric Ruiz — treseiscero</p>',
@@ -105,6 +111,8 @@ const DEMO_QUOTES: QuoteFormData[] = [
       email: 'alex@cobrofacil.io',
       address: 'Paseo de la Castellana 200, Madrid',
       taxId: 'B11223344',
+      city: '',
+      role: '',
       description: '<p>Startup fintech especializada en soluciones de cobro para autónomos y pequeñas empresas.</p>',
     },
     project: {
@@ -151,6 +159,7 @@ const DEMO_QUOTES: QuoteFormData[] = [
       annexes: '',
       dataProtection: '<p>Los datos de los usuarios entrevistados serán anonimizados y tratados conforme al RGPD.</p>',
     },
+    billingMilestones: [],
     billingConditions: '<p>Facturación por fases: 30% inicio, 30% entrega wireframes, 40% entrega final. Pago por transferencia en un plazo de 15 días desde la emisión de cada factura.</p>',
     conformity: {
       emitterData: '<p>Eric Ruiz — treseiscero</p>',
@@ -178,6 +187,8 @@ const DEMO_QUOTES: QuoteFormData[] = [
       email: 'lucia@vestida.es',
       address: 'Calle Fuencarral 45, Madrid',
       taxId: 'B55667788',
+      city: '',
+      role: '',
       description: '<p>Marca de moda femenina sostenible con colecciones de edición limitada.</p>',
     },
     project: {
@@ -224,6 +235,7 @@ const DEMO_QUOTES: QuoteFormData[] = [
       annexes: '',
       dataProtection: '<p>Los datos de clientes de la tienda serán responsabilidad del cliente como titular del tratamiento conforme al RGPD.</p>',
     },
+    billingMilestones: [],
     billingConditions: '<p>Facturación en tres hitos: 40% inicio, 30% aprobación de diseños, 30% lanzamiento. Transferencia bancaria en 15 días desde la emisión.</p>',
     conformity: {
       emitterData: '<p>Eric Ruiz — treseiscero</p>',
@@ -251,6 +263,8 @@ const DEMO_QUOTES: QuoteFormData[] = [
       email: 'carlos@espacionorte.com',
       address: 'Av. Diagonal 490, Barcelona',
       taxId: 'B44556677',
+      city: '',
+      role: '',
       description: '<p>Estudio de arquitectura e interiorismo especializado en espacios corporativos y retail.</p>',
     },
     project: {
@@ -297,6 +311,7 @@ const DEMO_QUOTES: QuoteFormData[] = [
       annexes: '',
       dataProtection: '<p>Los datos tratados en el marco del proyecto se gestionarán conforme al Reglamento General de Protección de Datos.</p>',
     },
+    billingMilestones: [],
     billingConditions: '<p>Tres hitos de facturación: 50% inicio, 25% diseños aprobados, 25% lanzamiento. Pago por transferencia en 15 días.</p>',
     conformity: {
       emitterData: '<p>Eric Ruiz — treseiscero</p>',
@@ -324,6 +339,8 @@ const DEMO_QUOTES: QuoteFormData[] = [
       email: 'paula@clinicasonria.es',
       address: 'Rambla de Catalunya 77, Barcelona',
       taxId: 'B22334455',
+      city: '',
+      role: '',
       description: '<p>Clínica dental con tres consultas en Barcelona y lista de espera de tres meses.</p>',
     },
     project: {
@@ -370,6 +387,7 @@ const DEMO_QUOTES: QuoteFormData[] = [
       annexes: '',
       dataProtection: '<p>El tratamiento de datos de pacientes es responsabilidad exclusiva de la clínica como responsable del fichero. treseiscero actuará como encargado del tratamiento solo para los datos estrictamente necesarios en el desarrollo del proyecto.</p>',
     },
+    billingMilestones: [],
     billingConditions: '<p>50% al inicio del proyecto y 50% al lanzamiento. Pago por transferencia bancaria en 15 días desde la emisión de cada factura.</p>',
     conformity: {
       emitterData: '<p>Eric Ruiz — treseiscero</p>',
@@ -397,6 +415,8 @@ const DEMO_QUOTES: QuoteFormData[] = [
       email: 'rtorres@torresgroup.es',
       address: 'Gran Vía 68, Madrid',
       taxId: 'B77889900',
+      city: '',
+      role: '',
       description: '<p>Grupo inmobiliario con más de 200 propiedades en cartera y oficinas en Madrid, Valencia y Málaga.</p>',
     },
     project: {
@@ -445,6 +465,7 @@ const DEMO_QUOTES: QuoteFormData[] = [
       annexes: '',
       dataProtection: '<p>Los datos de clientes del área privada serán responsabilidad de Torres Group. treseiscero implementará las medidas técnicas necesarias conforme al RGPD y firmará el correspondiente contrato de encargo de tratamiento.</p>',
     },
+    billingMilestones: [],
     billingConditions: '<p>Cuatro hitos de facturación: 30% inicio, 30% diseños aprobados, 30% desarrollo completado, 10% lanzamiento. Pago por transferencia en 15 días desde la emisión de cada factura.</p>',
     conformity: {
       emitterData: '<p>Eric Ruiz — treseiscero</p>',

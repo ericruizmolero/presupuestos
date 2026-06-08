@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { Quote } from '@/types/quote'
+import { t } from '@/lib/quoteI18n'
 import { GanttTimeline } from './GanttTimeline'
 import { FeatherIcon } from '@/components/ui/IconPicker'
 
@@ -50,7 +51,7 @@ function SubLabel({ children }: { children: React.ReactNode }) {
 }
 
 function Divider() {
-  return <hr className="border-t my-20 border-line" />
+  return <hr className="print-divider border-t my-20 border-line" />
 }
 
 interface TocItem { id: string; label: string }
@@ -59,17 +60,18 @@ const phasesHaveDates = (quote: Quote) =>
   quote.timeline.some((e) => e.startDate && e.endDate)
 
 function buildToc(quote: Quote): TocItem[] {
-  const items: TocItem[] = [{ id: 'header', label: 'Cabecera' }]
+  const l = t(quote.language)
+  const items: TocItem[] = [{ id: 'header', label: l.quoteWord }]
   if (quote.emitter.description || quote.emitter.companyName) items.push({ id: 'emitter', label: quote.emitter.companyName || 'Emisora' })
-  items.push({ id: 'project', label: 'Proyecto' })
-  if (quote.project.phases.length > 0) items.push({ id: 'phases', label: 'Fases' })
-  if (phasesHaveDates(quote)) items.push({ id: 'timeline', label: 'Tareas y tiempos' })
-  if (quote.budgetTable.items.length > 0) items.push({ id: 'budget', label: 'Presupuesto' })
+  items.push({ id: 'project', label: l.project })
+  if (quote.project.phases.length > 0) items.push({ id: 'phases', label: l.phases })
+  if (phasesHaveDates(quote)) items.push({ id: 'timeline', label: l.timeline })
+  if (quote.budgetTable.items.length > 0) items.push({ id: 'budget', label: l.budget })
   if (quote.budgetTableAdditional.enabled && quote.budgetTableAdditional.items.length > 0)
-    items.push({ id: 'budget-additional', label: quote.budgetTableAdditional.label || 'Adicional' })
-  if (Object.values(quote.acceptanceConditions).some(Boolean)) items.push({ id: 'conditions', label: 'Condiciones' })
-  if (quote.billingConditions) items.push({ id: 'billing', label: 'Facturación' })
-  items.push({ id: 'conformity', label: 'Conformidad' })
+    items.push({ id: 'budget-additional', label: quote.budgetTableAdditional.label || l.budget })
+  if (Object.values(quote.acceptanceConditions).some(Boolean)) items.push({ id: 'conditions', label: l.acceptanceAndBilling })
+  if (quote.billingMilestones?.length || quote.billingConditions) items.push({ id: 'billing', label: l.billing })
+  items.push({ id: 'conformity', label: l.conformity })
   return items
 }
 
@@ -127,26 +129,29 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
     return () => observerRef.current?.disconnect()
   }, [quote])
 
+  const locale = quote.language === 'en' ? 'en-US' : 'es-ES'
+
   const fmt = (n: number) =>
-    new Intl.NumberFormat('es-ES', {
+    new Intl.NumberFormat(locale, {
       style: 'currency', currency: quote.currency || 'EUR', maximumFractionDigits: 0,
     }).format(n)
 
   const formatDate = (d: string) =>
-    d ? new Date(d + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
+    d ? new Date(d + 'T00:00:00').toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' }) : ''
 
   const clientName = quote.client.company || quote.client.name
+  const l = t(quote.language)
 
   return (
     <div className="flex flex-1 min-w-0">
       <TableOfContents items={tocItems} activeId={activeId} />
 
-      <article className="flex-1 max-w-2xl mx-auto px-8 py-20 print:py-0 print:max-w-none print:mx-0">
+      <article className="print-article flex-1 min-w-0 max-w-4xl mx-auto px-4 sm:px-8 py-12 sm:py-20 print:py-0 print:px-0 print:max-w-none print:mx-0">
 
         {/* ── 1. Header — cover page ── */}
-        <section id="header" className="mb-20" style={{ minHeight: '72vh', paddingTop: '28vh' }}>
+        <section id="header" className="mb-12 sm:mb-20" style={{ minHeight: '70vh', paddingTop: '22vh' }}>
           <div className="space-y-3">
-            <p className="text-sm text-ink">Presupuesto</p>
+            <p className="text-sm text-ink">{l.quoteWord}</p>
             {clientName && (
               <p className="text-[1.625rem] font-medium tracking-tight text-ink leading-snug">{clientName}</p>
             )}
@@ -157,45 +162,43 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         </section>
 
         {onTogglePageBreak && <PageBreakControl sectionId="emitter" active={breaks.has('emitter')} onToggle={onTogglePageBreak} />}
-        <Divider />
 
         {/* ── 2. Empresa emisora ── */}
         {(quote.emitter.companyName || quote.emitter.description) && (
           <>
-            <section id="emitter" className="mb-20" style={pageBreakStyle('emitter')}>
+            <section id="emitter" className="mb-12 sm:mb-20" style={pageBreakStyle('emitter')}>
               <SectionLabel>{quote.emitter.companyName}</SectionLabel>
               {quote.emitter.description && <RichContent html={quote.emitter.description} />}
             </section>
             {onTogglePageBreak && <PageBreakControl sectionId="project" active={breaks.has('project')} onToggle={onTogglePageBreak} />}
-            <Divider />
           </>
         )}
 
         {/* ── 3. Proyecto ── */}
-        <section id="project" className="mb-20" style={pageBreakStyle('project')}>
-          <SectionLabel>Proyecto</SectionLabel>
+        <section id="project" className="mb-12 sm:mb-20" style={pageBreakStyle('project')}>
+          <SectionLabel>{l.project}</SectionLabel>
           <div className="space-y-12">
             {quote.client.description && (
               <div>
-                <SubLabel>Sobre {clientName || 'el cliente'}</SubLabel>
+                <SubLabel>{l.aboutClient(clientName)}</SubLabel>
                 <RichContent html={quote.client.description} />
               </div>
             )}
             {quote.project.mainObjective && (
               <div>
-                <SubLabel>Objetivo principal</SubLabel>
+                <SubLabel>{l.mainObjective}</SubLabel>
                 <RichContent html={quote.project.mainObjective} />
               </div>
             )}
             {quote.project.collaborationModel && (
               <div>
-                <SubLabel>Modelo de colaboración</SubLabel>
+                <SubLabel>{l.collaborationModel}</SubLabel>
                 <RichContent html={quote.project.collaborationModel} />
               </div>
             )}
             {quote.project.scope && (
               <div>
-                <SubLabel>Alcance</SubLabel>
+                <SubLabel>{l.scope}</SubLabel>
                 <RichContent html={quote.project.scope} />
               </div>
             )}
@@ -206,9 +209,8 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         {quote.project.phases.length > 0 && (
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="phases" active={breaks.has('phases')} onToggle={onTogglePageBreak} />}
-            <Divider />
-            <section id="phases" className="mb-20" style={pageBreakStyle('phases')}>
-              <SectionLabel>Fases del proyecto</SectionLabel>
+            <section id="phases" className="mb-12 sm:mb-20" style={pageBreakStyle('phases')}>
+              <SectionLabel>{l.projectPhases}</SectionLabel>
               <div className="space-y-10">
                 {quote.project.phases.map((phase, i) => (
                   <div key={i}>
@@ -225,7 +227,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                       <h3 className="text-base font-medium text-ink leading-snug">{phase.name}</h3>
                     </div>
                     {phase.description && (
-                      <div className="pl-12">
+                      <div className="pl-8 sm:pl-12">
                         <RichContent html={phase.description} />
                       </div>
                     )}
@@ -240,10 +242,10 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         {phasesHaveDates(quote) && (
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="timeline" active={breaks.has('timeline')} onToggle={onTogglePageBreak} />}
-            <Divider />
-            <section id="timeline" className="mb-20" style={pageBreakStyle('timeline')}>
-              <SectionLabel>Timeline</SectionLabel>
-              <GanttTimeline entries={quote.timeline.filter((e) => e.startDate && e.endDate)} />
+            <section id="timeline" className="mb-12 sm:mb-20" style={pageBreakStyle('timeline')}>
+              <SectionLabel>{l.timeline}</SectionLabel>
+              {/* Break out of article's max-w-3xl on larger screens for a wider Gantt */}
+              <GanttTimeline entries={quote.timeline.filter((e) => e.startDate && e.endDate)} lang={quote.language} />
             </section>
           </>
         )}
@@ -253,45 +255,51 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
 
         {/* ── 6. Presupuesto ── */}
         {quote.budgetTable.items.length > 0 && (
-          <section id="budget" className="mb-20" style={pageBreakStyle('budget')}>
-            <SectionLabel>Presupuesto</SectionLabel>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b" style={{ borderColor: 'var(--color-accent)' }}>
-                  <th className="text-left py-3 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">Concepto</th>
-                  <th className="text-left py-3 text-[10px] font-medium tracking-[0.15em] uppercase w-28 text-ink-60">Tiempo</th>
-                  <th className="text-right py-3 text-[10px] font-medium tracking-[0.15em] uppercase w-32 text-ink-60">Precio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quote.budgetTable.items.map((item, i) => (
-                  <tr key={i} className="border-b border-line">
-                    <td className="py-4 align-top text-ink">
-                      <p className="font-medium">{item.concept}</p>
-                      {item.notes && <p className="text-xs mt-1 font-normal leading-relaxed text-ink-40">{item.notes}</p>}
-                    </td>
-                    <td className="py-4 align-top text-ink-60">{item.time}</td>
-                    <td className="py-4 text-right font-medium align-top tabular-nums text-ink">{fmt(item.price)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-6 space-y-2 text-sm">
-              {quote.budgetTable.taxRate > 0 && (
-                <>
-                  <div className="flex justify-between text-ink-60">
-                    <span>Subtotal</span><span className="tabular-nums">{fmt(quote.budgetTable.subtotal)}</span>
+          <section id="budget" className="mb-12 sm:mb-20" style={pageBreakStyle('budget')}>
+            <SectionLabel>{l.budget}</SectionLabel>
+
+            {/* Column headers */}
+            <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line mb-0">
+              <span className="w-6 shrink-0 hidden xs:block" />
+              <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
+              <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">{l.price}</span>
+            </div>
+
+            {/* Items */}
+            <div>
+              {quote.budgetTable.items.map((item, i) => (
+                <div key={i} className="flex items-start gap-3 sm:gap-6 py-4 sm:py-5 border-b border-line">
+                  <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                    {item.time && (
+                      <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 mt-1">{item.time}</p>
+                    )}
+                    {item.notes && (
+                      <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
+                    )}
                   </div>
-                  <div className="flex justify-between text-ink-60">
-                    <span>IVA ({quote.budgetTable.taxRate}%)</span>
-                    <span className="tabular-nums">{fmt(quote.budgetTable.total - quote.budgetTable.subtotal)}</span>
-                  </div>
-                </>
-              )}
-              <div className="flex justify-between font-medium text-base pt-4 border-t border-accent text-ink">
-                <span>Total {quote.budgetTable.taxRate === 0 && <span className="font-normal text-sm text-ink-40">(IVA no incluido)</span>}</span>
-                <span className="tabular-nums">{fmt(quote.budgetTable.total)}</span>
-              </div>
+                  <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
+                    {fmt(item.price)}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Totals */}
+            <div className="flex items-baseline gap-3 sm:gap-6 pt-4 sm:pt-5">
+              <span className="w-6 shrink-0 hidden xs:block" />
+              <span className="flex-1 text-sm font-medium text-ink">
+                {quote.budgetTable.totalLabel || 'Total'}
+                {quote.budgetTable.taxRate > 0 && (
+                  <span className="font-normal text-ink-40 ml-1">{l.vatNotIncluded}</span>
+                )}
+              </span>
+              <span className="text-sm font-medium text-ink tabular-nums w-20 sm:w-28 text-right shrink-0">
+                {fmt(quote.budgetTable.subtotal)}
+              </span>
             </div>
           </section>
         )}
@@ -301,43 +309,50 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="budget-additional" active={breaks.has('budget-additional')} onToggle={onTogglePageBreak} />}
             <Divider />
-            <section id="budget-additional" className="mb-20" style={pageBreakStyle('budget-additional')}>
+            <section id="budget-additional" className="mb-12 sm:mb-20" style={pageBreakStyle('budget-additional')}>
               <SectionLabel>{quote.budgetTableAdditional.label || 'Servicios adicionales'}</SectionLabel>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-accent">
-                    <th className="text-left py-3 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">Concepto</th>
-                    <th className="text-right py-3 text-[10px] font-medium tracking-[0.15em] uppercase w-40 text-ink-60">Precio unitario (IVA no inc.)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quote.budgetTableAdditional.items.map((item, i) => (
-                    <tr key={i} className="border-b border-line">
-                      <td className="py-4 text-ink">{item.concept}</td>
-                      <td className="py-4 text-right font-medium tabular-nums text-ink">{fmt(item.price)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+              <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line mb-0">
+                <span className="w-6 shrink-0 hidden xs:block" />
+                <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
+                <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">{l.price}</span>
+              </div>
+              <div>
+                {quote.budgetTableAdditional.items.map((item, i) => (
+                  <div key={i} className="flex items-start gap-3 sm:gap-6 py-4 sm:py-5 border-b border-line">
+                    <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                      {item.notes && (
+                        <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
+                      )}
+                    </div>
+                    <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
+                      {item.price > 0 ? fmt(item.price) : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </section>
           </>
         )}
 
         {onTogglePageBreak && <PageBreakControl sectionId="conditions" active={breaks.has('conditions')} onToggle={onTogglePageBreak} />}
-        <Divider />
 
         {/* ── 8. Condiciones de aceptación ── */}
         {Object.values(quote.acceptanceConditions).some(Boolean) && (
-          <section id="conditions" className="mb-20" style={pageBreakStyle('conditions')}>
-            <SectionLabel>Aceptación y facturación</SectionLabel>
+          <section id="conditions" className="mb-12 sm:mb-20" style={pageBreakStyle('conditions')}>
+            <SectionLabel>{l.acceptanceAndBilling}</SectionLabel>
             <div className="space-y-10">
               {([
-                ['paymentTerms', 'Forma de pago'],
-                ['acceptanceCriteria', 'Criterios de aceptación'],
-                ['clientResponsibilities', 'Responsabilidades del cliente'],
-                ['penaltyClause', 'Cláusula de penalización'],
-                ['annexes', 'Archivos / Información anexa'],
-                ['dataProtection', 'Aceptación del tratamiento de datos personales'],
+                ['paymentTerms',            l.paymentTerms],
+                ['acceptanceCriteria',      l.acceptanceCriteria],
+                ['clientResponsibilities',  l.clientResponsibilities],
+                ['penaltyClause',           l.penaltyClause],
+                ['annexes',                 l.annexes],
+                ['dataProtection',          l.dataProtection],
               ] as [keyof Quote['acceptanceConditions'], string][]).map(([key, label]) =>
                 quote.acceptanceConditions[key] ? (
                   <div key={key}>
@@ -351,37 +366,79 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
         )}
 
         {/* ── 9. Facturación ── */}
-        {quote.billingConditions && (
+        {(quote.billingMilestones?.length || quote.billingConditions) && (
           <>
             {onTogglePageBreak && <PageBreakControl sectionId="billing" active={breaks.has('billing')} onToggle={onTogglePageBreak} />}
-            <Divider />
-            <section id="billing" className="mb-20" style={pageBreakStyle('billing')}>
-              <SectionLabel>Facturación</SectionLabel>
-              <RichContent html={quote.billingConditions} />
+            <section id="billing" className="mb-12 sm:mb-20" style={pageBreakStyle('billing')}>
+              <SectionLabel>{l.billing}</SectionLabel>
+              {quote.billingMilestones?.length ? (
+                <div className="space-y-8">
+                  {quote.billingMilestones.map((m) => {
+                    const subtotal = quote.budgetTable?.subtotal || 0
+                    const amount = subtotal > 0 ? subtotal * m.percentage / 100 : null
+                    const formatted = amount != null
+                      ? new Intl.NumberFormat(locale, { style: 'currency', currency: quote.currency || 'EUR' }).format(amount)
+                      : null
+                    return (
+                      <div key={m.id}>
+                        <p className="text-sm font-medium text-ink mb-1">
+                          {m.label}{formatted ? `: ${formatted}` : ''}
+                          {formatted && <span className="font-normal text-ink-60"> {l.vatNotIncluded}</span>}
+                        </p>
+                        {m.description && <p className="text-sm text-ink-60">{m.description}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <RichContent html={quote.billingConditions} />
+              )}
             </section>
           </>
         )}
 
         {onTogglePageBreak && <PageBreakControl sectionId="conformity" active={breaks.has('conformity')} onToggle={onTogglePageBreak} />}
-        <Divider />
 
         {/* ── 10. Conformidad ── */}
-        <section id="conformity" className="mb-20" style={pageBreakStyle('conformity')}>
-          <SectionLabel>Conformidad</SectionLabel>
+        <section id="conformity" className="mb-12 sm:mb-20" style={pageBreakStyle('conformity')}>
+          <SectionLabel>{l.conformity}</SectionLabel>
           <p className="text-sm text-ink-60 mb-16 leading-relaxed">
-            La firma del presente documento se interpreta como la conformidad y la aceptación de todas las condiciones expuestas en él y el cumplimiento de las mismas.
+            {l.conformityIntro}
           </p>
 
-          <div className="grid grid-cols-2 gap-16">
-            {[
-              { label: 'Cliente', data: quote.conformity.clientData },
-              { label: 'Proveedor', data: quote.conformity.emitterData },
-            ].map(({ label, data }) => (
-              <div key={label}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 sm:gap-16">
+            {([
+              { label: l.client, fields: [
+                { label: l.company,       value: quote.client.company },
+                { label: l.taxId,         value: quote.client.taxId },
+                { label: l.address,       value: quote.client.address },
+                { label: l.city,          value: quote.client.city },
+                { label: l.representedBy, value: quote.client.name },
+                { label: l.role,          value: quote.client.role },
+              ]},
+              { label: l.serviceProvider, fields: [
+                { label: l.company,       value: quote.emitter.companyName },
+                { label: l.taxId,         value: quote.emitter.taxId },
+                { label: l.address,       value: quote.emitter.address },
+                { label: l.city,          value: quote.emitter.city },
+                { label: l.representedBy, value: quote.emitter.representativeName },
+                { label: l.role,          value: quote.emitter.representativeRole },
+              ]},
+            ] as const).map(({ label, fields }) => (
+              <div key={label} className="flex flex-col">
                 <SubLabel>{label}</SubLabel>
-                {data && <div className="mb-8 text-sm"><RichContent html={data} /></div>}
-                <div className="mt-16 border-t border-input pt-3">
-                  <p className="text-xs text-ink-40">Firma y fecha</p>
+                <div className="space-y-2">
+                  {fields.filter(f => f.value).map(({ label: fl, value }) => (
+                    <div key={fl} className="flex gap-3 text-sm">
+                      <span className="text-ink-40 w-24 sm:w-32 shrink-0">{fl}:</span>
+                      <span className="text-ink">{value}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Spacer: fills available height but always at least 48px */}
+                <div className="flex-1 min-h-12" />
+                <div className="border-t border-input pt-3">
+                  <p className="text-xs text-ink-40">{l.signatureDate}</p>
                 </div>
               </div>
             ))}

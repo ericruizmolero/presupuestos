@@ -22,8 +22,11 @@ export interface Company {
   logoUrl: string
   email: string
   address: string
+  city: string
   taxId: string
   description: string
+  representativeName: string
+  representativeRole: string
   defaultConditions: DefaultConditions
   fonts: Font[]
   defaultFontName: string
@@ -45,8 +48,11 @@ export interface EmitterInfo {
   logoUrl: string
   email: string
   address: string
+  city: string
   taxId: string
   description: string
+  representativeName: string
+  representativeRole: string
 }
 
 export interface ClientInfo {
@@ -54,8 +60,10 @@ export interface ClientInfo {
   company: string
   email: string
   address: string
+  city: string
   taxId: string
   description: string
+  role: string
 }
 
 export interface ProjectPhase {
@@ -104,6 +112,13 @@ export interface BudgetTableAdditional {
   total: number
 }
 
+export interface BillingMilestone {
+  id: string
+  label: string       // "Hito inicial"
+  percentage: number  // 50
+  description: string // texto libre de condiciones
+}
+
 export interface AcceptanceConditions {
   paymentTerms: string
   acceptanceCriteria: string
@@ -128,11 +143,13 @@ export interface Quote {
   status: QuoteStatus
   createdAt: string
   updatedAt: string
+  isDemo?: boolean
 
   quoteNumber: string
   date: string
   validUntil: string
   currency: Currency
+  language?: 'es' | 'en'
   fontName: string
 
   emitter: EmitterInfo
@@ -143,9 +160,14 @@ export interface Quote {
   budgetTableAdditional: BudgetTableAdditional
   acceptanceConditions: AcceptanceConditions
   billingConditions: string
+  billingMilestones: BillingMilestone[]
   conformity: Conformity
+  accessPassword?: string
   pageBreaksBefore?: string[]
   sectionOrder?: string[]
+  sectionSpacing?: Record<string, { top: number; bottom: number }>
+  sectionHtmlOverrides?: Record<string, string>
+  sectionsMerged?: string[]
 }
 
 export type QuoteFormData = Omit<Quote, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'companyId'>

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { getQuotes, createQuote, deleteQuote, duplicateQuote, updateQuoteStatus } from '@/lib/firestore/quotes'
+import { getQuotes, createQuote, deleteQuote, duplicateQuote, updateQuote, updateQuoteStatus } from '@/lib/firestore/quotes'
 import { getUserCompanyId, setUserCompanyId } from '@/lib/firestore/companies'
 import { createDemoQuote } from '@/lib/demoQuote'
 import { nanoid } from 'nanoid'
@@ -76,6 +76,24 @@ function DashboardContent() {
         setQuotes(seeded)
         window.dispatchEvent(new Event('quotes-changed'))
       } else {
+        // Refresh or backfill demo quotes
+        const demoQuotes = data.filter(
+          q => q.isDemo || q.slug?.startsWith('demo-') || q.quoteNumber === 'PRE-2026-001'
+        )
+        if (demoQuotes.length > 0) {
+          const fresh = createDemoQuote()
+          await Promise.all(demoQuotes.map(q => {
+            // Refresh if missing new structured fields
+            const needsRefresh = !q.emitter?.city || !q.emitter?.representativeName || !q.billingMilestones?.length
+            const patch = needsRefresh ? { ...fresh, isDemo: true } : { isDemo: true }
+            return updateQuote(q.id, patch)
+          }))
+          demoQuotes.forEach(q => {
+            const needsRefresh = !q.emitter?.city || !q.emitter?.representativeName || !q.billingMilestones?.length
+            if (needsRefresh) Object.assign(q, { ...createDemoQuote(), isDemo: true })
+            else q.isDemo = true
+          })
+        }
         setQuotes(data)
       }
     } catch (e) {
@@ -210,8 +228,15 @@ function DashboardContent() {
                 onClick={() => router.push(`/dashboard/${q.id}`)}
               >
                 <td className="px-6 py-4">
-                  <span className="font-medium text-ink">
-                    {q.client?.company || q.client?.name || '—'}
+                  <span className="inline-flex items-center gap-2">
+                    <span className="font-medium text-ink">
+                      {q.client?.company || q.client?.name || '—'}
+                    </span>
+                    {q.isDemo && (
+                      <span className="text-[9px] tracking-widest uppercase px-1 py-px rounded border border-line text-ink-40 leading-none opacity-50">
+                        demo
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-ink-60">

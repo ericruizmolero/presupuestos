@@ -14,11 +14,12 @@ export function createDemoQuote(anchorDate?: string): QuoteFormData {
     return d.toISOString().split('T')[0]
   }
 
-  const quoteDate   = offset(-5)
-  const validUntil  = offset(25)
+  const quoteDate  = offset(-5)
+  const validUntil = offset(25)
 
   return {
     slug: `demo-mercado-urbano-${nanoid(6)}`,
+    isDemo: true,
     status: 'enviado',
     quoteNumber: 'PRE-2026-001',
     date: quoteDate,
@@ -26,24 +27,29 @@ export function createDemoQuote(anchorDate?: string): QuoteFormData {
     currency: 'EUR',
     fontName: '',
 
-    // ── Emisor ──────────────────────────────────────────────────────────────
+    // ── Emisor ───────────────────────────────────────────────────────────────
     emitter: {
-      companyName: 'Estudio Forma',
-      logoUrl: '',
-      email: 'hola@estudioforma.es',
-      address: 'Calle de Fuencarral 42, 1ª planta\n28004 Madrid',
-      taxId: 'B-12345678',
+      companyName:        'Estudio Forma',
+      logoUrl:            '',
+      email:              'hola@estudioforma.es',
+      address:            'Calle de Fuencarral 42, 1ª planta\n28004 Madrid',
+      city:               'Madrid',
+      taxId:              'B-12345678',
+      representativeName: 'Laura Gómez Reyes',
+      representativeRole: 'Directora creativa',
       description:
         '<p>Estudio de diseño estratégico especializado en identidad de marca, sistemas visuales y experiencia digital. Trabajamos con empresas que quieren construir marcas con criterio y coherencia.</p><p>Con más de ocho años de experiencia en el sector, hemos desarrollado proyectos para startups, pymes y marcas consolidadas de toda España y Latinoamérica.</p>',
     },
 
-    // ── Cliente ─────────────────────────────────────────────────────────────
+    // ── Cliente ──────────────────────────────────────────────────────────────
     client: {
-      name: 'Alejandro Torres',
-      company: 'Mercado Urbano SL',
-      email: 'alejandro@mercadourbano.es',
-      address: 'Paseo de Gràcia 45, 4º 2ª\n08007 Barcelona',
-      taxId: 'B-87654321',
+      name:        'Alejandro Torres',
+      company:     'Mercado Urbano SL',
+      email:       'alejandro@mercadourbano.es',
+      address:     'Paseo de Gràcia 45, 4º 2ª\n08007 Barcelona',
+      city:        'Barcelona',
+      taxId:       'B-87654321',
+      role:        'CEO & Cofundador',
       description:
         '<p>Mercado Urbano es una plataforma de comercio local que conecta productores artesanales y pequeños comerciantes con consumidores de proximidad. Con presencia en cuatro ciudades, busca consolidar su imagen de marca y lanzar su nueva web transaccional.</p>',
     },
@@ -105,87 +111,51 @@ export function createDemoQuote(anchorDate?: string): QuoteFormData {
       ],
     },
 
-    // ── Timeline ─────────────────────────────────────────────────────────────
+    // ── Timeline ──────────────────────────────────────────────────────────────
     timeline: [
-      {
-        phase: 'Descubrimiento',
-        group: 'Estrategia',
-        icon: 'Search',
-        startDate: offset(0),
-        endDate: offset(13),
-      },
-      {
-        phase: 'Estrategia de marca',
-        group: 'Estrategia',
-        icon: 'Compass',
-        startDate: offset(14),
-        endDate: offset(27),
-      },
-      {
-        phase: 'Identidad visual',
-        group: 'Diseño',
-        icon: 'PenTool',
-        startDate: offset(28),
-        endDate: offset(55),
-      },
-      {
-        phase: 'Diseño web',
-        group: 'Diseño',
-        icon: 'Layout',
-        startDate: offset(42),
-        endDate: offset(69),
-      },
-      {
-        phase: 'Desarrollo',
-        group: 'Tecnología',
-        icon: 'Code',
-        startDate: offset(70),
-        endDate: offset(97),
-      },
-      {
-        phase: 'Lanzamiento',
-        group: 'Tecnología',
-        icon: 'Zap',
-        startDate: offset(98),
-        endDate: offset(111),
-      },
+      { phase: 'Descubrimiento',     group: 'Estrategia',  icon: 'Search',  startDate: offset(0),  endDate: offset(13)  },
+      { phase: 'Estrategia de marca',group: 'Estrategia',  icon: 'Compass', startDate: offset(14), endDate: offset(27)  },
+      { phase: 'Identidad visual',   group: 'Diseño',      icon: 'PenTool', startDate: offset(28), endDate: offset(55)  },
+      { phase: 'Diseño web',         group: 'Diseño',      icon: 'Layout',  startDate: offset(42), endDate: offset(69)  },
+      { phase: 'Desarrollo',         group: 'Tecnología',  icon: 'Code',    startDate: offset(70), endDate: offset(97)  },
+      { phase: 'Lanzamiento',        group: 'Tecnología',  icon: 'Zap',     startDate: offset(98), endDate: offset(111) },
     ],
 
-    // ── Tabla de presupuesto ─────────────────────────────────────────────────
+    // ── Tabla de presupuesto ──────────────────────────────────────────────────
     budgetTable: {
       items: [
         {
           id: nanoid(8),
           concept: 'Estrategia y descubrimiento de marca',
-          time: '20h',
+          time: '2 semanas',
           price: 2400,
           notes: 'Incluye 2 sesiones de trabajo, análisis competitivo y entregables de estrategia',
         },
         {
           id: nanoid(8),
           concept: 'Diseño de identidad visual completa',
-          time: '60h',
+          time: '4 semanas',
           price: 7200,
           notes: 'Logotipo, paleta, tipografía, iconografía y manual de marca (PDF interactivo)',
         },
         {
           id: nanoid(8),
           concept: 'UX/UI — Diseño web (8 plantillas)',
-          time: '48h',
+          time: '3 semanas',
           price: 5760,
           notes: 'Arquitectura de información, wireframes, diseño UI responsivo y prototipo Figma',
         },
         {
           id: nanoid(8),
           concept: 'Desarrollo frontend (Next.js + CMS)',
-          time: '80h',
+          time: '6 semanas',
           price: 9600,
           notes: 'Implementación técnica, integración CMS headless, pasarela de pago y deploy',
         },
         {
           id: nanoid(8),
           concept: 'Formación y entrega de archivos',
-          time: '6h',
+          time: '1 semana',
           price: 720,
           notes: 'Sesión de onboarding de 2h + documentación técnica + todos los archivos fuente',
         },
@@ -195,7 +165,7 @@ export function createDemoQuote(anchorDate?: string): QuoteFormData {
       total: 31072.80,
     },
 
-    // ── Tabla adicional (desplazamientos y licencias) ─────────────────────────
+    // ── Tabla adicional ───────────────────────────────────────────────────────
     budgetTableAdditional: {
       enabled: true,
       label: 'Costes de terceros estimados',
@@ -216,7 +186,7 @@ export function createDemoQuote(anchorDate?: string): QuoteFormData {
         },
         {
           id: nanoid(8),
-          concept: 'Integración pasarela de pago (Stripe)',
+          concept: 'Pasarela de pago (Stripe)',
           time: '—',
           price: 0,
           notes: 'Sin coste de integración; comisiones según tarifa Stripe (1,5% + 0,25 € por transacción)',
@@ -226,10 +196,10 @@ export function createDemoQuote(anchorDate?: string): QuoteFormData {
       total: 720,
     },
 
-    // ── Condiciones de aceptación ────────────────────────────────────────────
+    // ── Condiciones de aceptación ─────────────────────────────────────────────
     acceptanceConditions: {
       paymentTerms:
-        '<p>El pago se estructura en tres hitos vinculados al avance del proyecto:</p><ul><li><strong>40% a la firma</strong> — 12.429,12 € — necesario para iniciar el proyecto</li><li><strong>30% al entregar la identidad visual aprobada</strong> — 9.321,84 €</li><li><strong>30% restante al lanzamiento del sitio web</strong> — 9.321,84 €</li></ul><p>Todos los pagos se realizarán por transferencia bancaria en un plazo máximo de 7 días desde la emisión de la factura correspondiente. El retraso en los pagos podrá suspender el avance del proyecto hasta la regularización.</p>',
+        '<p>El pago se estructura en tres hitos vinculados al avance del proyecto, tal y como se detalla en la sección de condiciones de facturación.</p><p>Todos los pagos se realizarán por transferencia bancaria en un plazo máximo de <strong>7 días naturales</strong> desde la emisión de la factura correspondiente. El retraso en los pagos podrá suspender el avance del proyecto hasta la regularización.</p>',
 
       acceptanceCriteria:
         '<p>Cada entregable se considerará aceptado cuando el cliente confirme su aprobación por escrito (email o mensaje en Notion). En ausencia de respuesta en un plazo de <strong>5 días laborables</strong> desde la entrega, el entregable se tendrá por aceptado tácitamente y el proyecto avanzará a la siguiente fase.</p><p>Se incluyen hasta <strong>dos rondas de revisión</strong> por entregable. Las revisiones adicionales se facturarán a razón de 120 €/h.</p>',
@@ -238,25 +208,42 @@ export function createDemoQuote(anchorDate?: string): QuoteFormData {
         '<ul><li>Designar un interlocutor con capacidad de decisión antes del inicio del proyecto</li><li>Facilitar accesos, contraseñas y materiales existentes en los primeros 3 días laborables</li><li>Revisar y aprobar (o comentar) los entregables en el plazo indicado en cada fase</li><li>Garantizar la disponibilidad del interlocutor para las reuniones de sprint (máx. 2h quincenales)</li><li>Proporcionar el contenido textual definitivo antes del inicio de la fase de desarrollo</li></ul>',
 
       penaltyClause:
-        '<p>Si el proyecto se paraliza por causas imputables al cliente durante más de <strong>30 días naturales</strong>, Estudio Forma se reserva el derecho a facturar el trabajo realizado hasta esa fecha y a renegociar las condiciones de reanudación.</p><p>En caso de cancelación por parte del cliente una vez iniciado el proyecto, se facturará el 100% del trabajo ejecutado hasta ese momento, más una penalización del 15% sobre el importe pendiente en concepto de lucro cesante.</p>',
+        '<p>Si el proyecto se paraliza por causas imputables al cliente durante más de <strong>30 días naturales</strong>, Estudio Forma se reserva el derecho a facturar el trabajo realizado hasta esa fecha y a renegociar las condiciones de reanudación.</p><p>En caso de cancelación por parte del cliente una vez iniciado el proyecto, se facturará el 100% del trabajo ejecutado hasta ese momento, más una penalización del <strong>15%</strong> sobre el importe pendiente en concepto de lucro cesante.</p>',
 
       annexes:
-        '<p>Se adjunta a este presupuesto:</p><ul><li><strong>Anexo A</strong> — Brief de proyecto y alcance detallado (Notion)</li><li><strong>Anexo B</strong> — Ejemplos de referencias visuales y moodboard inicial</li><li><strong>Anexo C</strong> — Propuesta técnica de arquitectura web</li></ul><p>Todos los documentos están disponibles en el espacio de trabajo compartido de Notion, accesible con el email facilitado por el cliente.</p>',
+        '<p>Se adjunta a este presupuesto:</p><ul><li><strong>Anexo A</strong> — Brief de proyecto y alcance detallado (Notion)</li><li><strong>Anexo B</strong> — Ejemplos de referencias visuales y moodboard inicial</li><li><strong>Anexo C</strong> — Propuesta técnica de arquitectura web</li></ul>',
 
       dataProtection:
-        '<p>En cumplimiento del Reglamento General de Protección de Datos (RGPD) y la Ley Orgánica 3/2018 (LOPDGDD), los datos personales facilitados durante la relación contractual serán tratados por Estudio Forma con la finalidad exclusiva de gestionar la prestación de servicios contratados.</p><p>Los datos no serán cedidos a terceros salvo obligación legal. El cliente tiene derecho de acceso, rectificación, supresión y portabilidad de sus datos enviando un email a <strong>privacidad@estudioforma.es</strong>.</p>',
+        '<p>En cumplimiento del RGPD y la Ley Orgánica 3/2018 (LOPDGDD), los datos personales facilitados serán tratados por Estudio Forma con la finalidad exclusiva de gestionar la prestación de servicios contratados. Los datos no serán cedidos a terceros salvo obligación legal.</p><p>El cliente puede ejercer sus derechos de acceso, rectificación y supresión escribiendo a <strong>privacidad@estudioforma.es</strong>.</p>',
     },
 
-    // ── Condiciones de facturación ───────────────────────────────────────────
-    billingConditions:
-      '<p>Las facturas se emitirán a nombre de <strong>Mercado Urbano SL</strong> con CIF B-87654321, en la dirección fiscal indicada en este presupuesto.</p><p>Estudio Forma emitirá cada factura con un desglose detallado de conceptos y el IVA aplicable al tipo vigente (21%). En caso de que el cliente esté sujeto a retención de IRPF, deberá comunicarlo antes de la emisión de la primera factura.</p><p>Las facturas se enviarán en formato PDF al email de facturación indicado por el cliente. Para cualquier gestión relacionada con facturación, contactar con <strong>admin@estudioforma.es</strong>.</p>',
+    // ── Hitos de facturación ──────────────────────────────────────────────────
+    billingConditions: '',
+    billingMilestones: [
+      {
+        id: nanoid(8),
+        label: 'Pago inicial 40%',
+        percentage: 40,
+        description: 'A la firma del presupuesto. Necesario para reservar la fecha de inicio y comenzar la fase de descubrimiento.',
+      },
+      {
+        id: nanoid(8),
+        label: 'Entrega de identidad 30%',
+        percentage: 30,
+        description: 'A la aprobación de la identidad visual completa (logotipo, manual de marca y sistema tipográfico).',
+      },
+      {
+        id: nanoid(8),
+        label: 'Lanzamiento web 30%',
+        percentage: 30,
+        description: 'Al lanzamiento del sitio web en producción y entrega de todos los archivos fuente al cliente.',
+      },
+    ],
 
-    // ── Conformidad ──────────────────────────────────────────────────────────
+    // ── Conformidad ───────────────────────────────────────────────────────────
     conformity: {
-      emitterData:
-        '<p><strong>Estudio Forma</strong><br>Representado por: Laura Gómez Reyes<br>Cargo: Directora de Proyecto<br>NIF: 12345678-A<br>Fecha: —</p>',
-      clientData:
-        '<p><strong>Mercado Urbano SL</strong><br>Representado por: Alejandro Torres<br>Cargo: CEO &amp; Cofundador<br>NIF: 87654321-B<br>Fecha: —</p>',
+      emitterData:  '',
+      clientData:   '',
       signatureStatus: 'unsigned',
       signedAt: null,
     },

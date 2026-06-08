@@ -25,21 +25,50 @@ function EditQuoteContent() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const { company } = useAuth()
+  const [quoteRaw, setQuoteRaw] = useState<Quote | null>(null)
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // Step 1: load quote from Firestore (once)
   useEffect(() => {
     getQuoteById(id).then((q) => {
       if (!q) { router.replace('/dashboard'); return }
-      if (!q.emitter.logoUrl && company?.logoUrl) {
-        q.emitter.logoUrl = company.logoUrl
-      }
-      setQuote(q)
-      setLoading(false)
+      setQuoteRaw(q)
     })
-  }, [id, router, company])
+  }, [id, router])
+
+  // Step 2: once both quote and company are resolved, merge and render
+  useEffect(() => {
+    if (!quoteRaw) return
+    const q: Quote = { ...quoteRaw, emitter: { ...quoteRaw.emitter }, client: { ...quoteRaw.client } }
+
+    // Backward compat — ensure new fields exist
+    q.emitter.city               = q.emitter.city ?? ''
+    q.emitter.representativeName = q.emitter.representativeName ?? ''
+    q.emitter.representativeRole = q.emitter.representativeRole ?? ''
+    q.client.city                = q.client.city ?? ''
+    q.client.role                = q.client.role ?? ''
+    if (!q.billingMilestones?.length) {
+      const mid = () => Math.random().toString(36).slice(2, 10)
+      q.billingMilestones = [
+        { id: mid(), label: 'Hito inicial 50%', percentage: 50, description: 'La forma de pago será a la recepción de la factura que será emitida cuando comience el proyecto.' },
+        { id: mid(), label: 'Hito final 50%',   percentage: 50, description: 'La forma de pago será a la recepción de la factura que será emitida cuando el trabajo esté completado.' },
+      ]
+    }
+
+    // Sync emitter fields from company settings if empty in the quote
+    if (company) {
+      if (!q.emitter.logoUrl && company.logoUrl)                       q.emitter.logoUrl = company.logoUrl
+      if (!q.emitter.city && company.city)                             q.emitter.city = company.city
+      if (!q.emitter.representativeName && company.representativeName) q.emitter.representativeName = company.representativeName
+      if (!q.emitter.representativeRole && company.representativeRole) q.emitter.representativeRole = company.representativeRole
+    }
+
+    setQuote(q)
+    setLoading(false)
+  }, [quoteRaw, company])
 
   async function handleSave(data: QuoteFormData) {
     setSaving(true)
@@ -91,7 +120,7 @@ function EditQuoteContent() {
             className="flex items-center gap-2 text-sm px-4 py-2 rounded-md transition-all hover:-translate-y-px bg-accent text-on-accent hover:bg-accent-hover"
           >
             <Printer size={14} strokeWidth={1.5} />
-            Exportar PDF
+            Previsualizar PDF
           </Link>
         </div>
       </div>

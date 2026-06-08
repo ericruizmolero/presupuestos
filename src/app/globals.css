@@ -6,6 +6,9 @@
   All --color-* vars are overridden at runtime by applyPalette() or custom pickers.
 */
 @theme {
+  /* Extra-small breakpoint for fine-grained responsive control (390px+) */
+  --breakpoint-xs: 390px;
+
   --color-accent:    #1A1A1A;
   --color-on-accent: #ffffff;
   --color-paper:     #ffffff;
@@ -36,12 +39,21 @@
 }
 @utility border-input       { border-color: color-mix(in srgb, var(--color-line) 70%, var(--color-ink)); }
 
+html {
+  /* Prevent any element from causing horizontal page scroll on mobile.
+     overflow-x: clip (vs hidden) avoids creating a new BFC so position:sticky still works. */
+  overflow-x: clip;
+}
+
 body {
   font-family: var(--font-body);
   background-color: var(--color-paper);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Belt-and-suspenders: also clip on body so nothing escapes the viewport */
+  overflow-x: clip;
+  max-width: 100%;
 }
 
 
@@ -164,6 +176,54 @@ input::-webkit-calendar-picker-indicator { display: none !important; }
 
   @page {
     margin: 25mm 20mm;
-    size: A4;
+    size: A4 portrait;
+  }
+
+  /* Timeline section gets its own landscape page */
+  @page timeline-landscape {
+    size: A4 landscape;
+    margin: 15mm 20mm;
+  }
+
+  /* Article wrapper: remove screen padding, @page handles margins */
+  .print-article {
+    padding: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  /* Cover: fills one full A4 page, content centrado verticalmente */
+  #header {
+    min-height: calc(297mm - 50mm) !important; /* A4 - top+bottom margins */
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    padding-top: 0 !important;
+    margin-bottom: 0 !important;
+    break-after: page;
+  }
+
+  /* Todas las secciones (excepto portada) empiezan en página nueva */
+  #emitter,
+  #project,
+  #phases,
+  #timeline,
+  #budget,
+  #budget-additional,
+  #conditions,
+  #billing,
+  #conformity {
+    break-before: page !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Timeline: landscape page so Gantt bars have maximum horizontal space */
+  #timeline {
+    page: timeline-landscape;
+  }
+
+  /* Divisores decorativos: innecesarios en print */
+  .print-divider {
+    display: none !important;
   }
 }

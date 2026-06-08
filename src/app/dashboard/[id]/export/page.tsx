@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
@@ -12,7 +12,7 @@ import { applyPalette, applyThemeColors, applyInkOpacities } from '@/lib/theme'
 import type { Quote } from '@/types/quote'
 import { GanttTimeline } from '@/components/quote/GanttTimeline'
 import { FeatherIcon } from '@/components/ui/IconPicker'
-import { ArrowLeft, Printer, Check, ChevronUp, ChevronDown } from 'lucide-react'
+import { ArrowLeft, FileDown, Check } from 'lucide-react'
 
 // ─── Shared rendering helpers ────────────────────────────────────────────────
 
@@ -39,6 +39,42 @@ function SubLabel({ children }: { children: React.ReactNode }) {
     <p className="text-[10px] font-medium tracking-[0.15em] uppercase mb-3 text-ink-40">
       {children}
     </p>
+  )
+}
+
+// ─── Spacing handle ───────────────────────────────────────────────────────────
+
+function SpacingHandle({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (delta: number) => void
+}) {
+  return (
+    <div
+      className="no-print group/sp flex items-center justify-center cursor-ns-resize transition-[height]"
+      style={{ height: Math.max(8, value) + 'px' }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="opacity-0 group-hover/sp:opacity-100 flex items-center gap-2 transition-opacity select-none">
+        <button
+          onClick={() => onChange(-16)}
+          className="w-5 h-5 rounded text-ink-40 hover:text-ink hover:bg-surface text-sm leading-none flex items-center justify-center"
+        >
+          −
+        </button>
+        {value > 0 && (
+          <span className="text-[9px] text-ink-40 tabular-nums">{value}px</span>
+        )}
+        <button
+          onClick={() => onChange(+16)}
+          className="w-5 h-5 rounded text-ink-40 hover:text-ink hover:bg-surface text-sm leading-none flex items-center justify-center"
+        >
+          +
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -124,27 +160,7 @@ function ExportContent() {
     })
   }, [id, router, company])
 
-  // ── Print-to-PDF ─────────────────────────────────────────────────────────────
-  // window.print() gives the browser's native PDF engine — vector text, perfect
-  // fonts, zero quality loss. We set document.title to the desired filename so
-  // the browser prefills it in the "Save as PDF" dialog.
-
-  function handlePrint() {
-    if (!quote) return
-    const sanitize = (s: string) =>
-      s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
-
-    const emitterName = sanitize(quote.emitter.companyName || 'empresa')
-    const clientLabel = sanitize(quote.client.company || quote.client.name || 'cliente')
-    const dateStr     = quote.date || new Date().toISOString().split('T')[0]
-    const newTitle    = `${emitterName}_${clientLabel}_${dateStr}`
-
-    const prev = document.title
-    document.title = newTitle
-    window.print()
-    document.title = prev
-  }
+  // ── PDF export (window.print — same as /p/[id]) ─────────────────────────
 
   // ── Page breaks ──────────────────────────────────────────────────────────────
 
@@ -160,26 +176,83 @@ function ExportContent() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  // ── Section reorder ───────────────────────────────────────────────────────────
+  // ── HTML overrides (saltos de línea y edición libre en vista previa) ─────────
 
-  async function handleMoveSection(sectionId: string, direction: 'up' | 'down') {
+  // Refs to content divs so we can set innerHTML imperatively (uncontrolled)
+  const contentRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  // Cuando el quote termina de cargar: restaurar overrides y pre-centrar primeras 2 secciones
+  const centeredApplied = useRef(false)
+  useEffect(() => {
+    if (loading || !quote || centeredApplied.current) return
+    centeredApplied.current = true
+
+    const overrides = quote.sectionHtmlOverrides ?? {}
+    const CENTERED = new Set(['header', 'emitter'])
+    // Secciones con datos estructurados: nunca aplicar override (siempre renderizar desde JSX)
+    const DATA_DRIVEN = new Set(['budget', 'budget-additional', 'conformity'])
+    const EMPTY_LINES = Array.from({ length: 18 }, () => '<p><br></p>').join('')
+
+    // Restaurar overrides guardados para secciones NO centradas y NO data-driven
+    for (const [secId, html] of Object.entries(overrides)) {
+      if (CENTERED.has(secId) || DATA_DRIVEN.has(secId)) continue
+      const el = contentRefs.current[secId]
+      if (el) el.innerHTML = html
+    }
+
+    // Secciones centradas: restaurar override SI ya tiene líneas vacías iniciales,
+    // de lo contrario añadir EMPTY_LINES (maneja overrides guardados antes de este feature)
+    for (const secId of CENTERED) {
+      const el = contentRefs.current[secId]
+      if (!el) continue
+      const savedHtml = overrides[secId]
+      if (savedHtml) {
+        // /<p[^>]*>\s*<br/ detecta primer <p> con <br> inmediato (= ya centrado)
+        const alreadyCentered = /<p[^>]*>\s*<br/.test(savedHtml.slice(0, 300))
+        el.innerHTML = alreadyCentered ? savedHtml : EMPTY_LINES + savedHtml
+      } else {
+        el.innerHTML = EMPTY_LINES + el.innerHTML
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]) // se dispara cuando loading pasa a false (quote ya cargado y DOM renderizado)
+
+  async function handleSaveHtmlOverride(sectionId: string, html: string) {
     if (!quote) return
-    // sectionOrder tracks the visible IDs in order; derive it from rendered secs below
-    // We operate on the current rendered order (computed in render)
-    const currentOrder = (quote.sectionOrder ?? []).length > 0
-      ? quote.sectionOrder!
-      : DEFAULT_SECTION_ORDER
+    // No guardar overrides para secciones con datos estructurados (siempre desde JSX)
+    if (['budget', 'budget-additional', 'conformity'].includes(sectionId)) return
+    const current = quote.sectionHtmlOverrides ?? {}
+    const newOverrides = { ...current, [sectionId]: html }
+    setQuote((q) => q ? { ...q, sectionHtmlOverrides: newOverrides } : q)
+    await updateQuote(id, { sectionHtmlOverrides: newOverrides })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
-    const idx = currentOrder.indexOf(sectionId)
-    if (idx === -1) return
-    const newIdx = direction === 'up' ? idx - 1 : idx + 1
-    if (newIdx < 0 || newIdx >= currentOrder.length) return
+  // ── Section spacing ──────────────────────────────────────────────────────────
 
-    const newOrder = [...currentOrder]
-    ;[newOrder[idx], newOrder[newIdx]] = [newOrder[newIdx], newOrder[idx]]
+  async function handleUpdateSpacing(sectionId: string, edge: 'top' | 'bottom', delta: number) {
+    if (!quote) return
+    const current = quote.sectionSpacing ?? {}
+    const prev = current[sectionId] ?? { top: 0, bottom: 0 }
+    const next = { ...prev, [edge]: Math.max(0, Math.min(320, prev[edge] + delta)) }
+    const newSpacing = { ...current, [sectionId]: next }
+    setQuote((q) => q ? { ...q, sectionSpacing: newSpacing } : q)
+    await updateQuote(id, { sectionSpacing: newSpacing })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
-    setQuote((q) => q ? { ...q, sectionOrder: newOrder } : q)
-    await updateQuote(id, { sectionOrder: newOrder })
+  // ── Merge / split pages ───────────────────────────────────────────────────────
+
+  async function handleToggleMerge(sectionId: string) {
+    if (!quote) return
+    const current = new Set(quote.sectionsMerged ?? [])
+    if (current.has(sectionId)) current.delete(sectionId)
+    else current.add(sectionId)
+    const newMerged = [...current]
+    setQuote((q) => q ? { ...q, sectionsMerged: newMerged } : q)
+    await updateQuote(id, { sectionsMerged: newMerged })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -211,22 +284,20 @@ function ExportContent() {
 
   // ── Build section list ───────────────────────────────────────────────────────
 
-  type SecDef = { id: string; label: string; node: React.ReactNode }
+  type SecDef = { id: string; label: string; node: React.ReactNode; landscape?: boolean }
   const allSecs: SecDef[] = []
 
   allSecs.push({
     id: 'header', label: 'Portada',
     node: (
-      <div style={{ minHeight: '72vh', paddingTop: '28vh' }}>
-        <div className="space-y-3">
-          <p className="text-sm text-ink">Presupuesto</p>
-          {clientName && (
-            <p className="text-[1.625rem] font-medium tracking-tight text-ink leading-snug">{clientName}</p>
-          )}
-          {quote.date && (
-            <p className="text-sm text-ink">{formatDate(quote.date)}</p>
-          )}
-        </div>
+      <div className="space-y-3">
+        <p className="text-sm text-ink">Presupuesto</p>
+        {clientName && (
+          <p className="text-[1.625rem] font-medium tracking-tight text-ink leading-snug">{clientName}</p>
+        )}
+        {quote.date && (
+          <p className="text-sm text-ink">{formatDate(quote.date)}</p>
+        )}
       </div>
     ),
   })
@@ -318,6 +389,7 @@ function ExportContent() {
   if (phasesHaveDates) {
     allSecs.push({
       id: 'timeline', label: 'Timeline',
+      landscape: true,
       node: (
         <>
           <SectionLabel>Timeline</SectionLabel>
@@ -333,49 +405,49 @@ function ExportContent() {
       node: (
         <>
           <SectionLabel>Presupuesto</SectionLabel>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b" style={{ borderColor: 'var(--color-accent)' }}>
-                <th className="text-left py-3 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">Concepto</th>
-                <th className="text-left py-3 text-[10px] font-medium tracking-[0.15em] uppercase w-28 text-ink-60">Tiempo</th>
-                <th className="text-right py-3 text-[10px] font-medium tracking-[0.15em] uppercase w-32 text-ink-60">Precio</th>
-              </tr>
-            </thead>
-            <tbody>
-              {quote.budgetTable.items.map((item, i) => (
-                <tr key={i} className="border-b border-line">
-                  <td className="py-4 align-top text-ink">
-                    <p className="font-medium">{item.concept}</p>
-                    {item.notes && <p className="text-xs mt-1 font-normal leading-relaxed text-ink-40">{item.notes}</p>}
-                  </td>
-                  <td className="py-4 align-top text-ink-60">{item.time}</td>
-                  <td className="py-4 text-right font-medium align-top tabular-nums text-ink">{fmt(item.price)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-6 space-y-2 text-sm">
-            {quote.budgetTable.taxRate > 0 && (
-              <>
-                <div className="flex justify-between text-ink-60">
-                  <span>Subtotal</span>
-                  <span className="tabular-nums">{fmt(quote.budgetTable.subtotal)}</span>
+
+          {/* Column headers */}
+          <div className="flex items-center gap-6 pb-3 border-b border-line mb-0">
+            <span className="w-6 shrink-0" />
+            <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">Concepto</span>
+            <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-28 shrink-0">Precio</span>
+          </div>
+
+          {/* Items */}
+          <div>
+            {quote.budgetTable.items.map((item, i) => (
+              <div key={i} className="flex items-start gap-6 py-5 border-b border-line">
+                <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                  {item.time && (
+                    <p className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 mt-1">{item.time}</p>
+                  )}
+                  {item.notes && (
+                    <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
+                  )}
                 </div>
-                <div className="flex justify-between text-ink-60">
-                  <span>IVA ({quote.budgetTable.taxRate}%)</span>
-                  <span className="tabular-nums">{fmt(quote.budgetTable.total - quote.budgetTable.subtotal)}</span>
-                </div>
-              </>
-            )}
-            <div className="flex justify-between font-medium text-base pt-4 border-t border-accent text-ink">
-              <span>
-                Total{' '}
-                {quote.budgetTable.taxRate === 0 && (
-                  <span className="font-normal text-sm text-ink-40">(IVA no incluido)</span>
-                )}
-              </span>
-              <span className="tabular-nums">{fmt(quote.budgetTable.total)}</span>
-            </div>
+                <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-28 text-right">
+                  {fmt(item.price)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Total */}
+          <div className="flex items-baseline gap-6 pt-5">
+            <span className="w-6 shrink-0" />
+            <span className="flex-1 text-sm font-medium text-ink">
+              {quote.budgetTable.totalLabel || 'Total'}
+              {quote.budgetTable.taxRate > 0 && (
+                <span className="font-normal text-ink-40 ml-1">(IVA no incluido)</span>
+              )}
+            </span>
+            <span className="text-sm font-medium text-ink tabular-nums w-28 text-right shrink-0">
+              {fmt(quote.budgetTable.subtotal)}
+            </span>
           </div>
         </>
       ),
@@ -388,22 +460,33 @@ function ExportContent() {
       node: (
         <>
           <SectionLabel>{quote.budgetTableAdditional.label || 'Servicios adicionales'}</SectionLabel>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b" style={{ borderColor: 'var(--color-accent)' }}>
-                <th className="text-left py-3 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">Concepto</th>
-                <th className="text-right py-3 text-[10px] font-medium tracking-[0.15em] uppercase w-40 text-ink-60">Precio unitario (IVA no inc.)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {quote.budgetTableAdditional.items.map((item, i) => (
-                <tr key={i} className="border-b border-line">
-                  <td className="py-4 text-ink">{item.concept}</td>
-                  <td className="py-4 text-right font-medium tabular-nums text-ink">{fmt(item.price)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+          {/* Column headers */}
+          <div className="flex items-center gap-6 pb-3 border-b border-line mb-0">
+            <span className="w-6 shrink-0" />
+            <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">Concepto</span>
+            <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-28 shrink-0">Precio</span>
+          </div>
+
+          {/* Items */}
+          <div>
+            {quote.budgetTableAdditional.items.map((item, i) => (
+              <div key={i} className="flex items-start gap-6 py-5 border-b border-line">
+                <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                  {item.notes && (
+                    <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
+                  )}
+                </div>
+                <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-28 text-right">
+                  {item.price > 0 ? fmt(item.price) : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
         </>
       ),
     })
@@ -460,14 +543,35 @@ function ExportContent() {
           La firma del presente documento se interpreta como la conformidad y la aceptación de todas las condiciones expuestas en él y el cumplimiento de las mismas.
         </p>
         <div className="grid grid-cols-2 gap-16">
-          {[
-            { label: 'Cliente',   data: quote.conformity.clientData  },
-            { label: 'Proveedor', data: quote.conformity.emitterData },
-          ].map(({ label, data }) => (
+          {([
+            { label: 'Cliente', fields: [
+              { label: 'Empresa',          value: quote.client.company },
+              { label: 'CIF',              value: quote.client.taxId },
+              { label: 'Dirección',        value: quote.client.address },
+              { label: 'Ciudad',           value: quote.client.city },
+              { label: 'Representada por', value: quote.client.name },
+              { label: 'Cargo',            value: quote.client.role },
+            ]},
+            { label: 'Proveedor', fields: [
+              { label: 'Empresa',          value: quote.emitter.companyName },
+              { label: 'CIF',              value: quote.emitter.taxId },
+              { label: 'Dirección',        value: quote.emitter.address },
+              { label: 'Ciudad',           value: quote.emitter.city },
+              { label: 'Representada por', value: quote.emitter.representativeName },
+              { label: 'Cargo',            value: quote.emitter.representativeRole },
+            ]},
+          ] as const).map(({ label, fields }) => (
             <div key={label}>
               <SubLabel>{label}</SubLabel>
-              {data && <div className="mb-8 text-sm"><RichContent html={data} /></div>}
-              <div className="mt-16 border-t border-input pt-3">
+              <div className="space-y-2 mb-16">
+                {fields.filter(f => f.value).map(({ label: fl, value }) => (
+                  <div key={fl} className="flex gap-3 text-sm">
+                    <span className="text-ink-40 w-32 shrink-0">{fl}:</span>
+                    <span className="text-ink">{value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8 border-t border-input pt-3">
                 <p className="text-xs text-ink-40">Firma y fecha</p>
               </div>
             </div>
@@ -490,13 +594,8 @@ function ExportContent() {
       })
     : allSecs
 
-  // ── Group into pages ─────────────────────────────────────────────────────────
-
-  const pages: SecDef[][] = [[]]
-  for (const s of secs) {
-    if (breaks.has(s.id) && pages[pages.length - 1].length > 0) pages.push([])
-    pages[pages.length - 1].push(s)
-  }
+  // Cada sección = su propia página A4
+  const pages: SecDef[][] = secs.map((s) => [s])
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
@@ -505,13 +604,49 @@ function ExportContent() {
 
       {/* Print styles */}
       <style>{`
-        @page { size: A4; margin: 0; }
+        /* Named page rules for mixed portrait/landscape in a single print job */
+        @page           { size: A4 portrait;  margin: 20mm 20mm; }
+        @page landscape { size: A4 landscape; margin: 15mm 20mm; }
+
         @media print {
+          /* Hide all preview chrome */
           .no-print { display: none !important; }
-          #doc-wrapper { padding: 0 !important; }
-          #pdf-root { background: white !important; min-height: 0 !important; }
-          .a4-page { break-after: page; width: 100% !important; min-height: 0 !important; }
-          .a4-page:last-of-type { break-after: auto; }
+
+          /* Remove preview zoom + grid layout; let @page rules handle sizing */
+          html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
+          #pdf-root { background: white !important; min-height: 0 !important; padding: 0 !important; }
+          #doc-wrapper-inner {
+            display: block !important;
+            zoom: 1 !important;
+            padding: 0 !important;
+            gap: 0 !important;
+            width: 100% !important;
+          }
+
+          /* Each A4 div becomes exactly one printed page */
+          .a4-page {
+            page: auto;
+            break-after: page;
+            width: 100% !important;
+            min-height: 0 !important;
+            max-width: none !important;
+            box-shadow: none !important;
+          }
+          .a4-page-landscape {
+            page: landscape;
+            break-after: page;
+            width: 100% !important;
+            min-height: 0 !important;
+            max-width: none !important;
+            box-shadow: none !important;
+          }
+
+          /* No trailing page break on the very last page */
+          .a4-page:last-of-type,
+          .a4-page-landscape:last-of-type { break-after: auto; }
+
+          /* Clean up editable chrome */
+          [contenteditable] { outline: none !important; }
         }
       `}</style>
 
@@ -541,84 +676,83 @@ function ExportContent() {
             </span>
           )}
           <button
-            onClick={handlePrint}
+            onClick={() => window.print()}
             className="flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-accent text-on-accent hover:bg-accent-hover transition-all hover:-translate-y-px"
           >
-            <Printer size={14} strokeWidth={1.5} />
+            <FileDown size={14} strokeWidth={1.5} />
             Exportar PDF
           </button>
         </div>
       </header>
 
       {/* ── Pages ── */}
-      <div id="doc-wrapper" className="pt-[72px] print:pt-0 pb-16 print:pb-0">
-        {pages.map((pageSections, pageIdx) => (
-          <div key={pageIdx}>
+      {/* Header-offset spacer (outside zoom so respects fixed header height) */}
+      <div className="no-print h-[72px]" />
 
-            {/* Inter-page active break strip */}
-            {pageIdx > 0 && (
-              <div className="no-print py-3">
-                <PageBreakZone
-                  sectionId={pageSections[0].id}
-                  active={true}
-                  onToggle={handleTogglePageBreak}
-                />
-              </div>
-            )}
+      <div id="doc-wrapper-inner" style={{
+        zoom: 0.65,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 794px)',
+        gap: '48px',
+        justifyContent: 'center',
+        padding: '32px 20px 64px',
+      }}>
+        {pages.map((pageSections, pageIdx) => {
+          const isLandscape = pageSections.some((s) => s.landscape)
+          // A4 portrait: 794×1123 px | A4 landscape: 1123×794 px (at 96 dpi)
+          const pageW = isLandscape ? 1123 : 794
+          const pageH = isLandscape ? 794  : 1123
 
-            {/* A4 sheet — 794 × 1123 px ≈ 210 × 297 mm at 96 dpi */}
-            <div
-              className="a4-page mx-auto bg-white"
-              style={{ width: '794px', minHeight: '1123px' }}
-            >
-              {pageSections.map((sec, secIdx) => {
-                // Position in the full flat secs list (for disable logic)
-                const flatIdx = secs.indexOf(sec)
-                const isFirst = flatIdx === 0
-                const isLast  = flatIdx === secs.length - 1
+          return (
+          <div
+            key={pageIdx}
+            className={isLandscape ? 'a4-page-landscape bg-white' : 'a4-page bg-white'}
+            style={{
+              width: `${pageW}px`,
+              minHeight: `${pageH}px`,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+              // Landscape pages span both grid columns and self-center
+              ...(isLandscape ? { gridColumn: '1 / -1', justifySelf: 'center' } : {}),
+            }}
+          >
+              {pageSections.map((sec) => {
+                const spacingTop    = (quote.sectionSpacing ?? {})[sec.id]?.top    ?? 0
+                const spacingBottom = (quote.sectionSpacing ?? {})[sec.id]?.bottom ?? 0
+                // Landscape pages use less vertical padding to maximise gantt height
+                const padV = isLandscape ? 40 : 64
 
                 return (
-                  <div key={sec.id} className="group/sec relative">
+                  <div key={sec.id}>
 
-                    {/* Within-page inactive break zone (hover → add) */}
-                    {secIdx > 0 && (
-                      <div className="no-print">
-                        <PageBreakZone
-                          sectionId={sec.id}
-                          active={false}
-                          onToggle={handleTogglePageBreak}
-                        />
-                      </div>
-                    )}
+                    {/* Spacing top handle */}
+                    <SpacingHandle
+                      value={spacingTop}
+                      onChange={(d) => handleUpdateSpacing(sec.id, 'top', d)}
+                    />
 
-                    {/* Move controls — appear on section hover, hidden on print */}
-                    <div className="no-print absolute top-4 right-4 z-10 flex items-center gap-0.5 opacity-0 group-hover/sec:opacity-100 transition-opacity">
-                      <button
-                        title="Subir sección"
-                        disabled={isFirst}
-                        onClick={() => handleMoveSection(sec.id, 'up')}
-                        className="w-7 h-7 flex items-center justify-center rounded text-ink-40 hover:text-ink hover:bg-surface transition-colors disabled:opacity-20 disabled:cursor-default"
-                      >
-                        <ChevronUp size={14} strokeWidth={2} />
-                      </button>
-                      <button
-                        title="Bajar sección"
-                        disabled={isLast}
-                        onClick={() => handleMoveSection(sec.id, 'down')}
-                        className="w-7 h-7 flex items-center justify-center rounded text-ink-40 hover:text-ink hover:bg-surface transition-colors disabled:opacity-20 disabled:cursor-default"
-                      >
-                        <ChevronDown size={14} strokeWidth={2} />
-                      </button>
-                      {/* Section label pill */}
-                      <span className="ml-1 text-[9px] tracking-widest uppercase text-ink-40 px-2 py-0.5 bg-surface rounded">
-                        {sec.label}
-                      </span>
-                    </div>
-
-                    {/* Content */}
-                    <div id={sec.id} className="px-16 py-16">
+                    {/* Content — editable, padding dinámico */}
+                    <div
+                      ref={(el) => { contentRefs.current[sec.id] = el }}
+                      id={sec.id}
+                      contentEditable
+                      suppressContentEditableWarning
+                      className="px-16 outline-none focus:outline-none"
+                      style={{
+                        paddingTop:    `${padV + spacingTop}px`,
+                        paddingBottom: `${padV + spacingBottom}px`,
+                        cursor: 'text',
+                        caretColor: 'var(--color-ink)',
+                      }}
+                      onBlur={(e) => handleSaveHtmlOverride(sec.id, e.currentTarget.innerHTML)}
+                    >
                       {sec.node}
                     </div>
+
+                    {/* Spacing bottom handle */}
+                    <SpacingHandle
+                      value={spacingBottom}
+                      onChange={(d) => handleUpdateSpacing(sec.id, 'bottom', d)}
+                    />
 
                   </div>
                 )
@@ -633,10 +767,10 @@ function ExportContent() {
                 </div>
               )}
             </div>
-
-          </div>
-        ))}
+          )
+        })}
       </div>
+
 
     </div>
   )

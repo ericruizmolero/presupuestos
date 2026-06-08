@@ -22,7 +22,10 @@ const QUOTE_DATA: QuoteFormData = {
     logoUrl: '',
     email: 'ericruizmolero@treseiscero.app',
     address: 'Jaitzubia Auzoa 197, 20280, Hondarribia, Guipúzcoa',
+    city: 'Hondarribia',
     taxId: 'E75239277',
+    representativeName: '',
+    representativeRole: '',
     description: `<p>Somos una <strong>pixel boutique</strong>.</p><p>Nos especializamos en:</p><ul><li>Diseño web.</li><li>Desarrollo Webflow.</li></ul><p><strong>Equipo:</strong></p><ul><li>Andoni Martínez Talavera, Fundador, Diseñador UX/UI</li><li>Eric Ruiz Molero, Fundador, Desarrollador Webflow</li></ul><p><strong>Contacto:</strong></p><ul><li>Web: www.treseiscero.app</li><li>Email: ericruizmolero@treseiscero.app</li></ul>`,
   },
 
@@ -31,7 +34,9 @@ const QUOTE_DATA: QuoteFormData = {
     company: 'Hostal Empúries',
     email: '',
     address: '',
+    city: '',
     taxId: '',
+    role: '',
     description: `<p>Hostal Empúries es un hotel familiar ubicado en la Costa Brava, junto a las ruinas de Empúries, que combina historia, naturaleza y hospitalidad auténtica. Con una oferta que abarca alojamiento, restauración, spa, experiencias culturales y espacios para eventos y empresas, la marca comunica tranquilidad, compromiso medioambiental y arraigo al territorio.</p>`,
   },
 
@@ -108,6 +113,7 @@ const QUOTE_DATA: QuoteFormData = {
     dataProtection: `<p>Ambas partes aseguran cumplir con las obligaciones de protección de datos, incluyendo el derecho a la información, consentimiento, deber de secreto y medidas de seguridad exigidas por la normativa comunitaria y nacional.</p>`,
   },
 
+  billingMilestones: [],
   billingConditions: `<p><strong>Hito inicial 50%: 7.500€</strong> (IVA no incluido)</p><p>La forma de pago será a la recepción de la factura que será emitida cuando comience el proyecto.</p><p><strong>Hito final 50%: 7.500€</strong> (IVA no incluido)</p><p>La forma de pago será a la recepción de la factura que será emitida cuando el trabajo esté completado.</p>`,
 
   conformity: {

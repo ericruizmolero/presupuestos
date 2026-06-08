@@ -1,4 +1,21 @@
-import type { QuoteFormData, Company } from '@/types/quote'
+import type { QuoteFormData, Company, BillingMilestone } from '@/types/quote'
+
+function mid() { return Math.random().toString(36).slice(2, 10) }
+
+const DEFAULT_MILESTONES: BillingMilestone[] = [
+  {
+    id: mid(),
+    label: 'Hito inicial 50%',
+    percentage: 50,
+    description: 'La forma de pago será a la recepción de la factura que será emitida cuando comience el proyecto.',
+  },
+  {
+    id: mid(),
+    label: 'Hito final 50%',
+    percentage: 50,
+    description: 'La forma de pago será a la recepción de la factura que será emitida cuando el trabajo esté completado.',
+  },
+]
 
 export function createDefaultQuote(company?: Partial<Company> | null): QuoteFormData {
   const today = new Date().toISOString().split('T')[0]
@@ -18,8 +35,11 @@ export function createDefaultQuote(company?: Partial<Company> | null): QuoteForm
       logoUrl: company?.logoUrl ?? '',
       email: company?.email ?? '',
       address: company?.address ?? '',
+      city: company?.city ?? '',
       taxId: company?.taxId ?? '',
       description: company?.description ?? '',
+      representativeName: company?.representativeName ?? '',
+      representativeRole: company?.representativeRole ?? '',
     },
 
     client: {
@@ -27,8 +47,10 @@ export function createDefaultQuote(company?: Partial<Company> | null): QuoteForm
       company: '',
       email: '',
       address: '',
+      city: '',
       taxId: '',
       description: '',
+      role: '',
     },
 
     project: {
@@ -73,6 +95,7 @@ export function createDefaultQuote(company?: Partial<Company> | null): QuoteForm
     },
 
     billingConditions: '',
+    billingMilestones: DEFAULT_MILESTONES.map(m => ({ ...m, id: mid() })),
 
     pageBreaksBefore: [],
 

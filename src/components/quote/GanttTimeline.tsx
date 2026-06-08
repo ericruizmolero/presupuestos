@@ -133,7 +133,7 @@ const GROUP_TINTS = [
   'color-mix(in srgb, var(--color-accent) 13%, var(--color-paper))',
 ]
 
-export function GanttTimeline({ entries }: { entries: TimelineEntry[] }) {
+export function GanttTimeline({ entries, lang }: { entries: TimelineEntry[]; lang?: string }) {
   const valid = entries.filter((e) => e.startDate && e.endDate)
   if (valid.length === 0) return null
 
@@ -150,7 +150,15 @@ export function GanttTimeline({ entries }: { entries: TimelineEntry[] }) {
   const totalDays  = numCols * 14  // same denominator used in InteractiveGantt
   const gridCols   = `repeat(${numCols}, minmax(0, 1fr))`
 
-  const weeks = Array.from({ length: numCols }, (_, i) => `Semana ${i * 2 + 1}-${i * 2 + 2}`)
+  const lastColOffset = span - (numCols - 1) * 14   // days into the last column (0–13)
+  const weeks = Array.from({ length: numCols }, (_, i) => {
+    const s = i * 2 + 1
+    const e = i * 2 + 2
+    const trimLast = i === numCols - 1 && lastColOffset < 7
+    return lang === 'en'
+      ? (trimLast ? `Week ${s}` : `Week ${s}-${e}`)
+      : (trimLast ? `Semana ${s}` : `Semana ${s}-${e}`)
+  })
 
   // Day-precise bar positioning (matches InteractiveGantt)
   function barLeft(dateStr: string): string {
@@ -280,9 +288,10 @@ export function GanttTimeline({ entries }: { entries: TimelineEntry[] }) {
   )
 }
 
-export function InteractiveGantt({ entries, onChange }: {
+export function InteractiveGantt({ entries, onChange, lang }: {
   entries: TimelineEntry[]
   onChange: (entries: TimelineEntry[]) => void
+  lang?: string
 }) {
   const [, forceUpdate] = useReducer((c: number) => c + 1, 0)
 
@@ -362,21 +371,30 @@ export function InteractiveGantt({ entries, onChange }: {
   const ds = dragState.current
 
   // Layout — frozen during drag to prevent grid jumping
-  let layoutMinDate: Date, layoutNumCols: number, layoutTotalDays: number
+  let layoutMinDate: Date, layoutNumCols: number, layoutTotalDays: number, layoutSpan: number
   if (ds.active && frozenLayout.current) {
-    layoutMinDate  = frozenLayout.current.minDate
-    layoutNumCols  = frozenLayout.current.numCols
+    layoutMinDate   = frozenLayout.current.minDate
+    layoutNumCols   = frozenLayout.current.numCols
     layoutTotalDays = frozenLayout.current.totalDays
+    layoutSpan      = layoutTotalDays - 1
   } else {
     layoutMinDate = valid.reduce((m, e) => { const d = parseDate(e.startDate); return d < m ? d : m }, parseDate(valid[0].startDate))
     const layoutMaxDate = valid.reduce((m, e) => { const d = parseDate(e.endDate); return d > m ? d : m }, parseDate(valid[0].endDate))
-    const span = daysBetween(layoutMinDate, layoutMaxDate) || 14
-    layoutNumCols   = Math.max(1, Math.ceil((span + 1) / 14))
+    layoutSpan      = daysBetween(layoutMinDate, layoutMaxDate) || 14
+    layoutNumCols   = Math.max(1, Math.ceil((layoutSpan + 1) / 14))
     layoutTotalDays = layoutNumCols * 14
   }
 
   const gridCols = `repeat(${layoutNumCols}, minmax(0, 1fr))`
-  const weeks = Array.from({ length: layoutNumCols }, (_, i) => `Sem. ${i * 2 + 1}-${i * 2 + 2}`)
+  const lastColOffset = layoutSpan - (layoutNumCols - 1) * 14
+  const weeks = Array.from({ length: layoutNumCols }, (_, i) => {
+    const s = i * 2 + 1
+    const e = i * 2 + 2
+    const trimLast = i === layoutNumCols - 1 && lastColOffset < 7
+    return lang === 'en'
+      ? (trimLast ? `Wk. ${s}` : `Wk. ${s}-${e}`)
+      : (trimLast ? `Sem. ${s}` : `Sem. ${s}-${e}`)
+  })
 
   // Bar position as % of the total day span (day-level precision)
   function barLeft(dateStr: string): string {

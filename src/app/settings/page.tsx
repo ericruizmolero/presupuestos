@@ -49,8 +49,11 @@ function SettingsContent() {
     logoUrl: '',
     email: '',
     address: '',
+    city: '',
     taxId: '',
     description: '',
+    representativeName: '',
+    representativeRole: '',
     defaultConditions: {
       paymentTerms: '',
       acceptanceCriteria: '',
@@ -71,8 +74,11 @@ function SettingsContent() {
         logoUrl: company.logoUrl || '',
         email: company.email || '',
         address: company.address || '',
+        city: company.city || '',
         taxId: company.taxId || '',
         description: company.description || '',
+        representativeName: company.representativeName || '',
+        representativeRole: company.representativeRole || '',
         defaultConditions: company.defaultConditions || {
           paymentTerms: '',
           acceptanceCriteria: '',
@@ -190,9 +196,26 @@ function SettingsContent() {
             </div>
           </div>
 
-          <div>
-            <label className={FIELD_LABEL}>Dirección</label>
-            <input className={INPUT_CLASS} value={form.address} onChange={(e) => setField('address', e.target.value)} placeholder="Calle, número, ciudad" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={FIELD_LABEL}>Dirección</label>
+              <input className={INPUT_CLASS} value={form.address} onChange={(e) => setField('address', e.target.value)} placeholder="Calle, número, CP" />
+            </div>
+            <div>
+              <label className={FIELD_LABEL}>Ciudad</label>
+              <input className={INPUT_CLASS} value={form.city} onChange={(e) => setField('city', e.target.value)} placeholder="Ciudad" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className={FIELD_LABEL}>Representada por</label>
+              <input className={INPUT_CLASS} value={form.representativeName} onChange={(e) => setField('representativeName', e.target.value)} placeholder="Nombre Apellido" />
+            </div>
+            <div>
+              <label className={FIELD_LABEL}>Cargo</label>
+              <input className={INPUT_CLASS} value={form.representativeRole} onChange={(e) => setField('representativeRole', e.target.value)} placeholder="Ej: Fundador, CEO…" />
+            </div>
           </div>
 
           <div>

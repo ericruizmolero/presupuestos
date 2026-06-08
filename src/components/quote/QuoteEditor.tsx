@@ -5,7 +5,8 @@ import gsap from 'gsap'
 import { RichTextEditor } from './RichTextEditor'
 import { BudgetTable } from './BudgetTable'
 import type { Quote, QuoteFormData, ProjectPhase } from '@/types/quote'
-import { Plus, Trash2, ChevronDown, ChevronUp, Check } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Check, Loader } from 'lucide-react'
+import { AIAssistant, type AISection } from './AIAssistant'
 import { IconPicker } from '@/components/ui/IconPicker'
 import { Select } from '@/components/ui/Select'
 import { DatePicker } from '@/components/ui/DatePicker'
@@ -64,24 +65,25 @@ function CollapsibleSection({ open, children }: { open: boolean; children: React
 
 // ── Section header ─────────────────────────────────────────────────────────────
 function SectionHeader({
-  label, open, onToggle, optional, saveStatus,
+  label, open, onToggle, optional, saveStatus, aiTouched,
 }: {
   label: string; open: boolean; onToggle: () => void
-  optional?: boolean; saveStatus?: SaveStatus
+  optional?: boolean; saveStatus?: SaveStatus; aiTouched?: boolean
 }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={SECTION_LABEL + ' w-full text-left cursor-pointer hover:text-ink-60 py-6'}
-    >
-      <span>
+    <div className={SECTION_LABEL + ' w-full cursor-pointer py-6 group/header'} onClick={onToggle}>
+      <span className="flex items-center gap-2 group-hover/header:text-ink-60 transition-colors">
         {label}
         {optional && (
-          <span className="ml-2 text-ink-40 normal-case font-normal tracking-normal text-xs">(opcional)</span>
+          <span className="text-ink-40 normal-case font-normal tracking-normal text-xs">(opcional)</span>
+        )}
+        {aiTouched && (
+          <span title="Rellenado con IA">
+            <Loader size={11} strokeWidth={1.5} className="text-ink-40" />
+          </span>
         )}
       </span>
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
         {open && saveStatus === 'saving' && (
           <span className="w-2.5 h-2.5 border border-ink-40 border-t-transparent rounded-full animate-spin" />
         )}
@@ -96,9 +98,11 @@ function SectionHeader({
             Error al guardar
           </span>
         )}
-        {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <span className="text-ink-40 group-hover/header:text-ink-60 transition-colors">
+          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </span>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -110,6 +114,8 @@ export function QuoteEditor({ initialData, onSave }: Props) {
     budget: false, budgetAdditional: false,
     acceptance: false, billing: false, conformity: false,
   })
+  const [aiSection, setAiSection] = useState<AISection | null>(null)
+  const [aiTouched, setAiTouched] = useState<Set<string>>(new Set())
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
@@ -150,7 +156,37 @@ export function QuoteEditor({ initialData, onSave }: Props) {
   }, [form])
 
   function toggle(key: string) {
-    setOpen((o) => ({ ...o, [key]: !o[key] }))
+    setOpen((o) => {
+      const opening = !o[key]
+      if (opening) setAiTouched((t) => { const n = new Set(t); n.delete(key); return n })
+      return { ...o, [key]: opening }
+    })
+  }
+
+  // Map form keys → section ids for AI-touch detection
+  const AI_SECTION_MAP: Array<[string, (f: QuoteFormData) => unknown]> = [
+    ['client',     (f) => f.client],
+    ['project',    (f) => ({ ...f.project, phases: undefined })],
+    ['phases',     (f) => f.project.phases],
+    ['timeline',   (f) => f.timeline],
+    ['budget',     (f) => f.budgetTable],
+    ['acceptance', (f) => f.acceptanceConditions],
+    ['billing',    (f) => f.billingConditions],
+    ['conformity', (f) => f.conformity],
+  ]
+
+  function handleAIApply(updater: (prev: QuoteFormData) => QuoteFormData) {
+    setForm((prev) => {
+      const next = updater(prev)
+      const touched = new Set<string>()
+      for (const [sectionKey, extract] of AI_SECTION_MAP) {
+        if (JSON.stringify(extract(prev)) !== JSON.stringify(extract(next))) {
+          touched.add(sectionKey)
+        }
+      }
+      if (touched.size > 0) setAiTouched((t) => new Set([...t, ...touched]))
+      return next
+    })
   }
 
   function set<K extends keyof QuoteFormData>(key: K, value: QuoteFormData[K]) {
@@ -187,7 +223,15 @@ export function QuoteEditor({ initialData, onSave }: Props) {
     <div className="max-w-3xl mx-auto px-8 py-12">
 
       {/* Header row */}
-      <div className="flex items-center justify-end mb-2">
+      <div className="flex items-center justify-between mb-2">
+        <button
+          type="button"
+          onClick={() => setAiSection('all')}
+          className="flex items-center gap-1.5 text-xs text-ink-40 hover:text-ink transition-colors"
+        >
+          <Loader size={11} strokeWidth={1.5} />
+          Completar con IA
+        </button>
         <button
           type="button"
           onClick={toggleAll}
@@ -214,6 +258,24 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                   <option value="USD">USD — Dólar</option>
                   <option value="MXN">MXN — Peso mexicano</option>
                 </Select>
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Idioma del presupuesto</label>
+                <Select className={INPUT} value={form.language ?? 'es'} onChange={(e) => set('language', e.target.value as 'es' | 'en')}>
+                  <option value="es">🇪🇸 Español</option>
+                  <option value="en">🇺🇸 English</option>
+                </Select>
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Contraseña de acceso</label>
+                <input
+                  className={INPUT}
+                  type="text"
+                  value={form.accessPassword ?? ''}
+                  onChange={(e) => set('accessPassword', e.target.value || undefined)}
+                  placeholder="Dejar vacío = sin protección"
+                />
+                <p className="text-xs text-ink-40 mt-1">El cliente la necesitará para ver el presupuesto.</p>
               </div>
               <div>
                 <label className={FIELD_LABEL}>Fecha</label>
@@ -250,7 +312,19 @@ export function QuoteEditor({ initialData, onSave }: Props) {
               </div>
               <div>
                 <label className={FIELD_LABEL}>Dirección</label>
-                <input className={INPUT} value={form.emitter.address} onChange={(e) => setNested('emitter', 'address', e.target.value)} placeholder="Calle, número, ciudad" />
+                <input className={INPUT} value={form.emitter.address} onChange={(e) => setNested('emitter', 'address', e.target.value)} placeholder="Calle, número, CP" />
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Ciudad</label>
+                <input className={INPUT} value={form.emitter.city} onChange={(e) => setNested('emitter', 'city', e.target.value)} placeholder="Ciudad" />
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Representada por</label>
+                <input className={INPUT} value={form.emitter.representativeName} onChange={(e) => setNested('emitter', 'representativeName', e.target.value)} placeholder="Nombre Apellido" />
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Cargo</label>
+                <input className={INPUT} value={form.emitter.representativeRole} onChange={(e) => setNested('emitter', 'representativeRole', e.target.value)} placeholder="Ej: Fundador, CEO…" />
               </div>
             </div>
             <div>
@@ -265,7 +339,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Cliente */}
       <div id="client">
-        <SectionHeader label="Empresa receptora / Cliente" open={open.client} onToggle={() => toggle('client')} saveStatus={saveStatus} />
+        <SectionHeader label="Empresa receptora / Cliente" open={open.client} onToggle={() => toggle('client')} saveStatus={saveStatus} aiTouched={aiTouched.has('client')} />
         <CollapsibleSection open={open.client}>
           <div className="space-y-6">
             <div className={GRID2}>
@@ -285,9 +359,21 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                 <label className={FIELD_LABEL}>CIF / NIF</label>
                 <input className={INPUT} value={form.client.taxId} onChange={(e) => setNested('client', 'taxId', e.target.value)} placeholder="A12345678" />
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className={FIELD_LABEL}>Dirección</label>
-                <input className={INPUT} value={form.client.address} onChange={(e) => setNested('client', 'address', e.target.value)} placeholder="Dirección del cliente" />
+                <input className={INPUT} value={form.client.address} onChange={(e) => setNested('client', 'address', e.target.value)} placeholder="Calle, número, CP" />
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Ciudad</label>
+                <input className={INPUT} value={form.client.city} onChange={(e) => setNested('client', 'city', e.target.value)} placeholder="Ciudad" />
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Representada por</label>
+                <input className={INPUT} value={form.client.name} onChange={(e) => setNested('client', 'name', e.target.value)} placeholder="Nombre Apellido" />
+              </div>
+              <div>
+                <label className={FIELD_LABEL}>Cargo</label>
+                <input className={INPUT} value={form.client.role} onChange={(e) => setNested('client', 'role', e.target.value)} placeholder="Ej: CEO, Director…" />
               </div>
             </div>
             <div>
@@ -302,7 +388,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Proyecto */}
       <div id="project">
-        <SectionHeader label="Proyecto" open={open.project} onToggle={() => toggle('project')} saveStatus={saveStatus} />
+        <SectionHeader label="Proyecto" open={open.project} onToggle={() => toggle('project')} saveStatus={saveStatus} aiTouched={aiTouched.has('project')} />
         <CollapsibleSection open={open.project}>
           <div className="space-y-6">
             <div>
@@ -328,7 +414,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Fases */}
       <div id="phases">
-        <SectionHeader label="Fases" open={open.phases} onToggle={() => toggle('phases')} saveStatus={saveStatus} />
+        <SectionHeader label="Fases" open={open.phases} onToggle={() => toggle('phases')} saveStatus={saveStatus} aiTouched={aiTouched.has('phases')} />
         <CollapsibleSection open={open.phases}>
           <div className="space-y-4">
             {form.project.phases.map((phase, i) => (
@@ -367,7 +453,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Tareas y tiempos */}
       <div id="timeline">
-        <SectionHeader label="Tareas y tiempos" open={open.timeline} onToggle={() => toggle('timeline')} saveStatus={saveStatus} />
+        <SectionHeader label="Tareas y tiempos" open={open.timeline} onToggle={() => toggle('timeline')} saveStatus={saveStatus} aiTouched={aiTouched.has('timeline')} />
         <CollapsibleSection open={open.timeline}>
           <div className="space-y-6">
             {form.timeline.some(e => e.startDate && e.endDate) && (
@@ -392,7 +478,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Presupuesto principal */}
       <div id="budget">
-        <SectionHeader label="Tabla de presupuesto" open={open.budget} onToggle={() => toggle('budget')} saveStatus={saveStatus} />
+        <SectionHeader label="Tabla de presupuesto" open={open.budget} onToggle={() => toggle('budget')} saveStatus={saveStatus} aiTouched={aiTouched.has('budget')} />
         <CollapsibleSection open={open.budget}>
           <BudgetTable value={form.budgetTable} onChange={(v) => set('budgetTable', v)} currency={form.currency} />
         </CollapsibleSection>
@@ -437,7 +523,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Condiciones de aceptación */}
       <div id="acceptance">
-        <SectionHeader label="Condiciones de aceptación" open={open.acceptance} onToggle={() => toggle('acceptance')} saveStatus={saveStatus} />
+        <SectionHeader label="Condiciones de aceptación" open={open.acceptance} onToggle={() => toggle('acceptance')} saveStatus={saveStatus} aiTouched={aiTouched.has('acceptance')} />
         <CollapsibleSection open={open.acceptance}>
           <div className="space-y-6">
             {([
@@ -461,9 +547,88 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Condiciones de facturación */}
       <div id="billing">
-        <SectionHeader label="Condiciones de facturación y pagos" open={open.billing} onToggle={() => toggle('billing')} saveStatus={saveStatus} />
+        <SectionHeader label="Condiciones de facturación y pagos" open={open.billing} onToggle={() => toggle('billing')} saveStatus={saveStatus} aiTouched={aiTouched.has('billing')} />
         <CollapsibleSection open={open.billing}>
-          <RichTextEditor value={form.billingConditions} onChange={(v) => set('billingConditions', v)} placeholder="Detalle de los pagos, plazos, facturación..." minHeight="100px" />
+          <div className="space-y-4">
+            {(form.billingMilestones ?? []).map((milestone, i) => {
+              const subtotal = form.budgetTable.subtotal || 0
+              const amount = subtotal > 0 ? (subtotal * milestone.percentage / 100) : null
+              const currency = form.currency || 'EUR'
+              const formatted = amount != null
+                ? new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(amount)
+                : null
+
+              function updateMilestone<K extends keyof typeof milestone>(key: K, value: typeof milestone[K]) {
+                const updated = (form.billingMilestones ?? []).map((m, idx) => idx === i ? { ...m, [key]: value } : m)
+                set('billingMilestones', updated)
+              }
+
+              return (
+                <div key={milestone.id} className="border border-line rounded-md p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-ink-40 uppercase tracking-widest">Pago {i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => set('billingMilestones', (form.billingMilestones ?? []).filter((_, idx) => idx !== i))}
+                      className="text-ink-40 hover:text-[#DC2626] transition-colors"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className={FIELD_LABEL}>Nombre</label>
+                      <input
+                        className={INPUT}
+                        value={milestone.label}
+                        onChange={(e) => updateMilestone('label', e.target.value)}
+                        placeholder="Pago inicial…"
+                      />
+                    </div>
+                    <div className="w-36">
+                      <label className={FIELD_LABEL}>% de pago</label>
+                      <div className="relative">
+                        <input
+                          className={INPUT + ' pr-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'}
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={milestone.percentage}
+                          onChange={(e) => updateMilestone('percentage', Number(e.target.value))}
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-40 text-sm pointer-events-none">%</span>
+                      </div>
+                    </div>
+                  </div>
+                  {formatted && (
+                    <p className="text-xs text-ink-40">
+                      Importe: <span className="text-ink font-medium">{formatted}</span> <span className="text-ink-40">(IVA no incluido)</span>
+                    </p>
+                  )}
+                  <div>
+                    <label className={FIELD_LABEL}>Condiciones de pago</label>
+                    <textarea
+                      className={INPUT + ' resize-none'}
+                      rows={2}
+                      value={milestone.description}
+                      onChange={(e) => updateMilestone('description', e.target.value)}
+                      placeholder="La forma de pago será a la recepción de la factura…"
+                    />
+                  </div>
+                </div>
+              )
+            })}
+            <button
+              type="button"
+              onClick={() => set('billingMilestones', [
+                ...(form.billingMilestones ?? []),
+                { id: Math.random().toString(36).slice(2, 10), label: '', percentage: 0, description: '' },
+              ])}
+              className="flex items-center gap-2 text-sm text-ink-60 hover:text-ink transition-colors"
+            >
+              <Plus size={14} strokeWidth={2} /> Añadir hito
+            </button>
+          </div>
         </CollapsibleSection>
       </div>
 
@@ -471,18 +636,64 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Conformidad */}
       <div id="conformity">
-        <SectionHeader label="Conformidad y firmas" open={open.conformity} onToggle={() => toggle('conformity')} saveStatus={saveStatus} />
+        <SectionHeader label="Conformidad y firmas" open={open.conformity} onToggle={() => toggle('conformity')} saveStatus={saveStatus} aiTouched={aiTouched.has('conformity')} />
         <CollapsibleSection open={open.conformity}>
           <div className="space-y-6">
-            <div>
-              <label className={FIELD_LABEL}>Datos empresa emisora (para firma)</label>
-              <RichTextEditor value={form.conformity.emitterData} onChange={(v) => setNested('conformity', 'emitterData', v)} placeholder="Nombre, cargo, empresa..." minHeight="60px" />
+            <p className="text-xs text-ink-60 leading-relaxed">
+              La firma del presente documento se interpreta como la conformidad y la aceptación de todas las condiciones expuestas en él y el cumplimiento de las mismas.
+            </p>
+            <div className="grid grid-cols-2 gap-8">
+              {/* Cliente */}
+              {([
+                { side: 'Cliente', rows: [
+                  { label: 'Empresa',          section: 'client'  as const, field: 'company'   as const, ph: 'Empresa del cliente' },
+                  { label: 'CIF',              section: 'client'  as const, field: 'taxId'     as const, ph: 'A12345678' },
+                  { label: 'Dirección',        section: 'client'  as const, field: 'address'   as const, ph: 'Calle, número, CP', multiline: true },
+                  { label: 'Ciudad',           section: 'client'  as const, field: 'city'      as const, ph: 'Ciudad' },
+                  { label: 'Representada por', section: 'client'  as const, field: 'name'      as const, ph: 'Nombre Apellido' },
+                  { label: 'Cargo',            section: 'client'  as const, field: 'role'      as const, ph: 'Ej: CEO, Director…' },
+                ]},
+                { side: 'Proveedor', rows: [
+                  { label: 'Empresa',          section: 'emitter' as const, field: 'companyName'        as const, ph: 'Nombre S.L.' },
+                  { label: 'CIF',              section: 'emitter' as const, field: 'taxId'              as const, ph: 'B12345678' },
+                  { label: 'Dirección',        section: 'emitter' as const, field: 'address'            as const, ph: 'Calle, número, CP', multiline: true },
+                  { label: 'Ciudad',           section: 'emitter' as const, field: 'city'               as const, ph: 'Ciudad' },
+                  { label: 'Representada por', section: 'emitter' as const, field: 'representativeName' as const, ph: 'Nombre Apellido' },
+                  { label: 'Cargo',            section: 'emitter' as const, field: 'representativeRole' as const, ph: 'Ej: Fundador, CEO…' },
+                ]},
+              ]).map(({ side, rows }) => (
+                <div key={side}>
+                  <p className="text-[10px] font-medium tracking-widest uppercase text-ink-40 mb-4">{side}</p>
+                  <div className="space-y-3">
+                    {rows.map(({ label, section, field, ph, multiline }) => {
+                      const cls = 'flex-1 bg-transparent border-0 border-b border-transparent hover:border-line focus:border-ink-40 focus:outline-none px-0 py-0.5 text-sm text-ink placeholder-ink-40 transition-colors w-full'
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const val = ((form[section] as any)[field] as string) || ''
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setNested(section, field as any, e.target.value)
+                      return (
+                        <div key={field} className={`flex gap-3 ${multiline ? 'items-start' : 'items-center'}`}>
+                          <span className={`text-xs text-ink-40 w-28 shrink-0 ${multiline ? 'pt-1' : ''}`}>{label}</span>
+                          {multiline
+                            ? <textarea className={cls + ' resize-none leading-snug'} rows={2} value={val} onChange={onChange} placeholder={ph} />
+                            : <input   className={cls}                                value={val} onChange={onChange} placeholder={ph} />
+                          }
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-6 pt-3 border-t border-line">
+                    <p className="text-xs text-ink-40">Firma</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div>
-              <label className={FIELD_LABEL}>Datos empresa receptora (para firma)</label>
-              <RichTextEditor value={form.conformity.clientData} onChange={(v) => setNested('conformity', 'clientData', v)} placeholder="Nombre, cargo, empresa del cliente..." minHeight="60px" />
-            </div>
-            <p className="text-xs text-ink-40">Integración con DocuSign disponible próximamente.</p>
+            {(!form.emitter.representativeName || !form.emitter.representativeRole) && (
+              <p className="text-xs text-ink-40">
+                Configura "Representada por" y "Cargo" del proveedor en{' '}
+                <a href="/settings" className="underline hover:text-ink transition-colors">Configuración</a>.
+              </p>
+            )}
           </div>
         </CollapsibleSection>
       </div>
@@ -491,6 +702,16 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Bottom spacer */}
       <div className="h-10" />
+
+      {/* AI Assistant modal */}
+      {aiSection && (
+        <AIAssistant
+          section={aiSection}
+          form={form}
+          onApply={handleAIApply}
+          onClose={() => setAiSection(null)}
+        />
+      )}
 
       {/* Fixed toast */}
       {saveStatus !== 'idle' && saveStatus !== 'pending' && (
