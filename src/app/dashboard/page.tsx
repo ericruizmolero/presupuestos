@@ -11,6 +11,30 @@ import { getUserCompanyId, setUserCompanyId } from '@/lib/firestore/companies'
 import { createDemoQuote } from '@/lib/demoQuote'
 import { nanoid } from 'nanoid'
 import type { Quote, QuoteStatus } from '@/types/quote'
+
+/** Returns the numeric total for sorting and display — handles both fixed and hourly modes */
+function quoteTotal(q: Quote): number {
+  if (q.budgetTable?.mode === 'hourly') {
+    const rate = q.budgetTable.hourlyRate ?? 0
+    const maxH = q.budgetTable.items?.reduce((s, i) => s + (i.maxHours ?? 0), 0) ?? 0
+    return maxH * rate
+  }
+  return q.budgetTable?.subtotal ?? 0
+}
+
+function quoteTotalLabel(q: Quote, locale = 'es-ES'): string {
+  const currency = q.currency || 'EUR'
+  const fmt = (n: number) => new Intl.NumberFormat(locale, { style: 'currency', currency }).format(n)
+  if (q.budgetTable?.mode === 'hourly') {
+    const rate = q.budgetTable.hourlyRate ?? 0
+    const minH = q.budgetTable.items?.reduce((s, i) => s + (i.minHours ?? 0), 0) ?? 0
+    const maxH = q.budgetTable.items?.reduce((s, i) => s + (i.maxHours ?? 0), 0) ?? 0
+    if (!rate || (!minH && !maxH)) return '—'
+    return minH === maxH ? `~${fmt(minH * rate)}` : `${fmt(minH * rate)} – ${fmt(maxH * rate)}`
+  }
+  const total = q.budgetTable?.subtotal ?? 0
+  return total > 0 ? fmt(total) : '—'
+}
 import { ExternalLink, Copy, Trash2, MoreHorizontal, X, ArrowDown } from 'lucide-react'
 
 const STATUS_LABELS: Record<QuoteStatus, string> = {
@@ -136,7 +160,7 @@ function DashboardContent() {
           break
         }
         case 'total': {
-          cmp = (a.budgetTable?.total ?? 0) - (b.budgetTable?.total ?? 0)
+          cmp = quoteTotal(a) - quoteTotal(b)
           break
         }
         case 'status': {
@@ -246,9 +270,7 @@ function DashboardContent() {
                   {q.date ? new Date(q.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                 </td>
                 <td className="px-6 py-4 text-ink">
-                  {q.budgetTable?.total != null
-                    ? new Intl.NumberFormat('es-ES', { style: 'currency', currency: q.currency || 'EUR' }).format(q.budgetTable.total)
-                    : '—'}
+                  {quoteTotalLabel(q)}
                 </td>
                 <td className="px-6 py-4">
                   <span className={`text-xs font-medium px-2 py-1 rounded ${STATUS_COLORS[q.status]}`}>
