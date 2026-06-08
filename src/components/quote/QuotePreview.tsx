@@ -272,8 +272,17 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                     </p>
                   )}
 
-                  {/* Items */}
-                  <div className="border-t border-line">
+                  {/* Column header */}
+                  <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line">
+                    <span className="w-6 shrink-0 hidden xs:block" />
+                    <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
+                    <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">
+                      {quote.language === 'en' ? 'Est. hours' : 'Horas est.'}
+                    </span>
+                  </div>
+
+                  {/* Items — hours right-aligned like price in fixed mode */}
+                  <div>
                     {quote.budgetTable.items.map((item, i) => {
                       const hasRange = (item.minHours ?? 0) > 0 || (item.maxHours ?? 0) > 0
                       const hoursLabel = hasRange
@@ -282,21 +291,19 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                             : `${item.minHours ?? 0}–${item.maxHours ?? 0}h`)
                         : item.time || null
                       return (
-                        <div key={i} className="flex items-start gap-4 py-4 sm:py-5 border-b border-line">
+                        <div key={i} className="flex items-start gap-3 sm:gap-6 py-4 sm:py-5 border-b border-line">
                           <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
                             {String(i + 1).padStart(2, '0')}
                           </span>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-3 flex-wrap">
-                              <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
-                              {hoursLabel && (
-                                <span className="text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40 shrink-0">{hoursLabel}</span>
-                              )}
-                            </div>
+                            <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
                             {item.notes && (
                               <p className="text-xs text-ink-40 mt-1.5 leading-relaxed">{item.notes}</p>
                             )}
                           </div>
+                          <span className="text-sm text-ink-60 tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
+                            {hoursLabel ?? '—'}
+                          </span>
                         </div>
                       )
                     })}
