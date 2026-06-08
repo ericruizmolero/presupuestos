@@ -108,7 +108,7 @@ function EditQuoteContent() {
             </span>
           )}
           <Link
-            href={`/p/${quote.slug}`}
+            href={`/client/${quote.slug}`}
             target="_blank"
             className="flex items-center gap-2 border border-line text-sm text-ink-60 px-4 py-2 rounded-md hover:border-input hover:text-ink transition-colors"
           >

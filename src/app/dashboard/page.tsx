@@ -258,7 +258,7 @@ function DashboardContent() {
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-1 justify-end relative">
                     <Link
-                      href={`/p/${q.slug}`}
+                      href={`/client/${q.slug}`}
                       target="_blank"
                       className="p-1.5 text-ink-40 hover:text-ink transition-colors opacity-0 group-hover:opacity-100"
                       title="Ver página pública"
