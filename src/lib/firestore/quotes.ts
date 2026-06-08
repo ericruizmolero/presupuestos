@@ -12,19 +12,27 @@ import {
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import type { Quote, QuoteFormData, QuoteStatus } from '@/types/quote'
-import { customAlphabet } from 'nanoid'
+import { nanoid } from 'nanoid'
 
-// lowercase alphanumeric only — clean URLs
-const shortId = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6)
-
-function generateSlug(clientName: string): string {
-  const base = (clientName || '')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')   // strip accents
+function toSlugBase(clientName: string): string {
+  return (clientName || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // strip accents
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
-    .slice(0, 40)
-  return base ? `${base}-${shortId()}` : shortId()
+    .slice(0, 50)
+}
+
+/** Returns a unique slug: "ai-for-equity", "ai-for-equity-2", etc. */
+async function generateUniqueSlug(clientName: string): Promise<string> {
+  const base = toSlugBase(clientName) || nanoid(8)
+  let candidate = base
+  let counter = 2
+  while (true) {
+    const snap = await getDocs(query(collection(db, 'quotes'), where('slug', '==', candidate)))
+    if (snap.empty) return candidate
+    candidate = `${base}-${counter++}`
+  }
 }
 
 export async function getQuotes(companyId: string): Promise<Quote[]> {
@@ -60,7 +68,7 @@ export async function createQuote(
   userId: string,
   companyId: string
 ): Promise<string> {
-  const slug = generateSlug(formData.client.company || formData.client.name)
+  const slug = await generateUniqueSlug(formData.client.company || formData.client.name)
   const ref = await addDoc(collection(db, 'quotes'), {
     ...formData,
     slug,
@@ -92,7 +100,7 @@ export async function duplicateQuote(id: string, userId: string, companyId: stri
   if (!original) throw new Error('Quote not found')
   const { id: _id, createdAt: _ca, updatedAt: _ua, slug: _slug, ...data } = original
   const newNumber = `${original.quoteNumber}-copia`
-  const newSlug = generateSlug(original.client.company || original.client.name)
+  const newSlug = await generateUniqueSlug(original.client.company || original.client.name)
   const ref = await addDoc(collection(db, 'quotes'), {
     ...data,
     quoteNumber: newNumber,
