@@ -187,22 +187,27 @@ export function QuotePageClient() {
         const date = q.date ? new Date(q.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
         const parts = [client, emitter, date].filter(Boolean)
         document.title = parts.length ? `${parts.join(' · ')} — Presu` : 'Presupuesto — Presu'
-        if (q.companyId) {
-          const company = await getCompany(q.companyId)
-          if (company) {
-            if (company.themeColors) applyThemeColors(company.themeColors)
-            else if (company.paletteId) applyPalette(company.paletteId)
-            if (company.inkOpacitySecondary != null || company.inkOpacityTertiary != null) {
-              applyInkOpacities(company.inkOpacitySecondary ?? 60, company.inkOpacityTertiary ?? 40)
+        // Company data is optional — if it fails (unauthenticated) just skip theming
+        try {
+          if (q.companyId) {
+            const company = await getCompany(q.companyId)
+            if (company) {
+              if (company.themeColors) applyThemeColors(company.themeColors)
+              else if (company.paletteId) applyPalette(company.paletteId)
+              if (company.inkOpacitySecondary != null || company.inkOpacityTertiary != null) {
+                applyInkOpacities(company.inkOpacitySecondary ?? 60, company.inkOpacityTertiary ?? 40)
+              }
+              if (company.defaultFontName) {
+                const uploadedFont = company.fonts.find((f) => f.name === company.defaultFontName)
+                if (uploadedFont) injectFont(uploadedFont)
+                else applySystemFont(company.defaultFontName)
+              }
             }
-            if (company.defaultFontName) {
-              const uploadedFont = company.fonts.find((f) => f.name === company.defaultFontName)
-              if (uploadedFont) injectFont(uploadedFont)
-              else applySystemFont(company.defaultFontName)
-            }
+          } else if (q.fontName) {
+            applySystemFont(q.fontName)
           }
-        } else if (q.fontName) {
-          applySystemFont(q.fontName)
+        } catch {
+          // Company fetch failed (e.g. unauthenticated) — quote still renders with default theme
         }
       })
       .catch((err) => { console.error('[QuotePage] fetch error:', err); setNotFound(true) })
