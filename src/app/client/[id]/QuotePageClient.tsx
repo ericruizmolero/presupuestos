@@ -2,8 +2,60 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { getQuoteBySlug } from '@/lib/firestore/quotes'
 import { getCompany } from '@/lib/firestore/companies'
+
+// ── Firestore REST fetch (bypasses SDK auth requirement for public pages) ──────
+
+type FSValue =
+  | { stringValue: string }
+  | { booleanValue: boolean }
+  | { integerValue: string }
+  | { doubleValue: number }
+  | { timestampValue: string }
+  | { nullValue: null }
+  | { mapValue: { fields: Record<string, FSValue> } }
+  | { arrayValue: { values?: FSValue[] } }
+
+function fromFS(v: FSValue): unknown {
+  if (!v) return null
+  if ('stringValue'    in v) return v.stringValue
+  if ('booleanValue'   in v) return v.booleanValue
+  if ('integerValue'   in v) return Number(v.integerValue)
+  if ('doubleValue'    in v) return v.doubleValue
+  if ('timestampValue' in v) return v.timestampValue
+  if ('nullValue'      in v) return null
+  if ('mapValue'       in v) {
+    const out: Record<string, unknown> = {}
+    for (const [k, fv] of Object.entries(v.mapValue.fields ?? {})) out[k] = fromFS(fv)
+    return out
+  }
+  if ('arrayValue' in v) return (v.arrayValue.values ?? []).map(fromFS)
+  return null
+}
+
+async function fetchQuoteBySlug(slug: string) {
+  const pid = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+  const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+  const url = `https://firestore.googleapis.com/v1/projects/${pid}/databases/(default)/documents:runQuery?key=${key}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      structuredQuery: {
+        from: [{ collectionId: 'quotes' }],
+        where: { fieldFilter: { field: { fieldPath: 'slug' }, op: 'EQUAL', value: { stringValue: slug } } },
+        limit: 1,
+      },
+    }),
+  })
+  const data: Array<{ document?: { name: string; fields: Record<string, FSValue> } }> = await res.json()
+  const doc = data?.[0]?.document
+  if (!doc) return null
+  const id = doc.name.split('/').pop()!
+  const fields: Record<string, unknown> = {}
+  for (const [k, fv] of Object.entries(doc.fields)) fields[k] = fromFS(fv)
+  return { id, ...fields } as import('@/types/quote').Quote
+}
 import { applySystemFont, injectFont } from '@/lib/fonts'
 import { applyPalette, applyThemeColors, applyInkOpacities } from '@/lib/theme'
 import type { Quote } from '@/types/quote'
@@ -122,7 +174,7 @@ export function QuotePageClient() {
 
   useEffect(() => {
     if (!id) return
-    getQuoteBySlug(id)
+    fetchQuoteBySlug(id)
       .then(async (q) => {
         if (!q) { console.warn('[QuotePage] no document found for slug:', id); setNotFound(true); return }
         setQuote(q)
