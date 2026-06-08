@@ -23,14 +23,18 @@ function toSlugBase(clientName: string): string {
     .slice(0, 50)
 }
 
-/** Returns a unique slug: "ai-for-equity", "ai-for-equity-2", etc. */
-async function generateUniqueSlug(clientName: string): Promise<string> {
+/** Returns a unique slug: "ai-for-equity", "ai-for-equity-2", etc.
+ *  excludeId: skip this document ID when checking for collisions (used on regenerate). */
+async function generateUniqueSlug(clientName: string, excludeId?: string): Promise<string> {
   const base = toSlugBase(clientName) || nanoid(8)
   let candidate = base
   let counter = 2
   while (true) {
     const snap = await getDocs(query(collection(db, 'quotes'), where('slug', '==', candidate)))
     if (snap.empty) return candidate
+    // Only collision if it's a DIFFERENT document — ignore the current one
+    const blockedByOther = snap.docs.some(d => d.id !== excludeId)
+    if (!blockedByOther) return candidate
     candidate = `${base}-${counter++}`
   }
 }
@@ -89,7 +93,7 @@ export async function updateQuote(id: string, data: Partial<QuoteFormData>) {
 
 /** Regenerate a clean slug from the client name and save it. Returns the new slug. */
 export async function regenerateQuoteSlug(id: string, clientName: string): Promise<string> {
-  const slug = await generateUniqueSlug(clientName)
+  const slug = await generateUniqueSlug(clientName, id) // exclude self from collision check
   await updateDoc(doc(db, 'quotes', id), { slug, updatedAt: serverTimestamp() })
   return slug
 }
