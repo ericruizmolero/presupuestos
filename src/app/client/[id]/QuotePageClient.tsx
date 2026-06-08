@@ -124,7 +124,7 @@ export function QuotePageClient() {
     if (!id) return
     getQuoteBySlug(id)
       .then(async (q) => {
-        if (!q) { setNotFound(true); return }
+        if (!q) { console.warn('[QuotePage] no document found for slug:', id); setNotFound(true); return }
         setQuote(q)
         // Check if already unlocked this session (or no password set)
         if (!q.accessPassword || sessionStorage.getItem(`quote-access-${q.slug}`) === '1') {
@@ -153,7 +153,7 @@ export function QuotePageClient() {
           applySystemFont(q.fontName)
         }
       })
-      .catch(() => setNotFound(true))
+      .catch((err) => { console.error('[QuotePage] fetch error:', err); setNotFound(true) })
       .finally(() => setLoading(false))
   }, [id])
 
