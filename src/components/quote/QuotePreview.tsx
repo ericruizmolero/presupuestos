@@ -309,17 +309,16 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                     })}
                   </div>
 
-                  {/* Auto-calculated total from min/max hours × rate */}
+                  {/* Auto-calculated total from min/max hours × rate — always ignores manualTotal in hourly mode */}
                   {(() => {
                     const rate = quote.budgetTable.hourlyRate ?? 0
                     const minH = quote.budgetTable.items.reduce((s, i) => s + (i.minHours ?? 0), 0)
                     const maxH = quote.budgetTable.items.reduce((s, i) => s + (i.maxHours ?? 0), 0)
                     const hasHours = minH > 0 || maxH > 0
-                    if (!hasHours && !quote.budgetTable.manualTotal) return null
-                    const totalStr = quote.budgetTable.manualTotal
-                      ?? (rate && hasHours
-                          ? (minH === maxH ? fmt(minH * rate) : `${fmt(minH * rate)} – ${fmt(maxH * rate)}`)
-                          : (minH === maxH ? `${minH}h` : `${minH}–${maxH}h`))
+                    if (!hasHours) return null
+                    const totalStr = rate && hasHours
+                      ? (minH === maxH ? fmt(minH * rate) : `${fmt(minH * rate)} – ${fmt(maxH * rate)}`)
+                      : (minH === maxH ? `${minH}h` : `${minH}–${maxH}h`)
                     return (
                       <div className="flex items-baseline justify-between pt-4 sm:pt-5">
                         <span className="w-6 shrink-0 hidden xs:block" />
