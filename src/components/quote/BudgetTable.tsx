@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import type { BudgetItem, BudgetTable as BudgetTableType } from '@/types/quote'
 import { nanoid } from 'nanoid'
@@ -18,8 +18,17 @@ function calcTotals(items: BudgetItem[], taxRate: number) {
   return { subtotal, total }
 }
 
-export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true }: Props) {
+export function BudgetTable({ value, onChange, currency = 'EUR' }: Props) {
   const INPUT = 'w-full px-3 py-2 text-sm border-0 focus:outline-none bg-transparent'
+  const mode = value.mode ?? 'fixed'
+  const isHourly = mode === 'hourly'
+
+  const fmt = (n: number) =>
+    new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(n)
+
+  function setMode(m: 'fixed' | 'hourly') {
+    onChange({ ...value, mode: m, manualTotal: undefined })
+  }
 
   function addItem() {
     const newItem: BudgetItem = { id: nanoid(), concept: '', time: '', price: 0, notes: '' }
@@ -40,22 +49,40 @@ export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true 
     onChange({ ...value, items, subtotal, total })
   }
 
-  function updateTaxRate(rate: number) {
-    const { subtotal, total } = calcTotals(value.items, rate)
-    onChange({ ...value, taxRate: rate, subtotal, total })
-  }
-
-  const fmt = (n: number) =>
-    new Intl.NumberFormat('es-ES', { style: 'currency', currency }).format(n)
-
   return (
     <div className="border border-line rounded-md overflow-hidden">
+
+      {/* Mode toggle */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-line bg-surface">
+        <span className="text-xs text-ink-40 font-medium uppercase tracking-widest">Modo</span>
+        <div className="flex items-center gap-1 bg-paper border border-line rounded-md p-0.5">
+          {(['fixed', 'hourly'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`text-xs px-3 py-1 rounded transition-all ${
+                mode === m
+                  ? 'bg-accent text-on-accent font-medium'
+                  : 'text-ink-60 hover:text-ink'
+              }`}
+            >
+              {m === 'fixed' ? 'Precio fijo' : 'Por horas'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-line">
             <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60">Concepto</th>
-            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-36">Tiempo</th>
-            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-32">Precio</th>
+            <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-36">
+              {isHourly ? 'Horas est.' : 'Tiempo'}
+            </th>
+            {!isHourly && (
+              <th className="text-left px-4 py-3 text-xs font-medium tracking-widest uppercase text-ink-60 w-32">Precio</th>
+            )}
             <th className="w-8" />
           </tr>
         </thead>
@@ -85,20 +112,22 @@ export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true 
               <td className="px-2 py-1 align-top">
                 <input
                   className={INPUT + ' text-ink-60'}
-                  placeholder="ej: 40h"
+                  placeholder={isHourly ? 'ej: 4–6h' : 'ej: 40h'}
                   value={item.time}
                   onChange={(e) => updateItem(item.id, 'time', e.target.value)}
                 />
               </td>
-              <td className="px-4 py-1 align-top">
-                <input
-                  className="w-full py-2 text-sm border-0 focus:outline-none bg-transparent text-left text-ink [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  type="number"
-                  min={0}
-                  value={item.price || ''}
-                  onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
-                />
-              </td>
+              {!isHourly && (
+                <td className="px-4 py-1 align-top">
+                  <input
+                    className="w-full py-2 text-sm border-0 focus:outline-none bg-transparent text-left text-ink [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    type="number"
+                    min={0}
+                    value={item.price || ''}
+                    onChange={(e) => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
+                  />
+                </td>
+              )}
               <td className="px-2 py-2 text-center align-top">
                 <div className="pt-1.5">
                   <button onClick={() => removeItem(item.id)} className="text-ink-40 hover:text-[#DC2626] transition-colors">
@@ -121,20 +150,53 @@ export function BudgetTable({ value, onChange, currency = 'EUR', showTax = true 
         </button>
       </div>
 
-      <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-4">
-        <input
-          className="px-3 py-2 text-sm border-0 focus:outline-none bg-transparent text-ink min-w-0"
-          value={value.totalLabel ?? 'Total (IVA no incluido)'}
-          placeholder="Total (IVA no incluido)"
-          onChange={(e) => onChange({ ...value, totalLabel: e.target.value })}
-        />
-        <input
-          className="text-sm font-medium text-ink text-right bg-transparent border-0 focus:outline-none w-40 shrink-0"
-          value={value.manualTotal ?? ''}
-          placeholder={fmt(value.subtotal)}
-          onChange={(e) => onChange({ ...value, manualTotal: e.target.value || undefined })}
-        />
-      </div>
+      {/* Footer */}
+      {isHourly ? (
+        /* Hourly mode footer: rate + estimated total */
+        <div className="border-t border-line">
+          <div className="px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm text-ink-60 shrink-0">Tarifa</span>
+              <div className="flex items-center gap-1">
+                <input
+                  className="w-20 py-1 px-2 text-sm border border-line rounded focus:border-ink focus:outline-none bg-paper text-ink [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  type="number"
+                  min={0}
+                  placeholder="90"
+                  value={value.hourlyRate ?? ''}
+                  onChange={(e) => onChange({ ...value, hourlyRate: parseFloat(e.target.value) || undefined })}
+                />
+                <span className="text-sm text-ink-60">€/h</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-ink-40">Total est.</span>
+              <input
+                className="text-sm font-medium text-ink text-right bg-transparent border-0 focus:outline-none w-40"
+                value={value.manualTotal ?? ''}
+                placeholder="ej: €2,700–4,500"
+                onChange={(e) => onChange({ ...value, manualTotal: e.target.value || undefined })}
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Fixed price footer */
+        <div className="px-4 py-3 border-t border-line flex items-center justify-between gap-4">
+          <input
+            className="px-3 py-2 text-sm border-0 focus:outline-none bg-transparent text-ink min-w-0"
+            value={value.totalLabel ?? 'Total (IVA no incluido)'}
+            placeholder="Total (IVA no incluido)"
+            onChange={(e) => onChange({ ...value, totalLabel: e.target.value })}
+          />
+          <input
+            className="text-sm font-medium text-ink text-right bg-transparent border-0 focus:outline-none w-40 shrink-0"
+            value={value.manualTotal ?? ''}
+            placeholder={fmt(value.subtotal)}
+            onChange={(e) => onChange({ ...value, manualTotal: e.target.value || undefined })}
+          />
+        </div>
+      )}
     </div>
   )
 }

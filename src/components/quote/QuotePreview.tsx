@@ -258,16 +258,63 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
           <section id="budget" className="mb-16 sm:mb-32" style={pageBreakStyle('budget')}>
             <SectionLabel>{l.budget}</SectionLabel>
 
-            {/* Column headers — hide Price column when all items are €0 (T&M mode) */}
             {(() => {
-              const hasAnyPrice = quote.budgetTable.items.some(it => it.price > 0)
-              const showPriceCol = hasAnyPrice || !quote.budgetTable.manualTotal
-              return (
+              const isHourly = quote.budgetTable.mode === 'hourly'
+
+              return isHourly ? (
+                /* ── Hourly / T&M mode ── */
+                <>
+                  {/* Header */}
+                  <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line">
+                    <span className="w-6 shrink-0 hidden xs:block" />
+                    <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
+                    <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">
+                      {quote.language === 'en' ? 'Est. hours' : 'Horas est.'}
+                    </span>
+                  </div>
+
+                  {/* Items */}
+                  <div>
+                    {quote.budgetTable.items.map((item, i) => (
+                      <div key={i} className="flex items-start gap-3 sm:gap-6 py-4 sm:py-5 border-b border-line">
+                        <span className="text-[8px] font-light text-ink-20 w-6 shrink-0 mt-[3px] tabular-nums select-none tracking-wide hidden xs:block">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-ink leading-snug">{item.concept}</p>
+                          {item.notes && (
+                            <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
+                          )}
+                        </div>
+                        <span className="text-sm text-ink-60 tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
+                          {item.time || '—'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer: rate + estimated total */}
+                  <div className="pt-4 sm:pt-5 flex items-baseline justify-between gap-3 sm:gap-6">
+                    <span className="w-6 shrink-0 hidden xs:block" />
+                    <span className="flex-1 text-sm text-ink-60">
+                      {quote.budgetTable.hourlyRate
+                        ? `${quote.language === 'en' ? 'Rate' : 'Tarifa'}: ${fmt(quote.budgetTable.hourlyRate!)}/h`
+                        : (quote.language === 'en' ? 'Hourly rate' : 'Tarifa horaria')}
+                    </span>
+                    {quote.budgetTable.manualTotal && (
+                      <span className="text-sm font-medium text-ink w-20 sm:w-28 text-right shrink-0">
+                        {quote.budgetTable.manualTotal}
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* ── Fixed price mode ── */
                 <>
                   <div className="flex items-center gap-3 sm:gap-6 pb-3 border-b border-line mb-0">
                     <span className="w-6 shrink-0 hidden xs:block" />
                     <span className="flex-1 text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60">{l.concept}</span>
-                    {showPriceCol && <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">{l.price}</span>}
+                    <span className="text-[10px] font-medium tracking-[0.15em] uppercase text-ink-60 text-right w-20 sm:w-28 shrink-0">{l.price}</span>
                   </div>
 
                   <div>
@@ -285,11 +332,9 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                             <p className="text-xs text-ink-40 mt-2 leading-relaxed">{item.notes}</p>
                           )}
                         </div>
-                        {showPriceCol && (
-                          <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
-                            {item.price > 0 ? fmt(item.price) : '—'}
-                          </span>
-                        )}
+                        <span className="text-sm font-medium text-ink tabular-nums shrink-0 mt-[3px] w-20 sm:w-28 text-right">
+                          {item.price > 0 ? fmt(item.price) : '—'}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -298,7 +343,6 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
                     <span className="w-6 shrink-0 hidden xs:block" />
                     <span className="flex-1 text-sm font-medium text-ink">
                       {quote.budgetTable.totalLabel || 'Total'}
-                      {/* Only show tax note when there's a numeric total (not manual override) */}
                       {!quote.budgetTable.manualTotal && quote.budgetTable.taxRate > 0 && (
                         <span className="font-normal text-ink-40 ml-1">{l.vatNotIncluded}</span>
                       )}

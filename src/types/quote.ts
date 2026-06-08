@@ -103,6 +103,8 @@ export interface BudgetTable {
   total: number
   totalLabel?: string
   manualTotal?: string   // overrides calculated total when set (e.g. "2,700–4,500 est.")
+  mode?: 'fixed' | 'hourly'   // 'fixed' = precio fijo (default), 'hourly' = T&M por horas
+  hourlyRate?: number          // tarifa €/h — solo en modo 'hourly'
 }
 
 export interface BudgetTableAdditional {
