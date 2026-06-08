@@ -67,7 +67,7 @@ async function fetchCompanyById(companyId: string) {
   if (!doc.fields) return null
   const fields: Record<string, unknown> = {}
   for (const [k, fv] of Object.entries(doc.fields)) fields[k] = fromFS(fv)
-  return fields as import('@/types/quote').Company
+  return fields as unknown as import('@/types/quote').Company
 }
 import { applySystemFont, injectFont } from '@/lib/fonts'
 import { applyPalette, applyThemeColors, applyInkOpacities } from '@/lib/theme'
