@@ -3,6 +3,40 @@
 import { useState } from 'react'
 import { X, Copy, Check, ArrowRight, ArrowLeft, Loader, ExternalLink } from 'lucide-react'
 import type { QuoteFormData } from '@/types/quote'
+import { EDITOR_I18N, type Lang } from '@/lib/editorI18n'
+
+// ── i18n helpers ──────────────────────────────────────────────────────────────
+type EditorT = typeof EDITOR_I18N['es']
+type QuestionOverride = { label?: string; placeholder?: string; helper?: string; defaultValue?: string }
+
+// Maps section+question key → EditorT.aiQ key
+const Q_MAP: Record<string, Record<string, keyof EditorT['aiQ']>> = {
+  client:           { linkedin: 'linkedin', sector: 'sector', about: 'about' },
+  project:          { linkedin: 'linkedin', brief: 'brief', problem: 'problem', model: 'model', outOfScope: 'outOfScope' },
+  phases:           { type: 'type', brief: 'brief', numPhases: 'numPhases' },
+  timeline:         { startDate: 'startDate', duration: 'duration' },
+  budget:           { service: 'service', rate: 'rate', deliverables: 'deliverables', taxRate: 'taxRate' },
+  budgetAdditional: { label: 'additionalLabel', description: 'additionalDesc', rate: 'additionalRate' },
+  acceptance:       { payment: 'payment', service: 'acceptanceService', special: 'special' },
+  billing:          { model: 'billingModel', details: 'billingDetails' },
+  conformity:       { emitterPerson: 'emitterPerson', clientPerson: 'clientPerson' },
+  all:              { linkedin: 'linkedin', projectBrief: 'projectBrief', rate: 'allRate', payment: 'allPayment' },
+}
+
+function buildTranslatedQuestions(section: string, t: EditorT): Record<string, QuestionOverride> {
+  const map = Q_MAP[section] ?? {}
+  const result: Record<string, QuestionOverride> = {}
+  for (const [qKey, tKey] of Object.entries(map)) {
+    result[qKey] = t.aiQ[tKey] as QuestionOverride
+  }
+  return result
+}
+
+// Add a language instruction to prompts so the AI outputs in the right language
+function withLang(prompt: string, lang: Lang): string {
+  if (lang === 'es') return prompt
+  return prompt + '\n\nIMPORTANT: Generate ALL content in English, not Spanish.'
+}
 
 function uid() { return Math.random().toString(36).slice(2, 10) }
 function withIds<T extends { id?: string }>(items: T[]): (T & { id: string })[] {
@@ -389,7 +423,7 @@ ${SCHEMA_HINT}`,
   },
 
   all: {
-    title: 'Presupuesto completo',
+    title: 'Empieza el presupuesto con IA',
     description: 'Genera todas las secciones del presupuesto de una vez.',
     questions: [
       {
@@ -564,24 +598,36 @@ const AI_OPTIONS = [
 interface Props {
   section: AISection
   form: QuoteFormData
+  language?: Lang
   onApply: (updater: (prev: QuoteFormData) => QuoteFormData) => void
   onClose: () => void
 }
 
 const INPUT_CLS = 'w-full px-3 py-2.5 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors bg-paper'
 
-export function AIAssistant({ section, form, onApply, onClose }: Props) {
+export function AIAssistant({ section, form, language = 'es', onApply, onClose }: Props) {
+  const t = EDITOR_I18N[language]
   const config = CONFIGS[section]
+
+  // Translated question labels/placeholders for this section
+  const tQuestions = buildTranslatedQuestions(section, t)
+  // Translated section title + description
+  const tSection = t.aiSections[section]
+
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
-    Object.fromEntries(config.questions.filter(q => q.defaultValue).map(q => [q.key, q.defaultValue!]))
+    Object.fromEntries(config.questions.map(q => {
+      const tq = tQuestions[q.key]
+      const defaultVal = (tq as { defaultValue?: string })?.defaultValue ?? q.defaultValue
+      return defaultVal ? [q.key, defaultVal] : null
+    }).filter(Boolean) as [string, string][])
   )
   const [copied, setCopied] = useState(false)
   const [response, setResponse] = useState('')
   const [parseError, setParseError] = useState('')
   const [applied, setApplied] = useState(false)
 
-  const prompt = step >= 2 ? config.buildPrompt(answers, form) : ''
+  const prompt = step >= 2 ? withLang(config.buildPrompt(answers, form), language) : ''
 
   function handleCopy() {
     navigator.clipboard.writeText(prompt)
@@ -598,7 +644,7 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
       setApplied(true)
       setTimeout(onClose, 800)
     } catch {
-      setParseError('No se pudo leer la respuesta. Asegúrate de pegar solo el JSON.')
+      setParseError(t.aiParseError)
     }
   }
 
@@ -617,7 +663,7 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-line shrink-0">
           <div className="flex items-center gap-2">
             <Loader size={14} strokeWidth={1.5} className="text-ink-40" />
-            <span className="text-sm font-medium text-ink">{config.title}</span>
+            <span className="text-sm font-medium text-ink">{tSection.title}</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
@@ -640,21 +686,26 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
           {/* Step 1: Questions */}
           {step === 1 && (
             <>
-              <p className="text-xs text-ink-40">{config.description}</p>
-              {config.questions.map((q) => (
+              <p className="text-xs text-ink-40">{tSection.description}</p>
+              {config.questions.map((q) => {
+                const tq = tQuestions[q.key]
+                const label = tq?.label ?? q.label
+                const placeholder = tq?.placeholder ?? q.placeholder
+                const helper = tq?.helper ?? q.helper
+                return (
                 <div key={q.key}>
                   <label className="block text-sm font-medium text-ink mb-1.5">
-                    {q.label}
-                    {q.optional && <span className="ml-1.5 text-ink-40 font-normal text-xs">(opcional)</span>}
+                    {label}
+                    {q.optional && <span className="ml-1.5 text-ink-40 font-normal text-xs">({language === 'en' ? 'optional' : 'opcional'})</span>}
                   </label>
-                  {q.helper && (
-                    <p className="text-xs text-ink-40 mb-2 leading-relaxed">{q.helper}</p>
+                  {helper && (
+                    <p className="text-xs text-ink-40 mb-2 leading-relaxed">{helper}</p>
                   )}
                   {q.type === 'textarea' ? (
                     <textarea
                       className={INPUT_CLS + ' resize-none'}
-                      rows={q.helper ? 5 : 3}
-                      placeholder={q.placeholder}
+                      rows={helper ? 5 : 3}
+                      placeholder={placeholder}
                       value={answers[q.key] || ''}
                       onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
                     />
@@ -662,20 +713,21 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
                     <input
                       className={INPUT_CLS}
                       type={q.type}
-                      placeholder={q.placeholder}
+                      placeholder={placeholder}
                       value={answers[q.key] || ''}
                       onChange={(e) => setAnswers((a) => ({ ...a, [q.key]: e.target.value }))}
                     />
                   )}
                 </div>
-              ))}
+                )
+              })}
             </>
           )}
 
           {/* Step 2: Prompt + AI links */}
           {step === 2 && (
             <>
-              <p className="text-xs text-ink-40">Copia este prompt y pégalo en la IA que prefieras.</p>
+              <p className="text-xs text-ink-40">{t.aiPopupStep2}</p>
               <div className="relative">
                 <pre className="text-xs text-ink-60 bg-surface border border-line rounded-md p-4 whitespace-pre-wrap break-words leading-relaxed max-h-56 overflow-y-auto">
                   {prompt}
@@ -685,11 +737,11 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
                   className="absolute top-2 right-2 flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-paper border border-line rounded-md text-ink-60 hover:text-ink transition-colors"
                 >
                   {copied ? <Check size={11} strokeWidth={2} /> : <Copy size={11} strokeWidth={1.5} />}
-                  {copied ? 'Copiado' : 'Copiar'}
+                  {copied ? t.aiCopiedBtn : t.aiCopyBtn}
                 </button>
               </div>
               <div className="flex items-center gap-4">
-                <p className="text-xs text-ink-40 shrink-0">Abrir en:</p>
+                <p className="text-xs text-ink-40 shrink-0">{t.aiOpenIn}</p>
                 <div className="flex items-center gap-3">
                   {AI_OPTIONS.map(({ id, label, url }) => (
                     <a
@@ -711,7 +763,7 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
           {/* Step 3: Paste response */}
           {step === 3 && (
             <>
-              <p className="text-xs text-ink-40">Pega aquí la respuesta JSON de la IA y aplica los cambios.</p>
+              <p className="text-xs text-ink-40">{t.aiPopupStep3}</p>
               <textarea
                 className={INPUT_CLS + ' resize-none font-mono text-xs'}
                 rows={10}
@@ -733,7 +785,7 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
             className="flex items-center gap-1.5 px-4 py-2 text-sm text-ink-60 hover:text-ink border border-line rounded-md transition-colors"
           >
             {step > 1 && <ArrowLeft size={13} strokeWidth={1.5} />}
-            {step === 1 ? 'Cancelar' : 'Atrás'}
+            {step === 1 ? t.aiCancel : t.aiBack}
           </button>
 
           {step < 3 ? (
@@ -742,7 +794,7 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
               disabled={step === 1 && !canProceed}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {step === 1 ? 'Generar prompt' : 'Ya tengo la respuesta'}
+              {step === 1 ? t.aiGeneratePrompt : t.aiHaveResponse}
               <ArrowRight size={13} strokeWidth={1.5} />
             </button>
           ) : (
@@ -751,7 +803,7 @@ export function AIAssistant({ section, form, onApply, onClose }: Props) {
               disabled={!response.trim() || applied}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {applied ? <><Check size={13} strokeWidth={2} /> Aplicado</> : 'Aplicar cambios'}
+              {applied ? <><Check size={13} strokeWidth={2} /> {t.aiApplied}</> : t.aiApply}
             </button>
           )}
         </div>

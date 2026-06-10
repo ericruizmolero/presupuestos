@@ -50,7 +50,7 @@ function NewQuoteContent() {
         ])
         defaultData.quoteNumber = quoteNumber
         const id = await createQuote(defaultData, user!.uid, companyId)
-        router.replace(`/dashboard/${id}`)
+        router.replace(`/dashboard/${id}?new=1`)
       } catch {
         router.replace('/dashboard')
       }

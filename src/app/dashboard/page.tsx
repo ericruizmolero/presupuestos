@@ -12,6 +12,9 @@ import { createDemoQuote } from '@/lib/demoQuote'
 import { nanoid } from 'nanoid'
 import type { Quote, QuoteStatus } from '@/types/quote'
 
+// Module-level guard: prevents double demo creation from React StrictMode double-mount
+const seedingCompanies = new Set<string>()
+
 /** Returns the numeric total for sorting and display — handles both fixed and hourly modes */
 function quoteTotal(q: Quote): number {
   if (q.budgetTable?.mode === 'hourly') {
@@ -95,7 +98,14 @@ function DashboardContent() {
 
       // First time ever (or all quotes deleted) → seed a demo quote
       if (data.length === 0) {
-        await createQuote(createDemoQuote(), user.uid, cid)
+        // Guard against StrictMode double-invocation or concurrent loads
+        if (seedingCompanies.has(cid)) return
+        seedingCompanies.add(cid)
+        try {
+          await createQuote(createDemoQuote(), user.uid, cid)
+        } finally {
+          seedingCompanies.delete(cid)
+        }
         const seeded = await getQuotes(cid)
         setQuotes(seeded)
         window.dispatchEvent(new Event('quotes-changed'))

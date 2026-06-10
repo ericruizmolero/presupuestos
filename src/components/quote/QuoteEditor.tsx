@@ -11,12 +11,14 @@ import { IconPicker } from '@/components/ui/IconPicker'
 import { Select } from '@/components/ui/Select'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { EditableGantt, InteractiveGantt } from './GanttTimeline'
+import { EDITOR_I18N } from '@/lib/editorI18n'
 
 interface Props {
   initialData: QuoteFormData
   companyData?: Partial<Quote['emitter']> & { defaultConditions?: Quote['acceptanceConditions'] }
   onSave: (data: QuoteFormData) => Promise<void>
   saving?: boolean
+  autoOpenAI?: boolean
 }
 
 const SECTION_LABEL = 'text-xs font-medium tracking-widest uppercase text-ink-40 flex items-center justify-between'
@@ -106,8 +108,9 @@ function SectionHeader({
   )
 }
 
-export function QuoteEditor({ initialData, onSave }: Props) {
+export function QuoteEditor({ initialData, onSave, autoOpenAI }: Props) {
   const [form, setForm] = useState<QuoteFormData>(initialData)
+  const t = EDITOR_I18N[form.language ?? 'es']
   const [open, setOpen] = useState<Record<string, boolean>>({
     meta: false, emitter: false, client: false,
     project: false, phases: false, timeline: false,
@@ -115,6 +118,11 @@ export function QuoteEditor({ initialData, onSave }: Props) {
     acceptance: false, billing: false, conformity: false,
   })
   const [aiSection, setAiSection] = useState<AISection | null>(null)
+
+  // Auto-open AI popup when creating a new quote
+  useEffect(() => {
+    if (autoOpenAI) setAiSection('all')
+  }, [autoOpenAI])
   const [aiTouched, setAiTouched] = useState<Set<string>>(new Set())
 
   // ── Auto-save ──────────────────────────────────────────────────────────────
@@ -230,29 +238,29 @@ export function QuoteEditor({ initialData, onSave }: Props) {
           className="flex items-center gap-1.5 text-xs text-ink-40 hover:text-ink transition-colors"
         >
           <Loader size={11} strokeWidth={1.5} />
-          Completar con IA
+          {aiTouched.size > 0 ? t.aiContinue : t.aiStart}
         </button>
         <button
           type="button"
           onClick={toggleAll}
           className="text-xs text-ink-40 hover:text-ink-60 transition-colors"
         >
-          {allOpen ? 'Plegar todo' : 'Desplegar todo'}
+          {allOpen ? t.collapseAll : t.expandAll}
         </button>
       </div>
 
       {/* Meta */}
       <div id="meta">
-        <SectionHeader label="Datos del presupuesto" open={open.meta} onToggle={() => toggle('meta')} saveStatus={saveStatus} />
+        <SectionHeader label={t.sectionMeta} open={open.meta} onToggle={() => toggle('meta')} saveStatus={saveStatus} />
         <CollapsibleSection open={open.meta}>
           <div className="space-y-6">
             <div className={GRID2}>
               <div>
-                <label className={FIELD_LABEL}>Número de presupuesto</label>
-                <input className={INPUT} value={form.quoteNumber} onChange={(e) => set('quoteNumber', e.target.value)} placeholder="P-2026-001" />
+                <label className={FIELD_LABEL}>{t.quoteNumber}</label>
+                <input className={INPUT} value={form.quoteNumber} onChange={(e) => set('quoteNumber', e.target.value)} placeholder={t.phEmitterName.startsWith('Your') ? 'Q-2026-001' : 'P-2026-001'} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Moneda</label>
+                <label className={FIELD_LABEL}>{t.currency}</label>
                 <Select className={INPUT} value={form.currency} onChange={(e) => set('currency', e.target.value as QuoteFormData['currency'])}>
                   <option value="EUR">EUR — Euro</option>
                   <option value="USD">USD — Dólar</option>
@@ -260,29 +268,29 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                 </Select>
               </div>
               <div>
-                <label className={FIELD_LABEL}>Idioma del presupuesto</label>
+                <label className={FIELD_LABEL}>{t.language}</label>
                 <Select className={INPUT} value={form.language ?? 'es'} onChange={(e) => set('language', e.target.value as 'es' | 'en')}>
                   <option value="es">🇪🇸 Español</option>
                   <option value="en">🇺🇸 English</option>
                 </Select>
               </div>
               <div>
-                <label className={FIELD_LABEL}>Contraseña de acceso</label>
+                <label className={FIELD_LABEL}>{t.accessPassword}</label>
                 <input
                   className={INPUT}
                   type="text"
                   value={form.accessPassword ?? ''}
                   onChange={(e) => set('accessPassword', e.target.value || undefined)}
-                  placeholder="Dejar vacío = sin protección"
+                  placeholder={t.accessPasswordPlaceholder}
                 />
-                <p className="text-xs text-ink-40 mt-1">El cliente la necesitará para ver el presupuesto.</p>
+                <p className="text-xs text-ink-40 mt-1">{t.accessPasswordHelp}</p>
               </div>
               <div>
-                <label className={FIELD_LABEL}>Fecha</label>
+                <label className={FIELD_LABEL}>{t.date}</label>
                 <DatePicker className={INPUT} value={form.date} onChange={(v) => set('date', v)} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Válido hasta</label>
+                <label className={FIELD_LABEL}>{t.validUntil}</label>
                 <DatePicker className={INPUT} value={form.validUntil} onChange={(v) => set('validUntil', v)} />
               </div>
             </div>
@@ -294,42 +302,42 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Empresa emisora */}
       <div id="emitter">
-        <SectionHeader label="Empresa emisora" open={open.emitter} onToggle={() => toggle('emitter')} saveStatus={saveStatus} />
+        <SectionHeader label={t.sectionEmitter} open={open.emitter} onToggle={() => toggle('emitter')} saveStatus={saveStatus} />
         <CollapsibleSection open={open.emitter}>
           <div className="space-y-6">
             <div className={GRID2}>
               <div>
-                <label className={FIELD_LABEL}>Nombre</label>
-                <input className={INPUT} value={form.emitter.companyName} onChange={(e) => setNested('emitter', 'companyName', e.target.value)} placeholder="Tu empresa S.L." />
+                <label className={FIELD_LABEL}>{t.name}</label>
+                <input className={INPUT} value={form.emitter.companyName} onChange={(e) => setNested('emitter', 'companyName', e.target.value)} placeholder={t.phEmitterName} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Email</label>
-                <input className={INPUT} type="email" value={form.emitter.email} onChange={(e) => setNested('emitter', 'email', e.target.value)} placeholder="hola@tuempresa.com" />
+                <label className={FIELD_LABEL}>{t.email}</label>
+                <input className={INPUT} type="email" value={form.emitter.email} onChange={(e) => setNested('emitter', 'email', e.target.value)} placeholder={t.phEmitterEmail} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>CIF / NIF</label>
-                <input className={INPUT} value={form.emitter.taxId} onChange={(e) => setNested('emitter', 'taxId', e.target.value)} placeholder="B12345678" />
+                <label className={FIELD_LABEL}>{t.taxId}</label>
+                <input className={INPUT} value={form.emitter.taxId} onChange={(e) => setNested('emitter', 'taxId', e.target.value)} placeholder={t.phEmitterTaxId} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Dirección</label>
-                <input className={INPUT} value={form.emitter.address} onChange={(e) => setNested('emitter', 'address', e.target.value)} placeholder="Calle, número, CP" />
+                <label className={FIELD_LABEL}>{t.address}</label>
+                <input className={INPUT} value={form.emitter.address} onChange={(e) => setNested('emitter', 'address', e.target.value)} placeholder={t.phAddress} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Ciudad</label>
-                <input className={INPUT} value={form.emitter.city} onChange={(e) => setNested('emitter', 'city', e.target.value)} placeholder="Ciudad" />
+                <label className={FIELD_LABEL}>{t.city}</label>
+                <input className={INPUT} value={form.emitter.city} onChange={(e) => setNested('emitter', 'city', e.target.value)} placeholder={t.phCity} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Representada por</label>
-                <input className={INPUT} value={form.emitter.representativeName} onChange={(e) => setNested('emitter', 'representativeName', e.target.value)} placeholder="Nombre Apellido" />
+                <label className={FIELD_LABEL}>{t.representedBy}</label>
+                <input className={INPUT} value={form.emitter.representativeName} onChange={(e) => setNested('emitter', 'representativeName', e.target.value)} placeholder={t.phRepresentative} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Cargo</label>
-                <input className={INPUT} value={form.emitter.representativeRole} onChange={(e) => setNested('emitter', 'representativeRole', e.target.value)} placeholder="Ej: Fundador, CEO…" />
+                <label className={FIELD_LABEL}>{t.role}</label>
+                <input className={INPUT} value={form.emitter.representativeRole} onChange={(e) => setNested('emitter', 'representativeRole', e.target.value)} placeholder={t.phRole} />
               </div>
             </div>
             <div>
-              <label className={FIELD_LABEL}>Descripción de la empresa</label>
-              <RichTextEditor value={form.emitter.description} onChange={(v) => setNested('emitter', 'description', v)} placeholder="Descripción de tu empresa..." minHeight="80px" />
+              <label className={FIELD_LABEL}>{t.companyDescription}</label>
+              <RichTextEditor value={form.emitter.description} onChange={(v) => setNested('emitter', 'description', v)} placeholder={t.phEmitterDescription} minHeight="80px" />
             </div>
           </div>
         </CollapsibleSection>
@@ -339,46 +347,46 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Cliente */}
       <div id="client">
-        <SectionHeader label="Empresa receptora / Cliente" open={open.client} onToggle={() => toggle('client')} saveStatus={saveStatus} aiTouched={aiTouched.has('client')} />
+        <SectionHeader label={t.sectionClient} open={open.client} onToggle={() => toggle('client')} saveStatus={saveStatus} aiTouched={aiTouched.has('client')} />
         <CollapsibleSection open={open.client}>
           <div className="space-y-6">
             <div className={GRID2}>
               <div>
-                <label className={FIELD_LABEL}>Empresa</label>
-                <input className={INPUT} value={form.client.company} onChange={(e) => setNested('client', 'company', e.target.value)} placeholder="Empresa del cliente" />
+                <label className={FIELD_LABEL}>{t.company}</label>
+                <input className={INPUT} value={form.client.company} onChange={(e) => setNested('client', 'company', e.target.value)} placeholder={t.phClientCompany} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Nombre de contacto</label>
-                <input className={INPUT} value={form.client.name} onChange={(e) => setNested('client', 'name', e.target.value)} placeholder="Nombre Apellido" />
+                <label className={FIELD_LABEL}>{t.contactName}</label>
+                <input className={INPUT} value={form.client.name} onChange={(e) => setNested('client', 'name', e.target.value)} placeholder={t.phClientName} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Email</label>
-                <input className={INPUT} type="email" value={form.client.email} onChange={(e) => setNested('client', 'email', e.target.value)} placeholder="cliente@empresa.com" />
+                <label className={FIELD_LABEL}>{t.email}</label>
+                <input className={INPUT} type="email" value={form.client.email} onChange={(e) => setNested('client', 'email', e.target.value)} placeholder={t.phClientEmail} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>CIF / NIF</label>
-                <input className={INPUT} value={form.client.taxId} onChange={(e) => setNested('client', 'taxId', e.target.value)} placeholder="A12345678" />
+                <label className={FIELD_LABEL}>{t.taxId}</label>
+                <input className={INPUT} value={form.client.taxId} onChange={(e) => setNested('client', 'taxId', e.target.value)} placeholder={t.phClientTaxId} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Dirección</label>
-                <input className={INPUT} value={form.client.address} onChange={(e) => setNested('client', 'address', e.target.value)} placeholder="Calle, número, CP" />
+                <label className={FIELD_LABEL}>{t.address}</label>
+                <input className={INPUT} value={form.client.address} onChange={(e) => setNested('client', 'address', e.target.value)} placeholder={t.phAddress} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Ciudad</label>
-                <input className={INPUT} value={form.client.city} onChange={(e) => setNested('client', 'city', e.target.value)} placeholder="Ciudad" />
+                <label className={FIELD_LABEL}>{t.city}</label>
+                <input className={INPUT} value={form.client.city} onChange={(e) => setNested('client', 'city', e.target.value)} placeholder={t.phCity} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Representada por</label>
-                <input className={INPUT} value={form.client.name} onChange={(e) => setNested('client', 'name', e.target.value)} placeholder="Nombre Apellido" />
+                <label className={FIELD_LABEL}>{t.representedBy}</label>
+                <input className={INPUT} value={form.client.name} onChange={(e) => setNested('client', 'name', e.target.value)} placeholder={t.phClientName} />
               </div>
               <div>
-                <label className={FIELD_LABEL}>Cargo</label>
-                <input className={INPUT} value={form.client.role} onChange={(e) => setNested('client', 'role', e.target.value)} placeholder="Ej: CEO, Director…" />
+                <label className={FIELD_LABEL}>{t.role}</label>
+                <input className={INPUT} value={form.client.role} onChange={(e) => setNested('client', 'role', e.target.value)} placeholder={t.phClientRole} />
               </div>
             </div>
             <div>
-              <label className={FIELD_LABEL}>Descripción de la empresa receptora</label>
-              <RichTextEditor value={form.client.description} onChange={(v) => setNested('client', 'description', v)} placeholder="Contexto del cliente..." minHeight="80px" />
+              <label className={FIELD_LABEL}>{t.clientDescription}</label>
+              <RichTextEditor value={form.client.description} onChange={(v) => setNested('client', 'description', v)} placeholder={t.phClientDescription} minHeight="80px" />
             </div>
           </div>
         </CollapsibleSection>
@@ -388,23 +396,23 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Proyecto */}
       <div id="project">
-        <SectionHeader label="Proyecto" open={open.project} onToggle={() => toggle('project')} saveStatus={saveStatus} aiTouched={aiTouched.has('project')} />
+        <SectionHeader label={t.sectionProject} open={open.project} onToggle={() => toggle('project')} saveStatus={saveStatus} aiTouched={aiTouched.has('project')} />
         <CollapsibleSection open={open.project}>
           <div className="space-y-6">
             <div>
-              <label className={FIELD_LABEL}>Objetivo principal</label>
-              <RichTextEditor value={form.project.mainObjective} onChange={(v) => setNested('project', 'mainObjective', v)} placeholder="¿Qué se quiere conseguir con este proyecto?" minHeight="80px" />
+              <label className={FIELD_LABEL}>{t.mainObjective}</label>
+              <RichTextEditor value={form.project.mainObjective} onChange={(v) => setNested('project', 'mainObjective', v)} placeholder={t.phMainObjective} minHeight="80px" />
             </div>
             <div>
               <label className={FIELD_LABEL}>
-                Modelo de colaboración
-                <span className="ml-2 text-ink-40 font-normal text-xs">(opcional)</span>
+                {t.collaborationModel}
+                <span className="ml-2 text-ink-40 font-normal text-xs">({t.optional})</span>
               </label>
-              <RichTextEditor value={form.project.collaborationModel} onChange={(v) => setNested('project', 'collaborationModel', v)} placeholder="Ej: proyecto cerrado, horas pactadas, retainer mensual..." minHeight="60px" />
+              <RichTextEditor value={form.project.collaborationModel} onChange={(v) => setNested('project', 'collaborationModel', v)} placeholder={t.phCollaborationModel} minHeight="60px" />
             </div>
             <div>
-              <label className={FIELD_LABEL}>Alcance del proyecto</label>
-              <RichTextEditor value={form.project.scope} onChange={(v) => setNested('project', 'scope', v)} placeholder="¿Qué incluye y qué no incluye este presupuesto?" minHeight="80px" />
+              <label className={FIELD_LABEL}>{t.scope}</label>
+              <RichTextEditor value={form.project.scope} onChange={(v) => setNested('project', 'scope', v)} placeholder={t.phScope} minHeight="80px" />
             </div>
           </div>
         </CollapsibleSection>
@@ -414,13 +422,13 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Fases */}
       <div id="phases">
-        <SectionHeader label="Fases" open={open.phases} onToggle={() => toggle('phases')} saveStatus={saveStatus} aiTouched={aiTouched.has('phases')} />
+        <SectionHeader label={t.sectionPhases} open={open.phases} onToggle={() => toggle('phases')} saveStatus={saveStatus} aiTouched={aiTouched.has('phases')} />
         <CollapsibleSection open={open.phases}>
           <div className="space-y-4">
             {form.project.phases.map((phase, i) => (
               <div key={i} className="border border-line rounded-md p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-ink-40 font-medium uppercase tracking-widest">Fase {i + 1}</span>
+                  <span className="text-xs text-ink-40 font-medium uppercase tracking-widest">{t.phase} {i + 1}</span>
                   <button type="button" onClick={() => removePhase(i)} className="text-ink-40 hover:text-[#DC2626] transition-colors">
                     <Trash2 size={13} />
                   </button>
@@ -429,7 +437,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                   <IconPicker value={phase.icon} onChange={(icon) => updatePhase(i, 'icon', icon ?? '')} />
                   <input
                     className={INPUT}
-                    placeholder="Nombre de la fase"
+                    placeholder={t.phaseName}
                     value={phase.name}
                     onChange={(e) => updatePhase(i, 'name', e.target.value)}
                   />
@@ -437,13 +445,13 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                 <RichTextEditor
                   value={phase.description}
                   onChange={(v) => updatePhase(i, 'description', v)}
-                  placeholder="Descripción de la fase..."
+                  placeholder={t.phaseDescription}
                   minHeight="60px"
                 />
               </div>
             ))}
             <button type="button" onClick={addPhase} className="flex items-center gap-2 text-sm text-ink-60 hover:text-ink transition-colors">
-              <Plus size={14} strokeWidth={2} /> Añadir fase
+              <Plus size={14} strokeWidth={2} /> {t.addPhase}
             </button>
           </div>
         </CollapsibleSection>
@@ -453,12 +461,12 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Tareas y tiempos */}
       <div id="timeline">
-        <SectionHeader label="Tareas y tiempos" open={open.timeline} onToggle={() => toggle('timeline')} saveStatus={saveStatus} aiTouched={aiTouched.has('timeline')} />
+        <SectionHeader label={t.sectionTimeline} open={open.timeline} onToggle={() => toggle('timeline')} saveStatus={saveStatus} aiTouched={aiTouched.has('timeline')} />
         <CollapsibleSection open={open.timeline}>
           <div className="space-y-6">
             {form.timeline.some(e => e.startDate && e.endDate) && (
               <div className="border border-line rounded-md p-4 bg-surface">
-                <p className="text-[10px] font-medium tracking-widest uppercase text-ink-40 mb-4">Vista previa interactiva — arrastra para ajustar fechas</p>
+                <p className="text-[10px] font-medium tracking-widest uppercase text-ink-40 mb-4">{t.ganttPreview}</p>
                 <InteractiveGantt
                   entries={form.timeline}
                   onChange={(t) => set('timeline', t)}
@@ -478,7 +486,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Presupuesto principal */}
       <div id="budget">
-        <SectionHeader label="Tabla de presupuesto" open={open.budget} onToggle={() => toggle('budget')} saveStatus={saveStatus} aiTouched={aiTouched.has('budget')} />
+        <SectionHeader label={t.sectionBudget} open={open.budget} onToggle={() => toggle('budget')} saveStatus={saveStatus} aiTouched={aiTouched.has('budget')} />
         <CollapsibleSection open={open.budget}>
           <BudgetTable value={form.budgetTable} onChange={(v) => set('budgetTable', v)} currency={form.currency} />
         </CollapsibleSection>
@@ -488,7 +496,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Presupuesto adicional */}
       <div id="budget-additional">
-        <SectionHeader label="Tabla adicional" open={open.budgetAdditional} onToggle={() => toggle('budgetAdditional')} optional />
+        <SectionHeader label={t.sectionBudgetAdditional} open={open.budgetAdditional} onToggle={() => toggle('budgetAdditional')} optional />
         <CollapsibleSection open={open.budgetAdditional}>
           <div className="space-y-4">
             <button
@@ -499,13 +507,13 @@ export function QuoteEditor({ initialData, onSave }: Props) {
               <span className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${form.budgetTableAdditional.enabled ? 'bg-ink border-ink' : 'bg-transparent border-line group-hover:border-ink-60'}`}>
                 {form.budgetTableAdditional.enabled && <Check size={10} strokeWidth={2.5} className="text-paper" />}
               </span>
-              <span className="text-sm text-ink">Incluir tabla adicional</span>
+              <span className="text-sm text-ink">{t.includeBudgetAdditional}</span>
             </button>
             {form.budgetTableAdditional.enabled && (
               <>
                 <div>
-                  <label className={FIELD_LABEL}>Título de la tabla adicional</label>
-                  <input className={INPUT} value={form.budgetTableAdditional.label} onChange={(e) => setNested('budgetTableAdditional', 'label', e.target.value)} placeholder="Ej: Servicios adicionales" />
+                  <label className={FIELD_LABEL}>{t.budgetAdditionalTitle}</label>
+                  <input className={INPUT} value={form.budgetTableAdditional.label} onChange={(e) => setNested('budgetTableAdditional', 'label', e.target.value)} placeholder={t.phBudgetAdditionalTitle} />
                 </div>
                 <BudgetTable
                   value={{ items: form.budgetTableAdditional.items, subtotal: form.budgetTableAdditional.subtotal, taxRate: 0, total: form.budgetTableAdditional.total }}
@@ -523,17 +531,10 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Condiciones de aceptación */}
       <div id="acceptance">
-        <SectionHeader label="Condiciones de aceptación" open={open.acceptance} onToggle={() => toggle('acceptance')} saveStatus={saveStatus} aiTouched={aiTouched.has('acceptance')} />
+        <SectionHeader label={t.sectionAcceptance} open={open.acceptance} onToggle={() => toggle('acceptance')} saveStatus={saveStatus} aiTouched={aiTouched.has('acceptance')} />
         <CollapsibleSection open={open.acceptance}>
           <div className="space-y-6">
-            {([
-              ['paymentTerms', 'Forma de pago'],
-              ['acceptanceCriteria', 'Criterios de aceptación'],
-              ['clientResponsibilities', 'Responsabilidades del cliente'],
-              ['penaltyClause', 'Cláusula de penalización'],
-              ['annexes', 'Archivos o información anexa'],
-              ['dataProtection', 'Aceptación de tratamiento de datos personales'],
-            ] as [keyof QuoteFormData['acceptanceConditions'], string][]).map(([key, label]) => (
+            {(t.acceptanceFields as [keyof QuoteFormData['acceptanceConditions'], string][]).map(([key, label]) => (
               <div key={key}>
                 <label className={FIELD_LABEL}>{label}</label>
                 <RichTextEditor value={form.acceptanceConditions[key]} onChange={(v) => setAcceptance(key, v)} placeholder={`${label}...`} />
@@ -547,7 +548,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Condiciones de facturación */}
       <div id="billing">
-        <SectionHeader label="Condiciones de facturación y pagos" open={open.billing} onToggle={() => toggle('billing')} saveStatus={saveStatus} aiTouched={aiTouched.has('billing')} />
+        <SectionHeader label={t.sectionBilling} open={open.billing} onToggle={() => toggle('billing')} saveStatus={saveStatus} aiTouched={aiTouched.has('billing')} />
         <CollapsibleSection open={open.billing}>
           <div className="space-y-4">
             {(form.billingMilestones ?? []).map((milestone, i) => {
@@ -566,7 +567,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
               return (
                 <div key={milestone.id} className="border border-line rounded-md p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-ink-40 uppercase tracking-widest">Pago {i + 1}</span>
+                    <span className="text-xs font-medium text-ink-40 uppercase tracking-widest">{t.paymentLabel} {i + 1}</span>
                     <button
                       type="button"
                       onClick={() => set('billingMilestones', (form.billingMilestones ?? []).filter((_, idx) => idx !== i))}
@@ -577,16 +578,16 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                   </div>
                   <div className="flex gap-3">
                     <div className="flex-1">
-                      <label className={FIELD_LABEL}>Nombre</label>
+                      <label className={FIELD_LABEL}>{t.paymentName}</label>
                       <input
                         className={INPUT}
                         value={milestone.label}
                         onChange={(e) => updateMilestone('label', e.target.value)}
-                        placeholder="Pago inicial…"
+                        placeholder={t.paymentNamePlaceholder}
                       />
                     </div>
                     <div className="w-36">
-                      <label className={FIELD_LABEL}>% de pago</label>
+                      <label className={FIELD_LABEL}>{t.paymentPercentage}</label>
                       <div className="relative">
                         <input
                           className={INPUT + ' pr-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none'}
@@ -602,17 +603,17 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                   </div>
                   {formatted && (
                     <p className="text-xs text-ink-40">
-                      Importe: <span className="text-ink font-medium">{formatted}</span> <span className="text-ink-40">(IVA no incluido)</span>
+                      {t.amount} <span className="text-ink font-medium">{formatted}</span> <span className="text-ink-40">{t.vatNotIncluded}</span>
                     </p>
                   )}
                   <div>
-                    <label className={FIELD_LABEL}>Condiciones de pago</label>
+                    <label className={FIELD_LABEL}>{t.paymentConditions}</label>
                     <textarea
                       className={INPUT + ' resize-none'}
                       rows={2}
                       value={milestone.description}
                       onChange={(e) => updateMilestone('description', e.target.value)}
-                      placeholder="La forma de pago será a la recepción de la factura…"
+                      placeholder={t.paymentConditionsPlaceholder}
                     />
                   </div>
                 </div>
@@ -626,7 +627,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
               ])}
               className="flex items-center gap-2 text-sm text-ink-60 hover:text-ink transition-colors"
             >
-              <Plus size={14} strokeWidth={2} /> Añadir hito
+              <Plus size={14} strokeWidth={2} /> {t.addMilestone}
             </button>
           </div>
         </CollapsibleSection>
@@ -636,31 +637,26 @@ export function QuoteEditor({ initialData, onSave }: Props) {
 
       {/* Conformidad */}
       <div id="conformity">
-        <SectionHeader label="Conformidad y firmas" open={open.conformity} onToggle={() => toggle('conformity')} saveStatus={saveStatus} aiTouched={aiTouched.has('conformity')} />
+        <SectionHeader label={t.sectionConformity} open={open.conformity} onToggle={() => toggle('conformity')} saveStatus={saveStatus} aiTouched={aiTouched.has('conformity')} />
         <CollapsibleSection open={open.conformity}>
           <div className="space-y-6">
-            <p className="text-xs text-ink-60 leading-relaxed">
-              La firma del presente documento se interpreta como la conformidad y la aceptación de todas las condiciones expuestas en él y el cumplimiento de las mismas.
-            </p>
+            <p className="text-xs text-ink-60 leading-relaxed">{t.conformityText}</p>
             <div className="grid grid-cols-2 gap-8">
-              {/* Cliente */}
               {([
-                { side: 'Cliente', rows: [
-                  { label: 'Empresa',          section: 'client'  as const, field: 'company'   as const, ph: 'Empresa del cliente' },
-                  { label: 'CIF',              section: 'client'  as const, field: 'taxId'     as const, ph: 'A12345678' },
-                  { label: 'Dirección',        section: 'client'  as const, field: 'address'   as const, ph: 'Calle, número, CP', multiline: true },
-                  { label: 'Ciudad',           section: 'client'  as const, field: 'city'      as const, ph: 'Ciudad' },
-                  { label: 'Representada por', section: 'client'  as const, field: 'name'      as const, ph: 'Nombre Apellido' },
-                  { label: 'Cargo',            section: 'client'  as const, field: 'role'      as const, ph: 'Ej: CEO, Director…' },
-                ]},
-                { side: 'Proveedor', rows: [
-                  { label: 'Empresa',          section: 'emitter' as const, field: 'companyName'        as const, ph: 'Nombre S.L.' },
-                  { label: 'CIF',              section: 'emitter' as const, field: 'taxId'              as const, ph: 'B12345678' },
-                  { label: 'Dirección',        section: 'emitter' as const, field: 'address'            as const, ph: 'Calle, número, CP', multiline: true },
-                  { label: 'Ciudad',           section: 'emitter' as const, field: 'city'               as const, ph: 'Ciudad' },
-                  { label: 'Representada por', section: 'emitter' as const, field: 'representativeName' as const, ph: 'Nombre Apellido' },
-                  { label: 'Cargo',            section: 'emitter' as const, field: 'representativeRole' as const, ph: 'Ej: Fundador, CEO…' },
-                ]},
+                { side: t.conformityClient, rows: t.conformityRows.map(([label,, ph], idx) => ({
+                  label,
+                  section: 'client'  as const,
+                  field: (['company','taxId','address','city','name','role'] as const)[idx],
+                  ph,
+                  multiline: idx === 2,
+                }))},
+                { side: t.conformitySupplier, rows: t.conformityRows.map(([label, ph], idx) => ({
+                  label,
+                  section: 'emitter' as const,
+                  field: (['companyName','taxId','address','city','representativeName','representativeRole'] as const)[idx],
+                  ph,
+                  multiline: idx === 2,
+                }))},
               ]).map(({ side, rows }) => (
                 <div key={side}>
                   <p className="text-[10px] font-medium tracking-widest uppercase text-ink-40 mb-4">{side}</p>
@@ -683,15 +679,15 @@ export function QuoteEditor({ initialData, onSave }: Props) {
                     })}
                   </div>
                   <div className="mt-6 pt-3 border-t border-line">
-                    <p className="text-xs text-ink-40">Firma</p>
+                    <p className="text-xs text-ink-40">{t.conformitySignature}</p>
                   </div>
                 </div>
               ))}
             </div>
             {(!form.emitter.representativeName || !form.emitter.representativeRole) && (
               <p className="text-xs text-ink-40">
-                Configura "Representada por" y "Cargo" del proveedor en{' '}
-                <a href="/settings" className="underline hover:text-ink transition-colors">Configuración</a>.
+                {t.conformityHelpText}{' '}
+                <a href="/settings" className="underline hover:text-ink transition-colors">{t.conformityHelpLink}</a>.
               </p>
             )}
           </div>
@@ -708,6 +704,7 @@ export function QuoteEditor({ initialData, onSave }: Props) {
         <AIAssistant
           section={aiSection}
           form={form}
+          language={form.language ?? 'es'}
           onApply={handleAIApply}
           onClose={() => setAiSection(null)}
         />
@@ -719,17 +716,17 @@ export function QuoteEditor({ initialData, onSave }: Props) {
           {saveStatus === 'saving' && (
             <>
               <span className="w-2.5 h-2.5 border border-ink-40 border-t-transparent rounded-full animate-spin shrink-0" />
-              Guardando…
+              {t.saving}
             </>
           )}
           {saveStatus === 'saved' && (
             <>
               <Check size={11} strokeWidth={2.5} />
-              Guardado
+              {t.saved}
             </>
           )}
           {saveStatus === 'error' && (
-            <span style={{ color: 'var(--color-error, #dc2626)' }}>Error al guardar</span>
+            <span style={{ color: 'var(--color-error, #dc2626)' }}>{t.errorSaving}</span>
           )}
         </div>
       )}

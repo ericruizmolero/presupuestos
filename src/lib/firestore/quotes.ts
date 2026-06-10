@@ -88,7 +88,7 @@ export async function createQuote(
   userId: string,
   companyId: string
 ): Promise<string> {
-  const slug = await generateUniqueSlug(formData.client.company || formData.client.name)
+  const slug = await generateUniqueSlug(formData.client.company || formData.client.name || formData.quoteNumber)
   const ref = await addDoc(collection(db, 'quotes'), {
     ...formData,
     slug,
@@ -105,6 +105,18 @@ export async function updateQuote(id: string, data: Partial<QuoteFormData>) {
     ...data,
     updatedAt: serverTimestamp(),
   })
+}
+
+/** Check whether a slug is available (not used by any other document). */
+export async function checkSlugAvailable(slug: string, excludeId?: string): Promise<boolean> {
+  const snap = await getDocs(query(collection(db, 'quotes'), where('slug', '==', slug)))
+  if (snap.empty) return true
+  return !snap.docs.some(d => d.id !== excludeId)
+}
+
+/** Save a custom slug directly without generating one. */
+export async function setQuoteSlug(id: string, slug: string): Promise<void> {
+  await updateDoc(doc(db, 'quotes', id), { slug, updatedAt: serverTimestamp() })
 }
 
 /** Regenerate a clean slug from the client name and save it. Returns the new slug. */
