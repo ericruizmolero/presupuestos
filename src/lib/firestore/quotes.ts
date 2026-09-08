@@ -6,6 +6,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   serverTimestamp,
@@ -83,6 +84,20 @@ export async function getQuoteBySlug(slug: string): Promise<Quote | null> {
   return { id: d.id, ...d.data() } as Quote
 }
 
+/** Firestore rejects `undefined` values — strip them from plain objects/arrays.
+ *  FieldValue sentinels (serverTimestamp, deleteField) pass through untouched. */
+function stripUndefinedDeep(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUndefinedDeep)
+  if (value !== null && typeof value === 'object' && value.constructor === Object) {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, stripUndefinedDeep(v)])
+    )
+  }
+  return value
+}
+
 export async function createQuote(
   formData: QuoteFormData,
   userId: string,
@@ -90,7 +105,7 @@ export async function createQuote(
 ): Promise<string> {
   const slug = await generateUniqueSlug(formData.client.company || formData.client.name || formData.quoteNumber)
   const ref = await addDoc(collection(db, 'quotes'), {
-    ...formData,
+    ...(stripUndefinedDeep(formData) as Record<string, unknown>),
     slug,
     createdBy: userId,
     companyId,
@@ -101,8 +116,13 @@ export async function createQuote(
 }
 
 export async function updateQuote(id: string, data: Partial<QuoteFormData>) {
+  // Top-level `undefined` means "remove the field"; nested ones are dropped
+  // (safe: nested maps are always rewritten whole, so the key disappears).
+  const clean = Object.fromEntries(
+    Object.entries(data).map(([k, v]) => [k, v === undefined ? deleteField() : stripUndefinedDeep(v)])
+  )
   await updateDoc(doc(db, 'quotes', id), {
-    ...data,
+    ...clean,
     updatedAt: serverTimestamp(),
   })
 }
