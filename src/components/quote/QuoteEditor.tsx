@@ -152,7 +152,8 @@ export function QuoteEditor({ initialData, onSave, autoOpenAI }: Props) {
         await onSave(form)
         setSaveStatus('saved')
         clearTimer.current = setTimeout(() => setSaveStatus('idle'), 2000)
-      } catch {
+      } catch (err) {
+        console.error('[autosave] Error al guardar el presupuesto:', err)
         setSaveStatus('error')
       }
     }, 1200)

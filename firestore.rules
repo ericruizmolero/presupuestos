@@ -2,15 +2,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Quotes: public read (shared links), write only by authenticated owner
+    // True si el usuario pertenece a la misma empresa que el documento
+    function sameCompany(companyId) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
+    }
+
+    // Quotes: lectura pública (links compartidos), escritura por creador o miembros de la empresa
     match /quotes/{quoteId} {
       allow read: if true;
       allow create: if request.auth != null;
       allow update, delete: if request.auth != null
-        && request.auth.uid == resource.data.createdBy;
+        && (request.auth.uid == resource.data.createdBy
+            || sameCompany(resource.data.companyId));
     }
 
-    // Everything else requires authentication
+    // Todo lo demás requiere autenticación
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
