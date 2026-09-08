@@ -75,7 +75,7 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { user } = useAuth()
+  const { user, company } = useAuth()
   const router = useRouter()
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [loading, setLoading] = useState(true)
@@ -138,6 +138,21 @@ function DashboardContent() {
   }
 
   useEffect(() => { load() }, [user])
+
+  // Sync stale per-quote logo snapshots with the current company logo.
+  // Runs once per load: after the sync, no quote is stale and the effect no-ops.
+  useEffect(() => {
+    if (!company?.logoUrl || quotes.length === 0) return
+    const stale = quotes.filter(q => q.emitter?.logoUrl !== company.logoUrl)
+    if (stale.length === 0) return
+    Promise.all(
+      stale.map(q => updateQuote(q.id, { emitter: { ...q.emitter, logoUrl: company.logoUrl } }))
+    )
+      .then(() => {
+        setQuotes(qs => qs.map(q => ({ ...q, emitter: { ...q.emitter, logoUrl: company.logoUrl } })))
+      })
+      .catch(err => console.error('[logo-sync] Error sincronizando logos:', err))
+  }, [company?.logoUrl, quotes])
 
   function handleSort(key: SortKey) {
     setSort(prev =>
