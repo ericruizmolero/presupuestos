@@ -90,7 +90,14 @@ function EditQuoteContent() {
     }
 
     if (company) {
-      if (!q.emitter.logoUrl && company.logoUrl)                       q.emitter.logoUrl = company.logoUrl
+      // The company logo always wins over the per-quote snapshot; persist the
+      // sync so the public view and PDF export pick it up too.
+      if (company.logoUrl && q.emitter.logoUrl !== company.logoUrl) {
+        q.emitter.logoUrl = company.logoUrl
+        updateQuote(id, { emitter: q.emitter }).catch((err) =>
+          console.error('[logo-sync] Error actualizando el logo del presupuesto:', err)
+        )
+      }
       if (!q.emitter.city && company.city)                             q.emitter.city = company.city
       if (!q.emitter.representativeName && company.representativeName) q.emitter.representativeName = company.representativeName
       if (!q.emitter.representativeRole && company.representativeRole) q.emitter.representativeRole = company.representativeRole

@@ -137,7 +137,7 @@ function ExportContent() {
   useEffect(() => {
     getQuoteById(id).then(async (q) => {
       if (!q) { router.replace('/dashboard'); return }
-      if (!q.emitter.logoUrl && company?.logoUrl) q.emitter.logoUrl = company.logoUrl
+      if (company?.logoUrl) q.emitter.logoUrl = company.logoUrl
       setQuote(q)
       setLoading(false)
 
