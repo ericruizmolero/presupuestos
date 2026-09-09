@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
     return [
       // Legacy /p/[slug] → /client/[slug]
       { source: '/p/:slug', destination: '/client/:slug', permanent: true },
+      // Legacy /horas/[slug] → /h/[slug] (URL neutra para ES/EN)
+      { source: '/horas/:slug', destination: '/h/:slug', permanent: true },
     ]
   },
 };

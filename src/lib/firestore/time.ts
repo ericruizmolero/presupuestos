@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   addDoc,
   updateDoc,
@@ -40,6 +41,12 @@ export async function getTimeProjects(companyId: string): Promise<TimeProject[]>
   const snap = await getDocs(query(collection(db, 'timeProjects'), where('companyId', '==', companyId)))
   const projects = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeProject))
   return projects.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+}
+
+export async function getTimeProjectById(id: string): Promise<TimeProject | null> {
+  const snap = await getDoc(doc(db, 'timeProjects', id))
+  if (!snap.exists()) return null
+  return { id: snap.id, ...snap.data() } as TimeProject
 }
 
 export async function getTimeProjectBySlug(slug: string): Promise<TimeProject | null> {
@@ -88,6 +95,11 @@ export async function getTimeEntries(projectId: string): Promise<TimeEntry[]> {
   const entries = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeEntry))
   // Newest first; entries on the same day keep insertion order
   return entries.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+}
+
+export async function getTimeEntriesByCompany(companyId: string): Promise<TimeEntry[]> {
+  const snap = await getDocs(query(collection(db, 'timeEntries'), where('companyId', '==', companyId)))
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeEntry))
 }
 
 export async function addTimeEntry(

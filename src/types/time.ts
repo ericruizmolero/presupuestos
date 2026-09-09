@@ -7,7 +7,8 @@ export interface TimeProject {
   slug: string        // URL pública /horas/[slug]
   companyName?: string // snapshot para la vista pública
   logoUrl?: string     // snapshot para la vista pública
-  language?: 'es' | 'en' // idioma de la vista pública
+  language?: 'es' | 'en' // idioma de la vista pública (heredado del presupuesto del cliente)
+  hourlyRate?: number    // €/h, heredado del presupuesto del cliente si existe
   archived?: boolean
   createdAt?: string
   updatedAt?: string
