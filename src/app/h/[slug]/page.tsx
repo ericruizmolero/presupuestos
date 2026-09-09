@@ -10,6 +10,8 @@ const I18N = {
     locale: 'es-ES',
     eyebrow: 'Registro de horas',
     total: 'Total',
+    amount: 'Importe',
+    rate: 'Tarifa',
     empty: 'Aún no hay horas registradas.',
     notFound: 'Este registro de horas no existe o ya no está disponible.',
     updated: 'actualizado a',
@@ -18,6 +20,8 @@ const I18N = {
     locale: 'en-GB',
     eyebrow: 'Time log',
     total: 'Total',
+    amount: 'Amount',
+    rate: 'Rate',
     empty: 'No hours logged yet.',
     notFound: 'This time log does not exist or is no longer available.',
     updated: 'updated',
@@ -34,6 +38,10 @@ function formatDate(iso: string, locale: string) {
 
 function formatHours(h: number, locale: string) {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(h) + ' h'
+}
+
+function formatMoney(n: number, locale: string) {
+  return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(n)
 }
 
 function monthLabel(iso: string, locale: string) {
@@ -125,6 +133,18 @@ export default function PublicHoursPage() {
             <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{t.total}</p>
             <p className="text-2xl font-medium tracking-tight text-ink">{formatHours(totals.total, locale)}</p>
           </div>
+          {project.hourlyRate ? (
+            <>
+              <div>
+                <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{t.amount}</p>
+                <p className="text-2xl font-medium tracking-tight text-ink">{formatMoney(totals.total * project.hourlyRate, locale)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{t.rate}</p>
+                <p className="text-2xl font-medium tracking-tight text-ink-60">{formatMoney(project.hourlyRate, locale)}/h</p>
+              </div>
+            </>
+          ) : null}
           {totals.byPerson.length > 1 && totals.byPerson.map(([name, h]) => (
             <div key={name}>
               <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{name}</p>
@@ -145,7 +165,10 @@ export default function PublicHoursPage() {
                   <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40">
                     {monthLabel(monthEntries[0].date, locale)}
                   </h2>
-                  <span className="text-xs text-ink-60 font-medium">{formatHours(monthTotal, locale)}</span>
+                  <span className="text-xs text-ink-60 font-medium">
+                    {formatHours(monthTotal, locale)}
+                    {project.hourlyRate ? ` · ${formatMoney(monthTotal * project.hourlyRate, locale)}` : ''}
+                  </span>
                 </div>
                 <div className="border border-line rounded-md overflow-hidden">
                   <table className="w-full text-sm">
