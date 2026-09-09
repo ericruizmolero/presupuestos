@@ -5,8 +5,9 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
+import { getQuotes } from '@/lib/firestore/quotes'
 import {
-  getTimeProjects, createTimeProject, deleteTimeProject,
+  getTimeProjects, createTimeProject, updateTimeProject, deleteTimeProject,
   getTimeEntries, addTimeEntry, deleteTimeEntry,
 } from '@/lib/firestore/time'
 import type { TimeProject, TimeEntry } from '@/types/time'
@@ -17,6 +18,8 @@ import { Plus, Trash2, ExternalLink, Copy, Check, X } from 'lucide-react'
 const INPUT = 'w-full px-4 py-3 border border-input rounded-md text-base text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
 const FIELD_LABEL = 'block text-sm font-medium text-ink mb-2'
 const SECTION_LABEL = 'text-xs font-medium tracking-widest uppercase text-ink-60'
+
+const OTHER = '__other__'
 
 function todayISO() {
   const d = new Date()
@@ -33,8 +36,10 @@ function formatHours(h: number) {
   return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(h) + ' h'
 }
 
-/** "ericruizmolero@…" → "Ericruizmolero"; best-effort default, editable */
-function defaultPerson(email?: string | null) {
+/** "Eric Ruiz" → "Eric"; fallback: capitalized email prefix */
+function defaultPerson(displayName?: string | null, email?: string | null) {
+  const first = (displayName || '').trim().split(/\s+/)[0]
+  if (first) return first
   const prefix = (email || '').split('@')[0]
   if (!prefix) return ''
   return prefix.charAt(0).toUpperCase() + prefix.slice(1)
@@ -59,16 +64,16 @@ function HorasContent() {
   const [loading, setLoading] = useState(true)
   const [loadingEntries, setLoadingEntries] = useState(false)
 
-  // New project form
+  // New project: pick a client and go
   const [creating, setCreating] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newClient, setNewClient] = useState('')
+  const [clientOptions, setClientOptions] = useState<string[]>([])
+  const [selectedClient, setSelectedClient] = useState('')
+  const [customClient, setCustomClient] = useState('')
   const [savingProject, setSavingProject] = useState(false)
   const [confirmDeleteProject, setConfirmDeleteProject] = useState(false)
 
-  // New entry form
+  // New entry form: fecha + concepto + horas
   const [date, setDate] = useState(todayISO())
-  const [person, setPerson] = useState('')
   const [hours, setHours] = useState('')
   const [description, setDescription] = useState('')
   const [savingEntry, setSavingEntry] = useState(false)
@@ -76,12 +81,16 @@ function HorasContent() {
 
   useEffect(() => {
     if (!user) return
-    setPerson((p) => p || defaultPerson(user.email))
     getUserCompanyId(user.uid).then(async (cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-      const ps = await getTimeProjects(cid)
+      const [ps, quotes] = await Promise.all([getTimeProjects(cid), getQuotes(cid)])
       setProjects(ps)
+      const clients = [...new Set(
+        quotes.map((q) => q.client?.company || q.client?.name || '').filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b))
+      setClientOptions(clients)
+      setSelectedClient(clients[0] ?? OTHER)
       if (ps.length > 0) setActiveId(ps[0].id)
       else setCreating(true)
       setLoading(false)
@@ -108,22 +117,25 @@ function HorasContent() {
     return { total, byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1]) }
   }, [entries])
 
+  const newProjectClient = selectedClient === OTHER ? customClient.trim() : selectedClient
+
   async function handleCreateProject() {
-    if (!user || !companyId || !newName.trim() || savingProject) return
+    if (!user || !companyId || !newProjectClient || savingProject) return
     setSavingProject(true)
     try {
       const p = await createTimeProject(
         {
-          name: newName.trim(),
-          clientName: newClient.trim(),
+          name: newProjectClient,
+          clientName: newProjectClient,
           companyName: company?.name || '',
           logoUrl: company?.logoUrl || '',
+          language: 'es',
         },
         user.uid, companyId
       )
       setProjects((ps) => [...ps, p].sort((a, b) => a.name.localeCompare(b.name)))
       setActiveId(p.id)
-      setNewName(''); setNewClient(''); setCreating(false)
+      setCustomClient(''); setCreating(false)
     } catch (err) {
       console.error('[horas] Error creando proyecto:', err)
     } finally {
@@ -147,14 +159,25 @@ function HorasContent() {
     }
   }
 
+  async function handleSetLanguage(lang: 'es' | 'en') {
+    if (!active || active.language === lang) return
+    setProjects((ps) => ps.map((p) => p.id === active.id ? { ...p, language: lang } : p))
+    try {
+      await updateTimeProject(active.id, { language: lang })
+    } catch (err) {
+      console.error('[horas] Error cambiando idioma:', err)
+    }
+  }
+
   async function handleAddEntry() {
     const h = parseFloat(hours.replace(',', '.'))
-    if (!user || !companyId || !active || !h || h <= 0 || !person.trim() || savingEntry) return
+    const person = defaultPerson(user?.displayName, user?.email)
+    if (!user || !companyId || !active || !h || h <= 0 || !person || savingEntry) return
     setSavingEntry(true)
     try {
       const data = {
         projectId: active.id,
-        person: person.trim(),
+        person,
         date,
         hours: h,
         description: description.trim(),
@@ -196,6 +219,23 @@ function HorasContent() {
         <h1 className="text-2xl font-medium tracking-tight text-ink">Horas</h1>
         {active && (
           <div className="flex items-center gap-2">
+            {/* Idioma de la vista cliente */}
+            <div className="flex items-center border border-line rounded-md overflow-hidden mr-2">
+              {(['es', 'en'] as const).map((lang) => {
+                const isActive = (active.language ?? 'es') === lang
+                return (
+                  <button
+                    key={lang}
+                    onClick={() => handleSetLanguage(lang)}
+                    className={`px-3 py-2 text-xs font-medium uppercase transition-colors ${
+                      isActive ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover'
+                    }`}
+                  >
+                    {lang}
+                  </button>
+                )
+              })}
+            </div>
             <button
               onClick={copyPublicLink}
               className="flex items-center gap-1.5 px-4 py-2 text-sm border border-line rounded-md hover:border-input transition-colors text-ink"
@@ -223,9 +263,7 @@ function HorasContent() {
             <label className={FIELD_LABEL}>Proyecto</label>
             <Select value={activeId ?? ''} onChange={(e) => setActiveId(e.target.value)} className={INPUT}>
               {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}{p.clientName ? ` — ${p.clientName}` : ''}
-                </option>
+                <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </Select>
           </div>
@@ -237,7 +275,7 @@ function HorasContent() {
           {creating ? <X size={14} strokeWidth={1.5} /> : <Plus size={14} strokeWidth={1.5} />}
           {creating ? 'Cancelar' : 'Nuevo proyecto'}
         </button>
-        {active && (
+        {active && !creating && (
           confirmDeleteProject ? (
             <div className="flex items-center gap-2">
               <button
@@ -265,42 +303,62 @@ function HorasContent() {
         )}
       </div>
 
-      {/* New project form */}
+      {/* New project: pick client → create */}
       {creating && (
-        <div className="border border-line rounded-md p-6 mb-10 bg-surface">
-          <p className={SECTION_LABEL + ' mb-6'}>Nuevo proyecto</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className={FIELD_LABEL}>Nombre del proyecto</label>
-              <input className={INPUT} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Web corporativa" />
-            </div>
-            <div>
-              <label className={FIELD_LABEL}>Cliente</label>
-              <input className={INPUT} value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="Acme S.L." />
-            </div>
+        <div className="flex items-end gap-3 mb-10 p-6 border border-line rounded-md bg-surface">
+          <div className="flex-1 max-w-xs">
+            <label className={FIELD_LABEL}>Cliente</label>
+            <Select
+              value={selectedClient}
+              onChange={(e) => setSelectedClient(e.target.value)}
+              className={INPUT}
+            >
+              {clientOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              <option value={OTHER}>Otro cliente…</option>
+            </Select>
           </div>
+          {selectedClient === OTHER && (
+            <div className="flex-1 max-w-xs">
+              <label className={FIELD_LABEL}>Nombre del cliente</label>
+              <input
+                className={INPUT}
+                value={customClient}
+                onChange={(e) => setCustomClient(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
+                placeholder="Acme S.L."
+                autoFocus
+              />
+            </div>
+          )}
           <button
             onClick={handleCreateProject}
-            disabled={!newName.trim() || savingProject}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={!newProjectClient || savingProject}
+            className="flex items-center gap-1.5 px-4 py-3 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus size={14} strokeWidth={2} />
-            Crear proyecto
+            Crear
           </button>
         </div>
       )}
 
       {active && (
         <>
-          {/* New entry form */}
-          <div className="grid grid-cols-2 sm:grid-cols-[10rem_9rem_6rem_1fr_auto] gap-3 items-end mb-10">
+          {/* New entry: fecha + concepto + horas */}
+          <div className="grid grid-cols-2 sm:grid-cols-[10rem_1fr_6rem_auto] gap-3 items-end mb-10">
             <div>
               <label className={FIELD_LABEL}>Fecha</label>
               <DatePicker value={date} onChange={setDate} />
             </div>
-            <div>
-              <label className={FIELD_LABEL}>Persona</label>
-              <input className={INPUT} value={person} onChange={(e) => setPerson(e.target.value)} placeholder="Eric" />
+            <div className="col-span-2 sm:col-span-1">
+              <label className={FIELD_LABEL}>Concepto</label>
+              <input
+                className={INPUT} value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+                placeholder="Diseño de la home"
+              />
             </div>
             <div>
               <label className={FIELD_LABEL}>Horas</label>
@@ -311,18 +369,9 @@ function HorasContent() {
                 placeholder="2,5"
               />
             </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className={FIELD_LABEL}>Descripción</label>
-              <input
-                className={INPUT} value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
-                placeholder="Diseño de la home"
-              />
-            </div>
             <button
               onClick={handleAddEntry}
-              disabled={savingEntry || !parseFloat(hours.replace(',', '.')) || !person.trim()}
+              disabled={savingEntry || !parseFloat(hours.replace(',', '.'))}
               className="flex items-center gap-1.5 px-4 py-3 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus size={14} strokeWidth={2} />
@@ -334,7 +383,7 @@ function HorasContent() {
           <div className="flex items-center gap-6 mb-6">
             <p className={SECTION_LABEL}>Registro</p>
             <div className="ml-auto flex items-center gap-4 text-sm text-ink-60">
-              {totals.byPerson.map(([name, h]) => (
+              {totals.byPerson.length > 1 && totals.byPerson.map(([name, h]) => (
                 <span key={name}>{name}: <span className="text-ink font-medium">{formatHours(h)}</span></span>
               ))}
               <span className="text-ink font-medium">Total: {formatHours(totals.total)}</span>
@@ -355,7 +404,7 @@ function HorasContent() {
                   <tr className="text-left text-xs font-medium tracking-widest uppercase text-ink-60 border-b border-line">
                     <th className="px-4 py-3 font-medium">Fecha</th>
                     <th className="px-4 py-3 font-medium">Persona</th>
-                    <th className="px-4 py-3 font-medium">Descripción</th>
+                    <th className="px-4 py-3 font-medium">Concepto</th>
                     <th className="px-4 py-3 font-medium text-right">Horas</th>
                     <th className="px-2 py-3 w-10" />
                   </tr>
