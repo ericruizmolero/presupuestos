@@ -1,0 +1,152 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { getTimeProjectBySlug, getTimeEntries } from '@/lib/firestore/time'
+import type { TimeProject, TimeEntry } from '@/types/time'
+
+function formatDate(iso: string) {
+  if (!iso) return '—'
+  const d = new Date(iso + 'T00:00:00')
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function formatHours(h: number) {
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(h) + ' h'
+}
+
+function monthLabel(iso: string) {
+  const d = new Date(iso + 'T00:00:00')
+  const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+export default function PublicHoursPage() {
+  const { slug } = useParams<{ slug: string }>()
+  const [project, setProject] = useState<TimeProject | null>(null)
+  const [entries, setEntries] = useState<TimeEntry[]>([])
+  const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading')
+
+  useEffect(() => {
+    if (!slug) return
+    getTimeProjectBySlug(slug).then(async (p) => {
+      if (!p) { setState('notfound'); return }
+      setProject(p)
+      setEntries(await getTimeEntries(p.id))
+      setState('ready')
+    }).catch(() => setState('notfound'))
+  }, [slug])
+
+  const byMonth = useMemo(() => {
+    const groups = new Map<string, TimeEntry[]>()
+    for (const e of entries) {
+      const key = (e.date || '').slice(0, 7) // yyyy-mm
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(e)
+    }
+    // Newest month first; entries inside are already date-desc
+    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  }, [entries])
+
+  const totals = useMemo(() => {
+    const byPerson = new Map<string, number>()
+    let total = 0
+    for (const e of entries) {
+      total += e.hours || 0
+      byPerson.set(e.person, (byPerson.get(e.person) || 0) + (e.hours || 0))
+    }
+    return { total, byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1]) }
+  }, [entries])
+
+  if (state === 'loading') {
+    return <main className="min-h-screen bg-paper flex items-center justify-center text-sm text-ink-40">Cargando…</main>
+  }
+
+  if (state === 'notfound' || !project) {
+    return (
+      <main className="min-h-screen bg-paper flex items-center justify-center">
+        <p className="text-sm text-ink-40">Este registro de horas no existe o ya no está disponible.</p>
+      </main>
+    )
+  }
+
+  return (
+    <main className="min-h-screen bg-paper">
+      <article className="max-w-2xl mx-auto px-4 sm:px-8 py-12 sm:py-20">
+        {/* Header */}
+        <header className="mb-12">
+          {project.logoUrl && (
+            <img
+              src={project.logoUrl}
+              alt={project.companyName || ''}
+              className="object-contain mb-8"
+              style={{ maxHeight: '1.5rem', maxWidth: '8rem' }}
+            />
+          )}
+          <p className="text-[10px] font-medium tracking-[0.18em] uppercase mb-4 text-ink-40">
+            Registro de horas
+          </p>
+          <h1 className="text-[1.625rem] font-medium tracking-tight text-ink leading-snug">
+            {project.name}
+          </h1>
+          {project.clientName && (
+            <p className="text-base text-ink-60 mt-1">{project.clientName}</p>
+          )}
+        </header>
+
+        {/* Totals */}
+        <section className="flex flex-wrap items-baseline gap-x-6 gap-y-2 mb-12 pb-6 border-b border-line">
+          <div>
+            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">Total</p>
+            <p className="text-2xl font-medium tracking-tight text-ink">{formatHours(totals.total)}</p>
+          </div>
+          {totals.byPerson.length > 1 && totals.byPerson.map(([name, h]) => (
+            <div key={name}>
+              <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{name}</p>
+              <p className="text-2xl font-medium tracking-tight text-ink-60">{formatHours(h)}</p>
+            </div>
+          ))}
+        </section>
+
+        {/* Entries grouped by month */}
+        {entries.length === 0 ? (
+          <p className="text-sm text-ink-40 text-center py-6">Aún no hay horas registradas.</p>
+        ) : (
+          byMonth.map(([month, monthEntries]) => {
+            const monthTotal = monthEntries.reduce((s, e) => s + (e.hours || 0), 0)
+            return (
+              <section key={month} className="mb-10">
+                <div className="flex items-baseline justify-between mb-3">
+                  <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40">
+                    {monthLabel(monthEntries[0].date)}
+                  </h2>
+                  <span className="text-xs text-ink-60 font-medium">{formatHours(monthTotal)}</span>
+                </div>
+                <div className="border border-line rounded-md overflow-hidden">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {monthEntries.map((e, i) => (
+                        <tr key={e.id} className={`border-b border-line last:border-b-0 ${i % 2 === 1 ? 'bg-surface' : 'bg-paper'}`}>
+                          <td className="px-4 py-3 whitespace-nowrap text-ink-60 w-28">{formatDate(e.date)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap w-24">{e.person}</td>
+                          <td className="px-4 py-3 text-ink-60">{e.description || '—'}</td>
+                          <td className="px-4 py-3 text-right font-medium whitespace-nowrap w-20">{formatHours(e.hours)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )
+          })
+        )}
+
+        <footer className="mt-16 pt-6 border-t border-line">
+          <p className="text-xs text-ink-40">
+            {project.companyName || 'treseiscero'} · actualizado a {new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </footer>
+      </article>
+    </main>
+  )
+}

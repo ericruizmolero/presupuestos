@@ -86,7 +86,7 @@ export async function getQuoteBySlug(slug: string): Promise<Quote | null> {
 
 /** Firestore rejects `undefined` values — strip them from plain objects/arrays.
  *  FieldValue sentinels (serverTimestamp, deleteField) pass through untouched. */
-function stripUndefinedDeep(value: unknown): unknown {
+export function stripUndefinedDeep(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stripUndefinedDeep)
   if (value !== null && typeof value === 'object' && value.constructor === Object) {
     return Object.fromEntries(
