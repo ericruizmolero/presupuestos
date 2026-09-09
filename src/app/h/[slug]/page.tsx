@@ -134,16 +134,11 @@ export default function PublicHoursPage() {
             <p className="text-2xl font-medium tracking-tight text-ink">{formatHours(totals.total, locale)}</p>
           </div>
           {project.hourlyRate ? (
-            <>
-              <div>
-                <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{t.amount}</p>
-                <p className="text-2xl font-medium tracking-tight text-ink">{formatMoney(totals.total * project.hourlyRate, locale)}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{t.rate}</p>
-                <p className="text-2xl font-medium tracking-tight text-ink-60">{formatMoney(project.hourlyRate, locale)}/h</p>
-              </div>
-            </>
+            <div>
+              <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{t.amount}</p>
+              <p className="text-lg font-medium tracking-tight text-ink-60">{formatMoney(totals.total * project.hourlyRate, locale)}</p>
+              <p className="text-xs text-ink-40 mt-0.5">{formatMoney(project.hourlyRate, locale)}/h</p>
+            </div>
           ) : null}
           {totals.byPerson.length > 1 && totals.byPerson.map(([name, h]) => (
             <div key={name}>
@@ -167,7 +162,9 @@ export default function PublicHoursPage() {
                   </h2>
                   <span className="text-xs text-ink-60 font-medium">
                     {formatHours(monthTotal, locale)}
-                    {project.hourlyRate ? ` · ${formatMoney(monthTotal * project.hourlyRate, locale)}` : ''}
+                    {project.hourlyRate ? (
+                      <span className="text-ink-40 font-normal"> · {formatMoney(monthTotal * project.hourlyRate, locale)}</span>
+                    ) : null}
                   </span>
                 </div>
                 <div className="border border-line rounded-md overflow-hidden">
