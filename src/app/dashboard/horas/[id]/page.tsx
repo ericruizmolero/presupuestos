@@ -9,11 +9,11 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import {
   getTimeProjectById, updateTimeProject, deleteTimeProject,
-  getTimeEntries, addTimeEntry, deleteTimeEntry,
+  getTimeEntries, addTimeEntry, updateTimeEntry, deleteTimeEntry,
 } from '@/lib/firestore/time'
 import type { TimeProject, TimeEntry } from '@/types/time'
 import { DatePicker } from '@/components/ui/DatePicker'
-import { Plus, Trash2, ExternalLink, Copy, Check, ArrowLeft } from 'lucide-react'
+import { Plus, Trash2, ExternalLink, Copy, Check, ArrowLeft, X } from 'lucide-react'
 
 const INPUT = 'w-full px-4 py-3 border border-input rounded-md text-base text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
 const FIELD_LABEL = 'block text-sm font-medium text-ink mb-2'
@@ -77,6 +77,13 @@ function HorasProjectContent() {
   const [description, setDescription] = useState('')
   const [savingEntry, setSavingEntry] = useState(false)
 
+  // Inline entry editing
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDate, setEditDate] = useState('')
+  const [editHours, setEditHours] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+
   useEffect(() => {
     if (!user) return
     Promise.all([
@@ -137,6 +144,35 @@ function HorasProjectContent() {
       console.error('[horas] Error guardando entrada:', err)
     } finally {
       setSavingEntry(false)
+    }
+  }
+
+  function startEdit(e: TimeEntry) {
+    setEditingId(e.id)
+    setEditDate(e.date)
+    setEditHours(String(e.hours).replace('.', ','))
+    setEditDescription(e.description || '')
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+  }
+
+  async function handleSaveEdit() {
+    if (!editingId || savingEdit) return
+    const h = parseFloat(editHours.replace(',', '.'))
+    if (!h || h <= 0 || !editDate) return
+    setSavingEdit(true)
+    try {
+      const patch = { date: editDate, hours: h, description: editDescription.trim() }
+      await updateTimeEntry(editingId, patch)
+      setEntries((es) => es.map((e) => e.id === editingId ? { ...e, ...patch } : e)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || '')))
+      setEditingId(null)
+    } catch (err) {
+      console.error('[horas] Error editando entrada:', err)
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -285,23 +321,79 @@ function HorasProjectContent() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((e, i) => (
-                <tr key={e.id} className={`border-b border-line last:border-b-0 ${i % 2 === 1 ? 'bg-surface' : 'bg-paper'}`}>
-                  <td className="px-4 py-3 whitespace-nowrap text-ink-60">{formatDate(e.date)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{e.person}</td>
-                  <td className="px-4 py-3 text-ink-60">{e.description || '—'}</td>
-                  <td className="px-4 py-3 text-right font-medium whitespace-nowrap">{formatHours(e.hours)}</td>
-                  <td className="px-2 py-3">
-                    <button
-                      onClick={() => handleDeleteEntry(e.id)}
-                      className="text-ink-40 hover:text-[#DC2626] transition-colors"
-                      title="Eliminar"
-                    >
-                      <Trash2 size={13} strokeWidth={1.5} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {entries.map((e, i) => {
+                const zebra = i % 2 === 1 ? 'bg-surface' : 'bg-paper'
+                if (editingId === e.id) {
+                  const EDIT_INPUT = 'w-full px-2 py-1.5 border border-input rounded-md text-sm text-ink focus:outline-none focus:border-accent transition-colors'
+                  return (
+                    <tr key={e.id} className={`border-b border-line last:border-b-0 ${zebra}`}>
+                      <td className="px-2 py-2 whitespace-nowrap w-36">
+                        <DatePicker value={editDate} onChange={setEditDate} />
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-ink-60">{e.person}</td>
+                      <td className="px-2 py-2">
+                        <input
+                          className={EDIT_INPUT}
+                          value={editDescription}
+                          onChange={(ev) => setEditDescription(ev.target.value)}
+                          onKeyDown={(ev) => { if (ev.key === 'Enter') handleSaveEdit(); if (ev.key === 'Escape') cancelEdit() }}
+                          autoFocus
+                        />
+                      </td>
+                      <td className="px-2 py-2 w-24">
+                        <input
+                          className={EDIT_INPUT + ' text-right'}
+                          value={editHours}
+                          inputMode="decimal"
+                          onChange={(ev) => setEditHours(ev.target.value)}
+                          onKeyDown={(ev) => { if (ev.key === 'Enter') handleSaveEdit(); if (ev.key === 'Escape') cancelEdit() }}
+                        />
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        <span className="flex items-center gap-1">
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={savingEdit || !parseFloat(editHours.replace(',', '.'))}
+                            className="p-1.5 rounded bg-accent text-on-accent hover:bg-accent-hover transition-colors disabled:opacity-40"
+                            title="Guardar"
+                          >
+                            <Check size={13} strokeWidth={2} />
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="p-1.5 rounded text-ink-60 hover:bg-surface-hover transition-colors"
+                            title="Cancelar"
+                          >
+                            <X size={13} strokeWidth={2} />
+                          </button>
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                }
+                return (
+                  <tr
+                    key={e.id}
+                    onClick={() => startEdit(e)}
+                    className={`border-b border-line last:border-b-0 cursor-pointer transition-colors hover:bg-surface-hover ${zebra}`}
+                    title="Editar"
+                  >
+                    <td className="px-4 py-3 whitespace-nowrap text-ink-60">{formatDate(e.date)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{e.person}</td>
+                    <td className="px-4 py-3 text-ink-60">{e.description || '—'}</td>
+                    <td className="px-4 py-3 text-right font-medium whitespace-nowrap">{formatHours(e.hours)}</td>
+                    <td className="px-2 py-3" onClick={(ev) => ev.stopPropagation()}>
+                      <button
+                        onClick={() => handleDeleteEntry(e.id)}
+                        className="text-ink-40 hover:text-[#DC2626] transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={13} strokeWidth={1.5} />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
