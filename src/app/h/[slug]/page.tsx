@@ -122,7 +122,7 @@ export default function PublicHoursPage() {
           <h1 className="text-[1.625rem] font-medium tracking-tight text-ink leading-snug">
             {project.name}
           </h1>
-          {project.clientName && (
+          {project.clientName && project.clientName !== project.name && (
             <p className="text-base text-ink-60 mt-1">{project.clientName}</p>
           )}
         </header>
