@@ -80,6 +80,7 @@ function HorasProjectContent() {
   // Inline entry editing
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDate, setEditDate] = useState('')
+  const [editPerson, setEditPerson] = useState('')
   const [editHours, setEditHours] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -150,6 +151,7 @@ function HorasProjectContent() {
   function startEdit(e: TimeEntry) {
     setEditingId(e.id)
     setEditDate(e.date)
+    setEditPerson(e.person || '')
     setEditHours(String(e.hours).replace('.', ','))
     setEditDescription(e.description || '')
   }
@@ -161,10 +163,10 @@ function HorasProjectContent() {
   async function handleSaveEdit() {
     if (!editingId || savingEdit) return
     const h = parseFloat(editHours.replace(',', '.'))
-    if (!h || h <= 0 || !editDate) return
+    if (!h || h <= 0 || !editDate || !editPerson.trim()) return
     setSavingEdit(true)
     try {
-      const patch = { date: editDate, hours: h, description: editDescription.trim() }
+      const patch = { date: editDate, person: editPerson.trim(), hours: h, description: editDescription.trim() }
       await updateTimeEntry(editingId, patch)
       setEntries((es) => es.map((e) => e.id === editingId ? { ...e, ...patch } : e)
         .sort((a, b) => (b.date || '').localeCompare(a.date || '')))
@@ -330,7 +332,14 @@ function HorasProjectContent() {
                       <td className="px-2 py-2 whitespace-nowrap w-36">
                         <DatePicker value={editDate} onChange={setEditDate} />
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-ink-60">{e.person}</td>
+                      <td className="px-2 py-2 w-28">
+                        <input
+                          className={EDIT_INPUT}
+                          value={editPerson}
+                          onChange={(ev) => setEditPerson(ev.target.value)}
+                          onKeyDown={(ev) => { if (ev.key === 'Enter') handleSaveEdit(); if (ev.key === 'Escape') cancelEdit() }}
+                        />
+                      </td>
                       <td className="px-2 py-2">
                         <input
                           className={EDIT_INPUT}
@@ -353,7 +362,7 @@ function HorasProjectContent() {
                         <span className="flex items-center gap-1">
                           <button
                             onClick={handleSaveEdit}
-                            disabled={savingEdit || !parseFloat(editHours.replace(',', '.'))}
+                            disabled={savingEdit || !parseFloat(editHours.replace(',', '.')) || !editPerson.trim()}
                             className="p-1.5 rounded bg-accent text-on-accent hover:bg-accent-hover transition-colors disabled:opacity-40"
                             title="Guardar"
                           >
