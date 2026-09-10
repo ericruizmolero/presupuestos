@@ -341,11 +341,22 @@ function HorasProjectContent() {
                         />
                       </td>
                       <td className="px-2 py-2">
-                        <input
-                          className={EDIT_INPUT}
+                        <textarea
+                          ref={(el) => {
+                            if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px' }
+                          }}
+                          className={EDIT_INPUT + ' resize-none overflow-hidden leading-snug'}
                           value={editDescription}
-                          onChange={(ev) => setEditDescription(ev.target.value)}
-                          onKeyDown={(ev) => { if (ev.key === 'Enter') handleSaveEdit(); if (ev.key === 'Escape') cancelEdit() }}
+                          rows={1}
+                          onChange={(ev) => {
+                            setEditDescription(ev.target.value)
+                            ev.target.style.height = 'auto'
+                            ev.target.style.height = ev.target.scrollHeight + 'px'
+                          }}
+                          onKeyDown={(ev) => {
+                            if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); handleSaveEdit() }
+                            if (ev.key === 'Escape') cancelEdit()
+                          }}
                           autoFocus
                         />
                       </td>
