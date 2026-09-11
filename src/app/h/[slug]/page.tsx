@@ -168,18 +168,33 @@ export default function PublicHoursPage() {
                   </span>
                 </div>
                 <div className="border border-line rounded-md overflow-hidden">
-                  <table className="w-full text-sm">
+                  {/* Desktop: table */}
+                  <table className="w-full text-sm hidden sm:table">
                     <tbody>
                       {monthEntries.map((e, i) => (
                         <tr key={e.id} className={`border-b border-line last:border-b-0 ${i % 2 === 1 ? 'bg-surface' : 'bg-paper'}`}>
-                          <td className="px-4 py-3 whitespace-nowrap text-ink-60 w-28">{formatDate(e.date, locale)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap w-24">{e.person}</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-ink-60 w-28 align-top">{formatDate(e.date, locale)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap w-24 align-top">{e.person}</td>
                           <td className="px-4 py-3 text-ink-60">{e.description || '—'}</td>
-                          <td className="px-4 py-3 text-right font-medium whitespace-nowrap w-20">{formatHours(e.hours, locale)}</td>
+                          <td className="px-4 py-3 text-right font-medium whitespace-nowrap w-20 align-top">{formatHours(e.hours, locale)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                  {/* Mobile: stacked cards */}
+                  <div className="sm:hidden">
+                    {monthEntries.map((e, i) => (
+                      <div key={e.id} className={`px-4 py-3 border-b border-line last:border-b-0 ${i % 2 === 1 ? 'bg-surface' : 'bg-paper'}`}>
+                        <div className="flex items-baseline justify-between gap-3 mb-1">
+                          <span className="text-xs text-ink-40 whitespace-nowrap">
+                            {formatDate(e.date, locale)} · {e.person}
+                          </span>
+                          <span className="text-sm font-medium whitespace-nowrap">{formatHours(e.hours, locale)}</span>
+                        </div>
+                        <p className="text-sm text-ink-60 leading-snug">{e.description || '—'}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
             )

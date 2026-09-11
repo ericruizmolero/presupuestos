@@ -13,6 +13,7 @@ import {
 } from '@/lib/firestore/time'
 import type { TimeProject, TimeEntry } from '@/types/time'
 import { DatePicker } from '@/components/ui/DatePicker'
+import { Select } from '@/components/ui/Select'
 import { Plus, Trash2, ExternalLink, Copy, Check, ArrowLeft, X } from 'lucide-react'
 
 const INPUT = 'w-full px-4 py-3 border border-input rounded-md text-base text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -38,13 +39,14 @@ function formatMoney(n: number) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
-/** "Eric Ruiz" → "Eric"; fallback: capitalized email prefix */
+const PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
+
+/** Best-effort match of the signed-in user to one of PEOPLE */
 function defaultPerson(displayName?: string | null, email?: string | null) {
-  const first = (displayName || '').trim().split(/\s+/)[0]
-  if (first) return first
-  const prefix = (email || '').split('@')[0]
-  if (!prefix) return ''
-  return prefix.charAt(0).toUpperCase() + prefix.slice(1)
+  const hint = `${displayName || ''} ${email || ''}`.toLowerCase()
+  if (hint.includes('andoni')) return 'Andoni'
+  if (hint.includes('eric')) return 'Eric'
+  return PEOPLE[0]
 }
 
 export default function HorasProjectPage() {
@@ -73,6 +75,7 @@ function HorasProjectContent() {
 
   // New entry form
   const [date, setDate] = useState(todayISO())
+  const [person, setPerson] = useState('')
   const [hours, setHours] = useState('')
   const [description, setDescription] = useState('')
   const [savingEntry, setSavingEntry] = useState(false)
@@ -87,6 +90,7 @@ function HorasProjectContent() {
 
   useEffect(() => {
     if (!user) return
+    setPerson((p) => p || defaultPerson(user.displayName, user.email))
     Promise.all([
       getUserCompanyId(user.uid),
       getTimeProjectById(id),
@@ -126,7 +130,6 @@ function HorasProjectContent() {
 
   async function handleAddEntry() {
     const h = parseFloat(hours.replace(',', '.'))
-    const person = defaultPerson(user?.displayName, user?.email)
     if (!user || !companyId || !project || !h || h <= 0 || !person || savingEntry) return
     setSavingEntry(true)
     try {
@@ -244,11 +247,17 @@ function HorasProjectContent() {
         Vista cliente en {project.language === 'en' ? 'inglés' : 'castellano'}
       </p>
 
-      {/* New entry: fecha + concepto + horas */}
-      <div className="grid grid-cols-2 sm:grid-cols-[10rem_1fr_6rem_auto] gap-3 items-end mb-10">
+      {/* New entry: fecha + persona + concepto + horas */}
+      <div className="grid grid-cols-2 sm:grid-cols-[10rem_11rem_1fr_6rem_auto] gap-3 items-end mb-10">
         <div>
           <label className={FIELD_LABEL}>Fecha</label>
           <DatePicker value={date} onChange={setDate} />
+        </div>
+        <div>
+          <label className={FIELD_LABEL}>Persona</label>
+          <Select value={person} onChange={(e) => setPerson(e.target.value)} className={INPUT}>
+            {PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
+          </Select>
         </div>
         <div className="col-span-2 sm:col-span-1">
           <label className={FIELD_LABEL}>Concepto</label>
@@ -311,7 +320,7 @@ function HorasProjectContent() {
           Aún no hay horas registradas en este proyecto
         </p>
       ) : (
-        <div className="border border-line rounded-md overflow-hidden">
+        <div className="border border-line rounded-md overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-medium tracking-widest uppercase text-ink-60 border-b border-line">
@@ -332,13 +341,18 @@ function HorasProjectContent() {
                       <td className="px-2 py-2 whitespace-nowrap w-36">
                         <DatePicker value={editDate} onChange={setEditDate} />
                       </td>
-                      <td className="px-2 py-2 w-28">
-                        <input
-                          className={EDIT_INPUT}
+                      <td className="px-2 py-2 w-36">
+                        <select
+                          className={EDIT_INPUT + ' appearance-none'}
                           value={editPerson}
                           onChange={(ev) => setEditPerson(ev.target.value)}
-                          onKeyDown={(ev) => { if (ev.key === 'Enter') handleSaveEdit(); if (ev.key === 'Escape') cancelEdit() }}
-                        />
+                          onKeyDown={(ev) => { if (ev.key === 'Escape') cancelEdit() }}
+                        >
+                          {!PEOPLE.includes(editPerson) && editPerson && (
+                            <option value={editPerson}>{editPerson}</option>
+                          )}
+                          {PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
+                        </select>
                       </td>
                       <td className="px-2 py-2">
                         <textarea

@@ -191,7 +191,7 @@ function HorasContent() {
           </p>
         )
       ) : (
-        <div className="border border-line rounded-md overflow-hidden">
+        <div className="border border-line rounded-md overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs font-medium tracking-widest uppercase text-ink-60 border-b border-line">
