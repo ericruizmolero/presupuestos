@@ -40,6 +40,11 @@ function formatHours(h: number, locale: string) {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(h) + ' h'
 }
 
+/** "Eric y Andoni" → "Eric & Andoni" in the English view */
+function displayPerson(person: string, lang: Lang) {
+  return lang === 'en' ? person.replace(/ y /g, ' & ') : person
+}
+
 function formatMoney(n: number, locale: string) {
   return new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' }).format(n)
 }
@@ -142,7 +147,7 @@ export default function PublicHoursPage() {
           ) : null}
           {totals.byPerson.length > 1 && totals.byPerson.map(([name, h]) => (
             <div key={name}>
-              <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{name}</p>
+              <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{displayPerson(name, lang)}</p>
               <p className="text-2xl font-medium tracking-tight text-ink-60">{formatHours(h, locale)}</p>
             </div>
           ))}
@@ -174,7 +179,7 @@ export default function PublicHoursPage() {
                       {monthEntries.map((e, i) => (
                         <tr key={e.id} className={`border-b border-line last:border-b-0 ${i % 2 === 1 ? 'bg-surface' : 'bg-paper'}`}>
                           <td className="px-4 py-3 whitespace-nowrap text-ink-60 w-28 align-top">{formatDate(e.date, locale)}</td>
-                          <td className="px-4 py-3 whitespace-nowrap w-24 align-top">{e.person}</td>
+                          <td className="px-4 py-3 whitespace-nowrap w-24 align-top">{displayPerson(e.person, lang)}</td>
                           <td className="px-4 py-3 text-ink-60">{e.description || '—'}</td>
                           <td className="px-4 py-3 text-right font-medium whitespace-nowrap w-20 align-top">{formatHours(e.hours, locale)}</td>
                         </tr>
@@ -187,7 +192,7 @@ export default function PublicHoursPage() {
                       <div key={e.id} className={`px-4 py-3 border-b border-line last:border-b-0 ${i % 2 === 1 ? 'bg-surface' : 'bg-paper'}`}>
                         <div className="flex items-baseline justify-between gap-3 mb-1">
                           <span className="text-xs text-ink-40 whitespace-nowrap">
-                            {formatDate(e.date, locale)} · {e.person}
+                            {formatDate(e.date, locale)} · {displayPerson(e.person, lang)}
                           </span>
                           <span className="text-sm font-medium whitespace-nowrap">{formatHours(e.hours, locale)}</span>
                         </div>
