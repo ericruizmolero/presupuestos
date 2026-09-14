@@ -40,14 +40,7 @@ function formatMoney(n: number) {
 }
 
 const PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
-
-/** Best-effort match of the signed-in user to one of PEOPLE */
-function defaultPerson(displayName?: string | null, email?: string | null) {
-  const hint = `${displayName || ''} ${email || ''}`.toLowerCase()
-  if (hint.includes('andoni')) return 'Andoni'
-  if (hint.includes('eric')) return 'Eric'
-  return PEOPLE[0]
-}
+const DEFAULT_PERSON = 'Eric y Andoni'
 
 export default function HorasProjectPage() {
   return (
@@ -90,7 +83,7 @@ function HorasProjectContent() {
 
   useEffect(() => {
     if (!user) return
-    setPerson((p) => p || defaultPerson(user.displayName, user.email))
+    setPerson((p) => p || DEFAULT_PERSON)
     Promise.all([
       getUserCompanyId(user.uid),
       getTimeProjectById(id),
