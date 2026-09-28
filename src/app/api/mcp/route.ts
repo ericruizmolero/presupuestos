@@ -74,6 +74,55 @@ async function projectTotals(projectId: string) {
   return { entries, total }
 }
 
+function toSlugBase(name: string): string {
+  return (name || '')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50)
+}
+
+async function generateUniqueSlug(name: string): Promise<string> {
+  const base = toSlugBase(name) || `proyecto-${Date.now()}`
+  let candidate = base
+  let counter = 2
+  while (true) {
+    const snap = await db().collection('timeProjects').where('slug', '==', candidate).get()
+    if (snap.empty) return candidate
+    candidate = `${base}-${counter++}`
+  }
+}
+
+/** Busca en los presupuestos del cliente: idioma del más reciente y tarifa
+ *  del más reciente en modo por horas — la misma lógica que la web. */
+async function clientMetaFromQuotes(clientNeedle: string) {
+  const snap = await db().collection('quotes').get()
+  const n = clientNeedle.toLowerCase()
+  interface QuoteDoc {
+    client?: { company?: string; name?: string }
+    language?: string
+    companyId?: string
+    budgetTable?: { mode?: string; hourlyRate?: number }
+    createdAt?: { toMillis?: () => number }
+  }
+  const quotes = snap.docs
+    .map((d) => d.data() as QuoteDoc)
+    .filter((q) => {
+      const name = (q.client?.company || q.client?.name || '').toLowerCase()
+      return name && name.includes(n)
+    })
+    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+  const language = quotes[0]?.language === 'en' ? 'en' : quotes.length > 0 ? 'es' : undefined
+  const hourly = quotes.find((q) => q.budgetTable?.mode === 'hourly' && q.budgetTable?.hourlyRate)
+  return {
+    language,
+    hourlyRate: hourly?.budgetTable?.hourlyRate,
+    companyId: quotes[0]?.companyId,
+    matchedQuotes: quotes.length,
+  }
+}
+
 // ── Tools ─────────────────────────────────────────────────────────────────────
 const TOOLS = [
   {
@@ -90,6 +139,20 @@ const TOOLS = [
         proyecto: { type: 'string', description: 'Nombre, cliente o slug del proyecto (acepta substring, p. ej. "vidflare")' },
       },
       required: ['proyecto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'crear_proyecto',
+    description: 'Crea un proyecto de bolsa de horas para un cliente. Si el cliente tiene presupuestos en la app, hereda automáticamente el idioma del más reciente y la tarifa del más reciente en modo por horas; "tarifa" e "idioma" solo hacen falta para forzarlos o si el cliente es nuevo. Devuelve el enlace público del proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        cliente: { type: 'string', description: 'Nombre del cliente (será también el nombre del proyecto)' },
+        tarifa: { type: 'number', description: '€/h; omitir para heredar del presupuesto del cliente' },
+        idioma: { type: 'string', enum: ['es', 'en'], description: 'Idioma de la vista pública; omitir para heredar' },
+      },
+      required: ['cliente'],
       additionalProperties: false,
     },
   },
@@ -143,6 +206,68 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const rows = entries.map((e) => `${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
     const amount = found.hourlyRate ? ` · ${(total * found.hourlyRate).toFixed(2)} € (a ${found.hourlyRate} €/h)` : ''
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
+  }
+
+  if (name === 'crear_proyecto') {
+    const cliente = String(args.cliente || '').trim()
+    if (!cliente) return { text: 'Falta "cliente".', isError: true }
+
+    // Evitar duplicados: si ya existe un proyecto para ese cliente, devolverlo
+    const existing = await getProjects()
+    const dupe = existing.find((p) =>
+      (p.name || '').toLowerCase() === cliente.toLowerCase() ||
+      (p.clientName || '').toLowerCase() === cliente.toLowerCase()
+    )
+    if (dupe) {
+      return {
+        text: `Ya existe un proyecto para "${dupe.name}" (${PUBLIC_BASE}/h/${dupe.slug}). Usa anadir_horas sobre él, o pide crearlo con otro nombre.`,
+        isError: true,
+      }
+    }
+
+    const meta = await clientMetaFromQuotes(cliente)
+    const hourlyRate = typeof args.tarifa === 'number' && args.tarifa > 0 ? args.tarifa : meta.hourlyRate
+    const language = args.idioma === 'en' || args.idioma === 'es' ? args.idioma : (meta.language ?? 'es')
+
+    // companyId: del presupuesto del cliente, o de cualquier proyecto/presupuesto existente
+    let companyId = meta.companyId || existing[0]?.companyId
+    if (!companyId) {
+      const anyQuote = await db().collection('quotes').limit(1).get()
+      companyId = (anyQuote.docs[0]?.data()?.companyId as string) || ''
+    }
+
+    // Snapshot de empresa para la vista pública
+    let companyName = ''
+    let logoUrl = ''
+    if (companyId) {
+      const comp = await db().collection('companies').doc(companyId).get()
+      if (comp.exists) {
+        companyName = (comp.data()?.name as string) || ''
+        logoUrl = (comp.data()?.logoUrl as string) || ''
+      }
+    }
+
+    const slug = await generateUniqueSlug(cliente)
+    await db().collection('timeProjects').add({
+      name: cliente,
+      clientName: cliente,
+      slug,
+      language,
+      ...(hourlyRate ? { hourlyRate } : {}),
+      companyName,
+      logoUrl,
+      companyId,
+      createdBy: 'claude-mcp',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    const heritage = meta.matchedQuotes > 0
+      ? ` (heredado de ${meta.matchedQuotes} presupuesto(s) del cliente)`
+      : ' (cliente sin presupuestos: revisa tarifa e idioma)'
+    return {
+      text: `✓ Proyecto "${cliente}" creado — idioma ${language}${hourlyRate ? `, ${hourlyRate} €/h` : ', sin tarifa'}${heritage}\nVista cliente: ${PUBLIC_BASE}/h/${slug}`,
+    }
   }
 
   if (name === 'anadir_horas') {
