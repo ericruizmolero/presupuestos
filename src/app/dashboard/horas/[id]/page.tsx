@@ -108,6 +108,16 @@ function HorasProjectContent() {
     return { total, byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1]) }
   }, [entries])
 
+  async function handleSetLanguage(lang: 'es' | 'en') {
+    if (!project || (project.language ?? 'es') === lang) return
+    setProject({ ...project, language: lang })
+    try {
+      await updateTimeProject(project.id, { language: lang })
+    } catch (err) {
+      console.error('[horas] Error cambiando idioma:', err)
+    }
+  }
+
   async function handleRateBlur() {
     if (!project) return
     const rate = parseFloat(rateInput.replace(',', '.'))
@@ -236,9 +246,25 @@ function HorasProjectContent() {
           </a>
         </div>
       </div>
-      <p className="text-sm text-ink-40 mb-10 uppercase text-xs tracking-widest">
-        Vista cliente en {project.language === 'en' ? 'inglés' : 'castellano'}
-      </p>
+      <div className="flex items-center gap-3 mb-10">
+        <span className="text-xs uppercase tracking-widest text-ink-40">Vista cliente</span>
+        <div className="flex items-center border border-line rounded-md overflow-hidden">
+          {(['es', 'en'] as const).map((lang) => {
+            const isActive = (project.language ?? 'es') === lang
+            return (
+              <button
+                key={lang}
+                onClick={() => handleSetLanguage(lang)}
+                className={`px-2.5 py-1 text-xs font-medium uppercase transition-colors ${
+                  isActive ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover'
+                }`}
+              >
+                {lang}
+              </button>
+            )
+          })}
+        </div>
+      </div>
 
       {/* New entry: fecha + persona + concepto + horas */}
       <div className="grid grid-cols-2 sm:grid-cols-[10rem_11rem_1fr_6rem_auto] gap-3 items-end mb-10">
