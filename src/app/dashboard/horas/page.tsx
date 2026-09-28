@@ -235,6 +235,29 @@ function HorasContent() {
 // ── Instrucciones del conector de Claude ──────────────────────────────────────
 function ClaudeConnectorHelp() {
   const [open, setOpen] = useState(false)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+
+  async function copyConnectorUrl() {
+    try {
+      const { auth } = await import('@/lib/firebase')
+      const token = await auth.currentUser?.getIdToken()
+      if (!token) throw new Error('sin sesión')
+      const res = await fetch('/api/mcp-url', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      const { url } = await res.json()
+      await navigator.clipboard.writeText(url)
+      setCopyState('copied')
+    } catch (err) {
+      console.error('[conector] Error obteniendo la URL:', err)
+      setCopyState('error')
+    } finally {
+      setTimeout(() => setCopyState('idle'), 2500)
+    }
+  }
+
   return (
     <div className="mt-12 pt-6 border-t border-line">
       <button
@@ -245,33 +268,37 @@ function ClaudeConnectorHelp() {
         <ChevronRight size={12} strokeWidth={1.5} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && (
-        <div className="mt-4 text-sm text-ink-60 space-y-3 max-w-2xl leading-relaxed">
+        <div className="mt-4 text-sm text-ink-60 space-y-4 max-w-2xl leading-relaxed">
           <p className="text-ink">
-            Puedes registrar y consultar horas hablando con Claude (web, móvil o desktop)
-            mediante un conector personalizado. Una vez conectado: <em>“apúntame 2h de hoy en
-            Vidflare de retoques del hero”</em>, <em>“crea un proyecto de bolsa de horas con Farco”</em>,
-            <em>“¿cuántas horas llevamos con Playground?”</em>.
+            Apunta y consulta horas hablando con Claude desde el móvil o el ordenador,
+            sin abrir esta app. Por ejemplo: <em>“apúntame 2h de hoy en Vidflare”</em>,{' '}
+            <em>“crea una bolsa de horas para Farco”</em> o <em>“¿cuántas horas llevamos con Playground?”</em>.
           </p>
-          <ol className="list-decimal pl-5 space-y-2">
-            <li>En claude.ai (o la app): <span className="text-ink">Ajustes → Conectores → Añadir conector personalizado</span>.</li>
-            <li>Nombre: <code className="text-xs bg-surface border border-line rounded px-1.5 py-0.5">Horas treseiscero</code></li>
+          <ol className="list-decimal pl-5 space-y-3">
             <li>
-              URL:{' '}
-              <code className="text-xs bg-surface border border-line rounded px-1.5 py-0.5 break-all">
-                https://client.treseiscero.app/api/mcp?key=&lt;MCP_SECRET&gt;
-              </code>
+              <button
+                onClick={copyConnectorUrl}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors"
+              >
+                {copyState === 'copied' ? 'Enlace copiado ✓' : copyState === 'error' ? 'Error, reintenta' : 'Copiar mi enlace de conexión'}
+              </button>
+              <span className="block mt-1.5">
+                Este enlace es personal: funciona como una llave. No lo compartas fuera del equipo.
+              </span>
             </li>
             <li>
-              Sustituye <code className="text-xs">&lt;MCP_SECRET&gt;</code> por la clave, que está en{' '}
-              <span className="text-ink">Vercel → presupuestos-app → Settings → Environment Variables → MCP_SECRET</span>{' '}
-              (o en <code className="text-xs">scripts/.mcp-secret</code> del repo local). No compartas esa URL:
-              quien la tenga puede escribir en el registro. Para revocarla, cambia MCP_SECRET en Vercel y redespliega.
+              Entra en <span className="text-ink">claude.ai → Ajustes → Conectores → Añadir conector personalizado</span>.
             </li>
-            <li>Guardar — sin OAuth. Activa el conector en el chat y listo.</li>
+            <li>
+              Ponle de nombre <span className="text-ink">Horas treseiscero</span>, pega el enlace en el campo URL y guarda.
+            </li>
+            <li>
+              Abre un chat nuevo, comprueba que el conector está activado en el menú de herramientas, y pídele lo que necesites.
+            </li>
           </ol>
           <p>
-            Herramientas disponibles: <span className="text-ink">listar_proyectos · ver_registro · anadir_horas · crear_proyecto</span>.
-            Por defecto: fecha de hoy (Madrid) y persona “Eric y Andoni”. En Claude Code además existe la skill local <code className="text-xs">/horas</code>.
+            Claude podrá listar proyectos, ver registros, apuntar horas y crear proyectos nuevos.
+            Si no dices lo contrario, apunta con la fecha de hoy y a nombre de “Eric y Andoni”.
           </p>
         </div>
       )}
