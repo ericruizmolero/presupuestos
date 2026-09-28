@@ -226,6 +226,55 @@ function HorasContent() {
           </table>
         </div>
       )}
+
+      <ClaudeConnectorHelp />
+    </div>
+  )
+}
+
+// ── Instrucciones del conector de Claude ──────────────────────────────────────
+function ClaudeConnectorHelp() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mt-12 pt-6 border-t border-line">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 text-xs font-medium tracking-widest uppercase text-ink-40 hover:text-ink-60 transition-colors"
+      >
+        Conectar con Claude
+        <ChevronRight size={12} strokeWidth={1.5} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-4 text-sm text-ink-60 space-y-3 max-w-2xl leading-relaxed">
+          <p className="text-ink">
+            Puedes registrar y consultar horas hablando con Claude (web, móvil o desktop)
+            mediante un conector personalizado. Una vez conectado: <em>“apúntame 2h de hoy en
+            Vidflare de retoques del hero”</em>, <em>“crea un proyecto de bolsa de horas con Farco”</em>,
+            <em>“¿cuántas horas llevamos con Playground?”</em>.
+          </p>
+          <ol className="list-decimal pl-5 space-y-2">
+            <li>En claude.ai (o la app): <span className="text-ink">Ajustes → Conectores → Añadir conector personalizado</span>.</li>
+            <li>Nombre: <code className="text-xs bg-surface border border-line rounded px-1.5 py-0.5">Horas treseiscero</code></li>
+            <li>
+              URL:{' '}
+              <code className="text-xs bg-surface border border-line rounded px-1.5 py-0.5 break-all">
+                https://client.treseiscero.app/api/mcp?key=&lt;MCP_SECRET&gt;
+              </code>
+            </li>
+            <li>
+              Sustituye <code className="text-xs">&lt;MCP_SECRET&gt;</code> por la clave, que está en{' '}
+              <span className="text-ink">Vercel → presupuestos-app → Settings → Environment Variables → MCP_SECRET</span>{' '}
+              (o en <code className="text-xs">scripts/.mcp-secret</code> del repo local). No compartas esa URL:
+              quien la tenga puede escribir en el registro. Para revocarla, cambia MCP_SECRET en Vercel y redespliega.
+            </li>
+            <li>Guardar — sin OAuth. Activa el conector en el chat y listo.</li>
+          </ol>
+          <p>
+            Herramientas disponibles: <span className="text-ink">listar_proyectos · ver_registro · anadir_horas · crear_proyecto</span>.
+            Por defecto: fecha de hoy (Madrid) y persona “Eric y Andoni”. En Claude Code además existe la skill local <code className="text-xs">/horas</code>.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
