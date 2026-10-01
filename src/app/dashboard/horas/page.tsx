@@ -45,6 +45,7 @@ function HorasContent() {
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [projects, setProjects] = useState<TimeProject[]>([])
   const [hoursByProject, setHoursByProject] = useState<Map<string, number>>(new Map())
+  const [monthHoursByProject, setMonthHoursByProject] = useState<Map<string, number>>(new Map())
   const [clientMeta, setClientMeta] = useState<Map<string, ClientMeta>>(new Map())
   const [clientOptions, setClientOptions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -68,10 +69,17 @@ function HorasContent() {
       setProjects(ps)
 
       const sums = new Map<string, number>()
+      const monthSums = new Map<string, number>()
+      const month = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit' })
+        .format(new Date()) // YYYY-MM
       for (const e of entries) {
         sums.set(e.projectId, (sums.get(e.projectId) || 0) + (e.hours || 0))
+        if ((e.date || '').startsWith(month)) {
+          monthSums.set(e.projectId, (monthSums.get(e.projectId) || 0) + (e.hours || 0))
+        }
       }
       setHoursByProject(sums)
+      setMonthHoursByProject(monthSums)
 
       // quotes come newest-first from getQuotes
       const meta = new Map<string, ClientMeta>()
@@ -120,9 +128,28 @@ function HorasContent() {
   }
 
   const rows = useMemo(
-    () => projects.map((p) => ({ project: p, total: hoursByProject.get(p.id) || 0 })),
-    [projects, hoursByProject]
+    () => projects.map((p) => ({
+      project: p,
+      total: hoursByProject.get(p.id) || 0,
+      month: monthHoursByProject.get(p.id) || 0,
+    })),
+    [projects, hoursByProject, monthHoursByProject]
   )
+
+  const monthSummary = useMemo(() => {
+    let hours = 0
+    let amount = 0
+    for (const r of rows) {
+      hours += r.month
+      if (r.project.hourlyRate) amount += r.month * r.project.hourlyRate
+    }
+    return { hours, amount }
+  }, [rows])
+
+  const monthLabel = (() => {
+    const label = new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+    return label.charAt(0).toUpperCase() + label.slice(1)
+  })()
 
   if (loading) {
     return <div className="px-8 py-12 text-sm text-ink-40">Cargando…</div>
@@ -183,6 +210,20 @@ function HorasContent() {
         </div>
       )}
 
+      {/* Month summary */}
+      {rows.length > 0 && (
+        <div className="flex items-baseline gap-8 mb-8">
+          <div>
+            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">{monthLabel}</p>
+            <p className="text-3xl font-medium tracking-tight text-ink">{formatHours(monthSummary.hours)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-1">Importe del mes</p>
+            <p className="text-3xl font-medium tracking-tight text-ink-60">{formatMoney(monthSummary.amount)}</p>
+          </div>
+        </div>
+      )}
+
       {/* Project rows */}
       {rows.length === 0 ? (
         !creating && (
@@ -198,13 +239,14 @@ function HorasContent() {
                 <th className="px-4 py-3 font-medium">Cliente</th>
                 <th className="px-4 py-3 font-medium">Idioma</th>
                 <th className="px-4 py-3 font-medium text-right">Tarifa</th>
-                <th className="px-4 py-3 font-medium text-right">Horas</th>
+                <th className="px-4 py-3 font-medium text-right">Este mes</th>
+                <th className="px-4 py-3 font-medium text-right">Total</th>
                 <th className="px-4 py-3 font-medium text-right">Importe</th>
                 <th className="px-2 py-3 w-8" />
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ project: p, total }, i) => (
+              {rows.map(({ project: p, total, month }, i) => (
                 <tr
                   key={p.id}
                   onClick={() => router.push(`/dashboard/horas/${p.id}`)}
@@ -215,7 +257,10 @@ function HorasContent() {
                   <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">
                     {p.hourlyRate ? `${formatMoney(p.hourlyRate)}/h` : '—'}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap font-medium">{formatHours(total)}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
+                    {month > 0 ? formatHours(month) : <span className="text-ink-40 font-normal">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">{formatHours(total)}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">
                     {p.hourlyRate ? formatMoney(total * p.hourlyRate) : '—'}
                   </td>
