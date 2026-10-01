@@ -5,16 +5,10 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
-import { getBoard, saveBoard, BOARD_COLORS, type Board, type BoardStatus } from '@/lib/firestore/planning'
+import { getBoard, saveBoard, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
 import { Check, Plus, X, Trash2 } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
-
-const LANES: Array<{ id: BoardStatus; label: string }> = [
-  { id: 'ahora', label: 'Ahora' },
-  { id: 'luego', label: 'Luego' },
-  { id: 'espera', label: 'En espera' },
-]
 
 export default function ProyectosPage() {
   return (
@@ -29,7 +23,8 @@ export default function ProyectosPage() {
 function ProyectosContent() {
   const { user } = useAuth()
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [board, setBoard] = useState<Board>({ groups: [], chips: [] })
+  const [board, setBoard] = useState<Board>({ lanes: [...DEFAULT_LANES], groups: [], chips: [] })
+  const [newLane, setNewLane] = useState('')
   const [loading, setLoading] = useState(true)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [newGroup, setNewGroup] = useState('')
@@ -75,7 +70,7 @@ function ProyectosContent() {
     const name = newGroup.trim()
     if (!name || board.groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return
     const color = BOARD_COLORS[board.groups.length % BOARD_COLORS.length]
-    setBoard((b) => ({ ...b, groups: [...b.groups, { name, color, status: 'ahora' }] }))
+    setBoard((b) => ({ ...b, groups: [...b.groups, { name, color, status: b.lanes[0] }] }))
     setNewGroup('')
   }
 
@@ -90,11 +85,38 @@ function ProyectosContent() {
     }))
   }
 
-  function setGroupStatus(name: string, status: BoardStatus) {
+  function setGroupStatus(name: string, status: string) {
     setBoard((b) => ({
       ...b,
       groups: b.groups.map((g) => (g.name === name ? { ...g, status } : g)),
     }))
+  }
+
+  function renameLane(oldName: string, newName: string) {
+    setBoard((b) => ({
+      ...b,
+      lanes: b.lanes.map((l) => (l === oldName ? newName : l)),
+      groups: b.groups.map((g) => (g.status === oldName ? { ...g, status: newName } : g)),
+    }))
+  }
+
+  function addLane() {
+    const name = newLane.trim()
+    if (!name || board.lanes.some((l) => l.toLowerCase() === name.toLowerCase())) return
+    setBoard((b) => ({ ...b, lanes: [...b.lanes, name] }))
+    setNewLane('')
+  }
+
+  function deleteLane(name: string) {
+    setBoard((b) => {
+      if (b.lanes.length <= 1) return b
+      const rest = b.lanes.filter((l) => l !== name)
+      return {
+        ...b,
+        lanes: rest,
+        groups: b.groups.map((g) => (g.status === name ? { ...g, status: rest[0] } : g)),
+      }
+    })
   }
 
   function deleteGroup(name: string) {
@@ -178,15 +200,31 @@ function ProyectosContent() {
         </p>
       ) : (
         <div className="space-y-12">
-          {LANES.map(({ id: laneId, label }) => {
-            const laneGroups = board.groups.filter((g) => (g.status ?? 'ahora') === laneId)
-            if (laneGroups.length === 0) return null
+          {board.lanes.map((lane, li) => {
+            const laneGroups = board.groups.filter((g) => (g.status ?? board.lanes[0]) === lane)
             return (
-              <section key={laneId}>
-                <h2 className={`text-[10px] font-medium tracking-[0.18em] uppercase mb-5 ${laneId === 'ahora' ? 'text-ink' : 'text-ink-40'}`}>
-                  {label}
-                </h2>
-                <div className={`space-y-8 ${laneId === 'espera' ? 'opacity-60' : ''}`}>
+              <section key={li}>
+                <div className="flex items-center gap-2 mb-5 group/lane">
+                  <input
+                    className={`text-[10px] font-medium tracking-[0.18em] uppercase bg-transparent outline-none w-48 ${li === 0 ? 'text-ink' : 'text-ink-40'} focus:text-ink transition-colors`}
+                    value={lane}
+                    onChange={(e) => renameLane(lane, e.target.value)}
+                    title="Renombrar carril"
+                  />
+                  {laneGroups.length === 0 && board.lanes.length > 1 && (
+                    <button
+                      onClick={() => deleteLane(lane)}
+                      className="opacity-0 group-hover/lane:opacity-100 text-ink-40 hover:text-[#DC2626] transition-all"
+                      title="Eliminar carril"
+                    >
+                      <Trash2 size={12} strokeWidth={1.5} />
+                    </button>
+                  )}
+                </div>
+                {laneGroups.length === 0 && (
+                  <p className="text-xs text-ink-40 -mt-2">Sin proyectos</p>
+                )}
+                <div className="space-y-8">
                   {laneGroups.map((g) => {
             const chips = board.chips.filter((c) => c.group === g.name)
             return (
@@ -202,17 +240,17 @@ function ProyectosContent() {
                   <h2 className="text-sm font-medium text-ink">{g.name}</h2>
                   <span className="text-xs text-ink-40">{chips.length}</span>
                   <span className="flex items-center border border-line rounded-md overflow-hidden ml-1">
-                    {LANES.map(({ id, label }) => {
-                      const isActive = (g.status ?? 'ahora') === id
+                    {board.lanes.map((l) => {
+                      const isActive = (g.status ?? board.lanes[0]) === l
                       return (
                         <button
-                          key={id}
-                          onClick={() => setGroupStatus(g.name, id)}
+                          key={l}
+                          onClick={() => setGroupStatus(g.name, l)}
                           className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
                             isActive ? 'bg-accent text-on-accent' : 'text-ink-40 hover:bg-surface-hover hover:text-ink-60'
                           }`}
                         >
-                          {label}
+                          {l}
                         </button>
                       )
                     })}
@@ -274,6 +312,25 @@ function ProyectosContent() {
           })}
         </div>
       )}
+
+      {/* Nuevo carril */}
+      <div className="mt-12 pt-6 border-t border-line flex items-center gap-2">
+        <input
+          className="px-3 py-1.5 text-xs border border-dashed border-line rounded-md bg-transparent text-ink placeholder-ink-40 focus:outline-none focus:border-input transition-colors w-44 uppercase tracking-wider"
+          placeholder="Nuevo carril…"
+          value={newLane}
+          onChange={(e) => setNewLane(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addLane()}
+        />
+        <button
+          onClick={addLane}
+          disabled={!newLane.trim()}
+          className="text-ink-40 hover:text-ink transition-colors disabled:opacity-40"
+          title="Añadir carril"
+        >
+          <Plus size={14} strokeWidth={1.5} />
+        </button>
+      </div>
     </div>
   )
 }
