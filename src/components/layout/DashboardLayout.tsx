@@ -5,14 +5,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { signOut } from '@/lib/auth'
-import { FileText, Settings, LogOut, Plus, Palette, Clock, CalendarRange } from 'lucide-react'
+import { FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote } from 'lucide-react'
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 
 const navLinks = [
   { href: '/dashboard', label: 'Presupuestos', icon: FileText },
   { href: '/dashboard/horas', label: 'Horas', icon: Clock },
-  { href: '/dashboard/proyectos', label: 'Proyectos', icon: CalendarRange },
+  { href: '/dashboard/proyectos', label: 'Proyectos', icon: StickyNote },
   { href: '/settings', label: 'Configuración', icon: Settings },
   { href: '/tematica', label: 'Temática', icon: Palette },
 ]

@@ -1,38 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
-import { getPlanning, savePlanning } from '@/lib/firestore/planning'
-import { getTimeProjects } from '@/lib/firestore/time'
-import { InteractiveGantt, EditableGantt } from '@/components/quote/GanttTimeline'
-import type { TimelineEntry } from '@/types/quote'
-import { Select } from '@/components/ui/Select'
-import { Check, Plus } from 'lucide-react'
+import { getBoard, saveBoard, BOARD_COLORS, type Board } from '@/lib/firestore/planning'
+import { Check, Plus, X, Trash2 } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
-
-const INPUT = 'w-full px-4 py-3 border border-input rounded-md text-base text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
-
-function madridToday(): Date {
-  const iso = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date())
-  return new Date(iso + 'T00:00:00')
-}
-
-/** Lunes y domingo de la semana actual (Madrid), como YYYY-MM-DD */
-function currentWeekRange(): { start: string; end: string } {
-  const today = madridToday()
-  const dow = (today.getDay() + 6) % 7 // lunes = 0
-  const monday = new Date(today); monday.setDate(today.getDate() - dow)
-  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  return { start: fmt(monday), end: fmt(sunday) }
-}
 
 export default function ProyectosPage() {
   return (
@@ -47,11 +23,12 @@ export default function ProyectosPage() {
 function ProyectosContent() {
   const { user } = useAuth()
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [entries, setEntries] = useState<TimelineEntry[]>([])
-  const [clients, setClients] = useState<string[]>([])
-  const [selectedClient, setSelectedClient] = useState('')
+  const [board, setBoard] = useState<Board>({ groups: [], chips: [] })
   const [loading, setLoading] = useState(true)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [newGroup, setNewGroup] = useState('')
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState<string | null>(null)
   const isFirstRender = useRef(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -61,16 +38,12 @@ function ProyectosContent() {
     getUserCompanyId(user.uid).then(async (cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-      const [planning, projects] = await Promise.all([getPlanning(cid), getTimeProjects(cid)])
-      setEntries(planning)
-      const names = projects.map((p) => p.name).filter(Boolean).sort((a, b) => a.localeCompare(b))
-      setClients(names)
-      setSelectedClient(names[0] ?? '')
+      setBoard(await getBoard(cid))
       setLoading(false)
     })
   }, [user])
 
-  // Auto-save con debounce, como el editor de presupuestos
+  // Auto-save con debounce
   useEffect(() => {
     if (loading) return
     if (isFirstRender.current) { isFirstRender.current = false; return }
@@ -80,50 +53,65 @@ function ProyectosContent() {
     saveTimer.current = setTimeout(async () => {
       setSaveStatus('saving')
       try {
-        await savePlanning(companyId, entries)
+        await saveBoard(companyId, board)
         setSaveStatus('saved')
         clearTimer.current = setTimeout(() => setSaveStatus('idle'), 2000)
       } catch (err) {
-        console.error('[proyectos] Error al guardar el planning:', err)
+        console.error('[proyectos] Error al guardar:', err)
         setSaveStatus('error')
       }
     }, 1200)
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries])
+  }, [board])
 
-  const existingGroups = useMemo(
-    () => [...new Set(entries.map((e) => e.group ?? ''))],
-    [entries]
-  )
-
-  const availableClients = clients.filter((c) => !existingGroups.includes(c))
-  const effectiveClient = availableClients.includes(selectedClient)
-    ? selectedClient
-    : (availableClients[0] ?? '')
-
-  function addClientGroup() {
-    const name = effectiveClient.trim()
-    if (!name || existingGroups.includes(name)) return
-    setEntries((es) => [...es, { phase: '', group: name, startDate: '', endDate: '' }])
+  function addGroup() {
+    const name = newGroup.trim()
+    if (!name || board.groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return
+    const color = BOARD_COLORS[board.groups.length % BOARD_COLORS.length]
+    setBoard((b) => ({ ...b, groups: [...b.groups, { name, color }] }))
+    setNewGroup('')
   }
 
-  // Tareas que tocan la semana actual, agrupadas por cliente
-  const week = useMemo(() => {
-    const { start, end } = currentWeekRange()
-    const byClient = new Map<string, TimelineEntry[]>()
-    let undated = 0
-    for (const e of entries) {
-      if (!e.phase) continue
-      if (!e.startDate || !e.endDate) { undated++; continue }
-      if (e.startDate <= end && e.endDate >= start) {
-        const g = e.group || 'Sin cliente'
-        if (!byClient.has(g)) byClient.set(g, [])
-        byClient.get(g)!.push(e)
+  function cycleColor(name: string) {
+    setBoard((b) => ({
+      ...b,
+      groups: b.groups.map((g) => {
+        if (g.name !== name) return g
+        const idx = BOARD_COLORS.indexOf(g.color)
+        return { ...g, color: BOARD_COLORS[(idx + 1) % BOARD_COLORS.length] }
+      }),
+    }))
+  }
+
+  function deleteGroup(name: string) {
+    setBoard((b) => ({
+      groups: b.groups.filter((g) => g.name !== name),
+      chips: b.chips.filter((c) => c.group !== name),
+    }))
+    setConfirmDeleteGroup(null)
+  }
+
+  function addChip(group: string) {
+    const text = (drafts[group] || '').trim()
+    if (!text) return
+    setBoard((b) => ({ ...b, chips: [...b.chips, { group, text }] }))
+    setDrafts((d) => ({ ...d, [group]: '' }))
+  }
+
+  function removeChip(group: string, index: number) {
+    setBoard((b) => {
+      let seen = -1
+      return {
+        ...b,
+        chips: b.chips.filter((c) => {
+          if (c.group !== group) return true
+          seen++
+          return seen !== index
+        }),
       }
-    }
-    return { byClient: [...byClient.entries()], undated, start, end }
-  }, [entries])
+    })
+  }
 
   if (loading) {
     return <div className="px-8 py-12 text-sm text-ink-40">Cargando…</div>
@@ -148,66 +136,103 @@ function ProyectosContent() {
           )}
         </div>
       </div>
-      <p className="text-sm text-ink-40 mb-8">
-        Organización interna por cliente: qué hay que hacer y cuándo. Lo terminado, se borra.
+      <p className="text-sm text-ink-40 mb-10">
+        Post-its por proyecto: apunta, tacha y fuera. El punto de color cambia el color del proyecto.
       </p>
 
-      {/* Esta semana */}
-      <div className="border border-line rounded-md p-4 bg-surface mb-8">
-        <p className="text-[10px] font-medium tracking-widest uppercase text-ink-40 mb-3">Esta semana</p>
-        {week.byClient.length === 0 ? (
-          <p className="text-sm text-ink-40">Nada con fechas en esta semana.</p>
-        ) : (
-          <div className="space-y-2">
-            {week.byClient.map(([client, tasks]) => (
-              <div key={client} className="flex gap-3 text-sm">
-                <span className="font-medium text-ink shrink-0 w-44 truncate">{client}</span>
-                <span className="text-ink-60">
-                  {tasks.map((t) => t.phase).join(' · ')}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-        {week.undated > 0 && (
-          <p className="text-xs text-ink-40 mt-3">
-            {week.undated} tarea{week.undated > 1 ? 's' : ''} sin fechas — ponles fechas para verlas aquí y en el timeline.
-          </p>
-        )}
+      {/* Nuevo proyecto */}
+      <div className="flex items-center gap-3 mb-10">
+        <input
+          className="flex-1 max-w-xs px-4 py-3 border border-input rounded-md text-base text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors"
+          placeholder="Nuevo proyecto (Kymatio, Interno…)"
+          value={newGroup}
+          onChange={(e) => setNewGroup(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && addGroup()}
+        />
+        <button
+          onClick={addGroup}
+          disabled={!newGroup.trim()}
+          className="flex items-center gap-1.5 px-4 py-3 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Plus size={14} strokeWidth={2} />
+          Añadir
+        </button>
       </div>
 
-      {/* Añadir cliente al planning */}
-      {availableClients.length > 0 && (
-        <div className="flex items-end gap-3 mb-8">
-          <div className="flex-1 max-w-xs">
-            <Select
-              value={effectiveClient}
-              onChange={(e) => setSelectedClient(e.target.value)}
-              className={INPUT}
-            >
-              {availableClients.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </Select>
-          </div>
-          <button
-            onClick={addClientGroup}
-            className="flex items-center gap-1.5 px-4 py-3 text-sm border border-line rounded-md hover:border-input transition-colors text-ink-60 hover:text-ink"
-          >
-            <Plus size={14} strokeWidth={1.5} />
-            Añadir cliente al planning
-          </button>
+      {board.groups.length === 0 ? (
+        <p className="text-sm text-ink-40 text-center py-6 border border-line rounded-md">
+          Crea un proyecto y empieza a soltar post-its
+        </p>
+      ) : (
+        <div className="space-y-8">
+          {board.groups.map((g) => {
+            const chips = board.chips.filter((c) => c.group === g.name)
+            return (
+              <div key={g.name}>
+                {/* Group header */}
+                <div className="flex items-center gap-2.5 mb-3 group/header">
+                  <button
+                    onClick={() => cycleColor(g.name)}
+                    title="Cambiar color"
+                    className="w-3.5 h-3.5 rounded-full border border-black/10 hover:scale-110 transition-transform"
+                    style={{ background: g.color }}
+                  />
+                  <h2 className="text-sm font-medium text-ink">{g.name}</h2>
+                  <span className="text-xs text-ink-40">{chips.length}</span>
+                  {confirmDeleteGroup === g.name ? (
+                    <span className="flex items-center gap-2 ml-2">
+                      <button
+                        onClick={() => deleteGroup(g.name)}
+                        className="px-2 py-0.5 text-xs font-medium bg-[#DC2626] text-white rounded hover:bg-[#B91C1C] transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                      <button onClick={() => setConfirmDeleteGroup(null)} className="text-xs text-ink-60 hover:text-ink">
+                        Cancelar
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setConfirmDeleteGroup(g.name)}
+                      className="opacity-0 group-hover/header:opacity-100 text-ink-40 hover:text-[#DC2626] transition-all"
+                      title="Eliminar proyecto"
+                    >
+                      <Trash2 size={13} strokeWidth={1.5} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Chips */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {chips.map((c, i) => (
+                    <span
+                      key={`${c.text}-${i}`}
+                      className="group/chip inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-md text-sm text-ink border border-black/[0.06]"
+                      style={{ background: g.color }}
+                    >
+                      {c.text}
+                      <button
+                        onClick={() => removeChip(g.name, i)}
+                        className="opacity-40 group-hover/chip:opacity-100 hover:!opacity-100 transition-opacity"
+                        title="Quitar"
+                      >
+                        <X size={12} strokeWidth={2} />
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    className="px-3 py-1.5 text-sm border border-dashed border-line rounded-md bg-transparent text-ink placeholder-ink-40 focus:outline-none focus:border-input transition-colors w-44"
+                    placeholder="Añadir…"
+                    value={drafts[g.name] || ''}
+                    onChange={(e) => setDrafts((d) => ({ ...d, [g.name]: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && addChip(g.name)}
+                  />
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
-
-      {entries.some((e) => e.startDate && e.endDate) && (
-        <div className="border border-line rounded-md p-4 bg-surface mb-8">
-          <p className="text-[10px] font-medium tracking-widest uppercase text-ink-40 mb-4">Timeline</p>
-          <InteractiveGantt entries={entries} onChange={setEntries} />
-        </div>
-      )}
-
-      <EditableGantt entries={entries} onChange={setEntries} />
     </div>
   )
 }
