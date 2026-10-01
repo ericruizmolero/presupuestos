@@ -121,6 +121,7 @@ function ProyectosContent() {
 
   function deleteGroup(name: string) {
     setBoard((b) => ({
+      ...b,
       groups: b.groups.filter((g) => g.name !== name),
       chips: b.chips.filter((c) => c.group !== name),
     }))
