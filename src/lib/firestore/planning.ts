@@ -3,9 +3,12 @@ import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
 
 /** Tablero interno tipo post-its: grupos (proyectos) con color y chips de texto. */
+export type BoardStatus = 'ahora' | 'luego' | 'espera'
+
 export interface BoardGroup {
   name: string
   color: string // hex
+  status?: BoardStatus // default: 'ahora'
 }
 
 export interface BoardChip {

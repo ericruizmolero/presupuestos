@@ -5,10 +5,16 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
-import { getBoard, saveBoard, BOARD_COLORS, type Board } from '@/lib/firestore/planning'
+import { getBoard, saveBoard, BOARD_COLORS, type Board, type BoardStatus } from '@/lib/firestore/planning'
 import { Check, Plus, X, Trash2 } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+const LANES: Array<{ id: BoardStatus; label: string }> = [
+  { id: 'ahora', label: 'Ahora' },
+  { id: 'luego', label: 'Luego' },
+  { id: 'espera', label: 'En espera' },
+]
 
 export default function ProyectosPage() {
   return (
@@ -69,7 +75,7 @@ function ProyectosContent() {
     const name = newGroup.trim()
     if (!name || board.groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return
     const color = BOARD_COLORS[board.groups.length % BOARD_COLORS.length]
-    setBoard((b) => ({ ...b, groups: [...b.groups, { name, color }] }))
+    setBoard((b) => ({ ...b, groups: [...b.groups, { name, color, status: 'ahora' }] }))
     setNewGroup('')
   }
 
@@ -81,6 +87,13 @@ function ProyectosContent() {
         const idx = BOARD_COLORS.indexOf(g.color)
         return { ...g, color: BOARD_COLORS[(idx + 1) % BOARD_COLORS.length] }
       }),
+    }))
+  }
+
+  function setGroupStatus(name: string, status: BoardStatus) {
+    setBoard((b) => ({
+      ...b,
+      groups: b.groups.map((g) => (g.name === name ? { ...g, status } : g)),
     }))
   }
 
@@ -164,8 +177,17 @@ function ProyectosContent() {
           Crea un proyecto y empieza a soltar post-its
         </p>
       ) : (
-        <div className="space-y-8">
-          {board.groups.map((g) => {
+        <div className="space-y-12">
+          {LANES.map(({ id: laneId, label }) => {
+            const laneGroups = board.groups.filter((g) => (g.status ?? 'ahora') === laneId)
+            if (laneGroups.length === 0) return null
+            return (
+              <section key={laneId}>
+                <h2 className={`text-[10px] font-medium tracking-[0.18em] uppercase mb-5 ${laneId === 'ahora' ? 'text-ink' : 'text-ink-40'}`}>
+                  {label}
+                </h2>
+                <div className={`space-y-8 ${laneId === 'espera' ? 'opacity-60' : ''}`}>
+                  {laneGroups.map((g) => {
             const chips = board.chips.filter((c) => c.group === g.name)
             return (
               <div key={g.name}>
@@ -179,6 +201,22 @@ function ProyectosContent() {
                   />
                   <h2 className="text-sm font-medium text-ink">{g.name}</h2>
                   <span className="text-xs text-ink-40">{chips.length}</span>
+                  <span className="flex items-center border border-line rounded-md overflow-hidden ml-1">
+                    {LANES.map(({ id, label }) => {
+                      const isActive = (g.status ?? 'ahora') === id
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => setGroupStatus(g.name, id)}
+                          className={`px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider transition-colors ${
+                            isActive ? 'bg-accent text-on-accent' : 'text-ink-40 hover:bg-surface-hover hover:text-ink-60'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </span>
                   {confirmDeleteGroup === g.name ? (
                     <span className="flex items-center gap-2 ml-2">
                       <button
@@ -229,6 +267,9 @@ function ProyectosContent() {
                   />
                 </div>
               </div>
+                  )})}
+                </div>
+              </section>
             )
           })}
         </div>
