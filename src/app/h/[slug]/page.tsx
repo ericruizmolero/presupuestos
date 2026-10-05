@@ -9,8 +9,8 @@ const I18N = {
   es: {
     locale: 'es-ES',
     eyebrow: 'Registro de horas',
-    total: 'Total',
-    amount: 'Importe',
+    total: 'Este mes',
+    amount: 'Importe del mes',
     rate: 'Tarifa',
     empty: 'Aún no hay horas registradas.',
     notFound: 'Este registro de horas no existe o ya no está disponible.',
@@ -19,8 +19,8 @@ const I18N = {
   en: {
     locale: 'en-GB',
     eyebrow: 'Time log',
-    total: 'Total',
-    amount: 'Amount',
+    total: 'This month',
+    amount: "Month's amount",
     rate: 'Rate',
     empty: 'No hours logged yet.',
     notFound: 'This time log does not exist or is no longer available.',
@@ -77,9 +77,15 @@ export default function PublicHoursPage() {
     return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]))
   }, [entries])
 
+  // Solo el mes en curso (Madrid): lo anterior ya está facturado
   const totals = useMemo(() => {
+    const month = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit',
+    }).format(new Date())
     let total = 0
-    for (const e of entries) total += e.hours || 0
+    for (const e of entries) {
+      if ((e.date || '').startsWith(month)) total += e.hours || 0
+    }
     return { total }
   }, [entries])
 
