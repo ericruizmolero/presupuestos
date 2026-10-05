@@ -142,15 +142,15 @@ export default function PublicHoursPage() {
         {entries.length === 0 ? (
           <p className="text-sm text-ink-40 text-center py-6">{t.empty}</p>
         ) : (
-          byMonth.map(([month, monthEntries]) => {
+          byMonth.map(([month, monthEntries], mi) => {
             const monthTotal = monthEntries.reduce((s, e) => s + (e.hours || 0), 0)
             return (
-              <section key={month} className="mb-10">
-                <div className="flex items-baseline justify-between mb-3">
-                  <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40">
+              <section key={month} className={mi === 0 ? 'mb-16' : 'mb-16 pt-10 border-t border-line'}>
+                <div className="flex items-baseline justify-between mb-4">
+                  <h2 className="text-lg font-medium tracking-tight text-ink">
                     {monthLabel(monthEntries[0].date, locale)}
                   </h2>
-                  <span className="text-xs text-ink-60 font-medium">
+                  <span className="text-sm text-ink font-medium">
                     {formatHours(monthTotal, locale)}
                     {project.hourlyRate ? (
                       <span className="text-ink-40 font-normal"> · {formatMoney(monthTotal * project.hourlyRate, locale)}</span>
