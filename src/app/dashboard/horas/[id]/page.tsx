@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
@@ -29,6 +29,12 @@ function formatDate(iso: string) {
   if (!iso) return '—'
   const d = new Date(iso + 'T00:00:00')
   return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function monthLabel(key: string) {
+  const d = new Date(key + '-01T00:00:00')
+  const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
 function formatHours(h: number) {
@@ -97,6 +103,17 @@ function HorasProjectContent() {
       setLoading(false)
     })
   }, [user, id, router])
+
+  // Entradas agrupadas por mes (más reciente primero; entries ya vienen date-desc)
+  const byMonth = useMemo(() => {
+    const groups = new Map<string, TimeEntry[]>()
+    for (const e of entries) {
+      const key = (e.date || '').slice(0, 7)
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(e)
+    }
+    return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  }, [entries])
 
   const totals = useMemo(() => {
     const byPerson = new Map<string, number>()
@@ -351,7 +368,26 @@ function HorasProjectContent() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((e, i) => {
+              {byMonth.map(([month, monthEntries]) => {
+                const monthTotal = monthEntries.reduce((s, e) => s + (e.hours || 0), 0)
+                return (
+                  <React.Fragment key={month}>
+                    <tr className="bg-surface border-y border-line">
+                      <td colSpan={5} className="px-4 py-2">
+                        <span className="flex items-baseline justify-between">
+                          <span className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-60">
+                            {monthLabel(month)}
+                          </span>
+                          <span className="text-xs text-ink-60 font-medium">
+                            {formatHours(monthTotal)}
+                            {project.hourlyRate ? (
+                              <span className="text-ink-40 font-normal"> · {formatMoney(monthTotal * project.hourlyRate)}</span>
+                            ) : null}
+                          </span>
+                        </span>
+                      </td>
+                    </tr>
+                    {monthEntries.map((e, i) => {
                 const zebra = i % 2 === 1 ? 'bg-surface' : 'bg-paper'
                 if (editingId === e.id) {
                   const EDIT_INPUT = 'w-full px-2 py-1.5 border border-input rounded-md text-sm text-ink focus:outline-none focus:border-accent transition-colors'
@@ -445,6 +481,9 @@ function HorasProjectContent() {
                       </button>
                     </td>
                   </tr>
+                )
+                    })}
+                  </React.Fragment>
                 )
               })}
             </tbody>
