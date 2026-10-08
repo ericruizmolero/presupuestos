@@ -143,6 +143,34 @@ const TOOLS = [
     },
   },
   {
+    name: 'editar_entrada',
+    description: 'Edita una entrada de horas existente. El id de la entrada sale de ver_registro. Solo se cambian los campos indicados.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Id de la entrada (de ver_registro)' },
+        fecha: { type: 'string', description: 'Nueva fecha YYYY-MM-DD' },
+        horas: { type: 'number', description: 'Nuevas horas' },
+        concepto: { type: 'string', description: 'Nuevo concepto' },
+        persona: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Nueva persona' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'borrar_entrada',
+    description: 'Borra una entrada de horas (irreversible). El id sale de ver_registro.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Id de la entrada (de ver_registro)' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'crear_proyecto',
     description: 'Crea un proyecto de bolsa de horas para un cliente. Si el cliente tiene presupuestos en la app, hereda automáticamente el idioma del más reciente y la tarifa del más reciente en modo por horas; "tarifa" e "idioma" solo hacen falta para forzarlos o si el cliente es nuevo. Devuelve el enlace público del proyecto.',
     inputSchema: {
@@ -203,9 +231,44 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const found = await findProject(String(args.proyecto || ''))
     if (typeof found === 'string') return { text: found, isError: true }
     const { entries, total } = await projectTotals(found.id)
-    const rows = entries.map((e) => `${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
+    const rows = entries.map((e) => `[${e.id}] ${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
     const amount = found.hourlyRate ? ` · ${(total * found.hourlyRate).toFixed(2)} € (a ${found.hourlyRate} €/h)` : ''
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
+  }
+
+  if (name === 'editar_entrada' || name === 'borrar_entrada') {
+    const id = String(args.id || '').trim()
+    if (!id) return { text: 'Falta "id" (sale de ver_registro).', isError: true }
+    const ref = db().collection('timeEntries').doc(id)
+    const snap = await ref.get()
+    if (!snap.exists) return { text: `No existe ninguna entrada con id ${id}.`, isError: true }
+    const current = snap.data() as { date?: string; hours?: number; person?: string; description?: string }
+
+    if (name === 'borrar_entrada') {
+      await ref.delete()
+      return { text: `✓ Borrada: ${current.date}  ${current.hours} h  ${current.person}  ${current.description || ''}` }
+    }
+
+    const patch: Record<string, unknown> = {}
+    if (args.fecha !== undefined) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(args.fecha))) {
+        return { text: `Fecha inválida (usa YYYY-MM-DD): ${args.fecha}`, isError: true }
+      }
+      patch.date = args.fecha
+    }
+    if (args.horas !== undefined) {
+      const h = Number(args.horas)
+      if (!h || h <= 0) return { text: `Horas inválidas: ${args.horas}`, isError: true }
+      patch.hours = h
+    }
+    if (args.concepto !== undefined) patch.description = String(args.concepto).trim()
+    if (args.persona !== undefined) patch.person = String(args.persona).trim()
+    if (Object.keys(patch).length === 0) {
+      return { text: 'Indica al menos un campo a cambiar (fecha, horas, concepto o persona).', isError: true }
+    }
+    await ref.update(patch)
+    const updated = { ...current, ...patch } as typeof current & { date?: string }
+    return { text: `✓ Actualizada: ${updated.date}  ${updated.hours} h  ${updated.person}  ${updated.description || ''}` }
   }
 
   if (name === 'crear_proyecto') {
