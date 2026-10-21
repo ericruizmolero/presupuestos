@@ -219,7 +219,7 @@ const TOOLS = [
   },
   {
     name: 'anadir_nota',
-    description: 'Añade una nota (post-it) a un proyecto del tablero. Si el proyecto no existe en el tablero, se crea en el primer carril.',
+    description: 'Añade una nota (post-it) a un proyecto del tablero. Si el proyecto no existe en el tablero, se crea en el primer carril. Al volcar notas de una reunión, NO crear una nota-resumen: trocear en una nota por acción concreta, cada una con su "quien" (a quién le toca) y su "de" (quién estuvo en la reunión).',
     inputSchema: {
       type: 'object',
       properties: {
