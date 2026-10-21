@@ -113,7 +113,7 @@ if (has('tablero') || has('nota') || has('quitar-nota') || has('mover')) {
       for (const g of groups) {
         const chips = board.chips.filter((c) => c.group === g.name)
         console.log(`- ${g.name}${chips.length ? ':' : ' (sin notas)'}`)
-        chips.forEach((c) => console.log(`    · ${c.text}`))
+        chips.forEach((c) => console.log(`    · ${c.text}${c.who ? ` — ${c.who}` : ''}`))
       }
     }
     process.exit(0)
@@ -130,9 +130,10 @@ if (has('tablero') || has('nota') || has('quitar-nota') || has('mover')) {
       group = { name: flag('nota'), color: BOARD_COLORS[board.groups.length % BOARD_COLORS.length], status: board.lanes[0] }
       board.groups.push(group)
     }
-    board.chips.push({ group: group.name, text: texto })
+    const who = (flag('quien') || '').trim()
+    board.chips.push({ group: group.name, text: texto, ...(who ? { who } : {}) })
     await writeBoard(cid, board)
-    console.log(`✓ Nota en "${group.name}": ${texto}`)
+    console.log(`✓ Nota en "${group.name}": ${texto}${who ? ` — ${who}` : ''}`)
     process.exit(0)
   }
 

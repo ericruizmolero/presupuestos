@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
-import { getBoard, saveBoard, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
+import { getBoard, saveBoard, BOARD_COLORS, BOARD_PEOPLE, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
 import { Check, Plus, X, Trash2 } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -133,6 +133,24 @@ function ProyectosContent() {
     if (!text) return
     setBoard((b) => ({ ...b, chips: [...b.chips, { group, text }] }))
     setDrafts((d) => ({ ...d, [group]: '' }))
+  }
+
+  /** Rota la asignación de la nota: nadie → Eric → Andoni → Eric y Andoni → nadie */
+  function cycleWho(group: string, index: number) {
+    setBoard((b) => {
+      let seen = -1
+      return {
+        ...b,
+        chips: b.chips.map((c) => {
+          if (c.group !== group) return c
+          seen++
+          if (seen !== index) return c
+          const idx = c.who ? BOARD_PEOPLE.indexOf(c.who) : -1
+          const next = idx + 1 >= BOARD_PEOPLE.length ? undefined : BOARD_PEOPLE[idx + 1]
+          return { ...c, who: next }
+        }),
+      }
+    })
   }
 
   function removeChip(group: string, index: number) {
@@ -284,9 +302,18 @@ function ProyectosContent() {
                   {chips.map((c, i) => (
                     <span
                       key={`${c.text}-${i}`}
-                      className="group/chip inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-md text-sm text-ink border border-black/[0.06]"
+                      className="group/chip inline-flex items-center gap-1.5 pl-2 pr-2 py-1.5 rounded-md text-sm text-ink border border-black/[0.06]"
                       style={{ background: g.color }}
                     >
+                      <button
+                        onClick={() => cycleWho(g.name, i)}
+                        title={c.who ? c.who + ' — clic para cambiar' : 'Sin asignar — clic para asignar'}
+                        className={`shrink-0 text-[9px] font-medium uppercase tracking-wide rounded px-1 py-0.5 transition-colors ${
+                          c.who ? 'bg-black/10 text-ink' : 'bg-black/[0.04] text-ink-40'
+                        }`}
+                      >
+                        {c.who === 'Eric y Andoni' ? 'E+A' : c.who ? c.who.charAt(0) : '·'}
+                      </button>
                       {c.text}
                       <button
                         onClick={() => removeChip(g.name, i)}

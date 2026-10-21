@@ -129,7 +129,8 @@ const DEFAULT_LANES = ['Ahora', 'Luego', 'En espera']
 const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', espera: 'En espera' }
 
 interface BoardGroup { name: string; color: string; status?: string }
-interface BoardChip { group: string; text: string }
+interface BoardChip { group: string; text: string; who?: string }
+const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
 interface Board { lanes: string[]; groups: BoardGroup[]; chips: BoardChip[] }
 
 async function boardCompanyId(): Promise<string | null> {
@@ -186,7 +187,7 @@ function renderBoard(board: Board): string {
     for (const g of groups) {
       const chips = board.chips.filter((c) => c.group === g.name)
       lines.push(`- ${g.name}${chips.length ? ':' : ' (sin notas)'}`)
-      for (const c of chips) lines.push(`    · ${c.text}`)
+      for (const c of chips) lines.push(`    · ${c.text}${c.who ? ` — ${c.who}` : ''}`)
     }
   }
   return lines.join('\n')
@@ -224,8 +225,23 @@ const TOOLS = [
       properties: {
         proyecto: { type: 'string', description: 'Nombre del proyecto del tablero (acepta substring)' },
         texto: { type: 'string', description: 'Texto de la nota, corto' },
+        quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Quién lo lleva; omitir si no se sabe' },
       },
       required: ['proyecto', 'texto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'asignar_nota',
+    description: 'Asigna (o reasigna) una nota del tablero a Eric, Andoni o ambos. El texto se busca por coincidencia parcial dentro del proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyecto: { type: 'string', description: 'Proyecto del tablero (acepta substring)' },
+        texto: { type: 'string', description: 'Texto (o parte) de la nota' },
+        quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Nuevo responsable' },
+      },
+      required: ['proyecto', 'texto', 'quien'],
       additionalProperties: false,
     },
   },
@@ -349,7 +365,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
   }
 
-  if (name === 'ver_tablero' || name === 'anadir_nota' || name === 'quitar_nota' || name === 'mover_proyecto') {
+  if (name === 'ver_tablero' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto') {
     const cid = await boardCompanyId()
     if (!cid) return { text: 'No se pudo resolver la empresa (no hay proyectos de horas).', isError: true }
     const board = await readBoard(cid)
@@ -370,15 +386,16 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         board.groups.push(group)
         created = true
       }
-      board.chips.push({ group: group.name, text: texto })
+      const who = BOARD_PEOPLE.includes(String(args.quien)) ? String(args.quien) : undefined
+      board.chips.push({ group: group.name, text: texto, ...(who ? { who } : {}) })
       await writeBoard(cid, board)
-      return { text: `✓ Nota en "${group.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}: ${texto}` }
+      return { text: `✓ Nota en "${group.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}: ${texto}${who ? ` — ${who}` : ''}` }
     }
 
     const found = findBoardGroup(board, String(args.proyecto || ''))
     if (typeof found === 'string') return { text: found, isError: true }
 
-    if (name === 'quitar_nota') {
+    if (name === 'quitar_nota' || name === 'asignar_nota') {
       const needle = String(args.texto || '').trim().toLowerCase()
       const matches = board.chips.filter((c) => c.group === found.name && c.text.toLowerCase().includes(needle))
       if (matches.length === 0) {
@@ -387,6 +404,13 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       }
       if (matches.length > 1) {
         return { text: `"${args.texto}" coincide con varias notas de "${found.name}":\n${matches.map((c) => `- ${c.text}`).join('\n')}\nSé más específico.`, isError: true }
+      }
+      if (name === 'asignar_nota') {
+        const who = String(args.quien)
+        if (!BOARD_PEOPLE.includes(who)) return { text: `"quien" debe ser: ${BOARD_PEOPLE.join(', ')}`, isError: true }
+        board.chips = board.chips.map((c) => (c === matches[0] ? { ...c, who } : c))
+        await writeBoard(cid, board)
+        return { text: `✓ "${matches[0].text}" asignada a ${who}` }
       }
       board.chips = board.chips.filter((c) => c !== matches[0])
       await writeBoard(cid, board)

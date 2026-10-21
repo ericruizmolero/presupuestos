@@ -15,7 +15,10 @@ export interface BoardGroup {
 export interface BoardChip {
   group: string
   text: string
+  who?: string // 'Eric' | 'Andoni' | 'Eric y Andoni' | undefined (sin asignar)
 }
+
+export const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
 
 export interface Board {
   lanes: string[]
