@@ -128,7 +128,7 @@ const BOARD_COLORS = ['#FDE68A', '#BFDBFE', '#BBF7D0', '#FECACA', '#E9D5FF', '#F
 const DEFAULT_LANES = ['Ahora', 'Luego', 'En espera']
 const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', espera: 'En espera' }
 
-interface BoardGroup { name: string; color: string; status?: string; health?: string; statusNote?: string; statusDate?: string }
+interface BoardGroup { name: string; color: string; status?: string; owner?: string; health?: string; statusNote?: string; statusDate?: string }
 const HEALTH_ICON: Record<string, string> = { verde: '🟢', ambar: '🟡', rojo: '🔴' }
 interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string }
 const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
@@ -187,10 +187,15 @@ function renderBoard(board: Board): string {
     lines.push(`## ${lane}${groups.length === 0 ? ' (vacío)' : ''}`)
     for (const g of groups) {
       const chips = board.chips.filter((c) => c.group === g.name)
+      const owner = g.owner === 'Eric' || g.owner === 'Andoni' ? g.owner : 'Los dos'
       const health = g.health ? ` ${HEALTH_ICON[g.health] ?? ''}` : ''
       const status = g.statusNote ? ` — ${g.statusNote} (${g.statusDate ?? 's/f'})` : ''
-      lines.push(`- ${g.name}${health}${status}${chips.length ? ':' : ' (sin notas)'}`)
-      for (const c of chips) lines.push(`    · ${c.text}${c.who ? ` — ${c.who}` : ''}`)
+      lines.push(`- ${g.name} [${owner}]${health}${status}${chips.length ? ':' : ' (sin notas)'}`)
+      // etiqueta por nota solo si difiere del responsable del proyecto
+      for (const c of chips) {
+        const exception = c.who && c.who !== (g.owner ?? 'Eric y Andoni')
+        lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}`)
+      }
     }
   }
   return lines.join('\n')
@@ -228,7 +233,7 @@ const TOOLS = [
       properties: {
         proyecto: { type: 'string', description: 'Nombre del proyecto del tablero (acepta substring)' },
         texto: { type: 'string', description: 'Texto de la nota, corto' },
-        quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Quién lo lleva; omitir si no se sabe' },
+        quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Solo si difiere del responsable del proyecto; si no, omitir (la nota hereda el responsable)' },
         de: { type: 'string', enum: ['Eric', 'Andoni'], description: 'Quién lo apunta (p. ej. quien estuvo en la reunión); omitir si no se sabe' },
       },
       required: ['proyecto', 'texto'],
@@ -244,6 +249,7 @@ const TOOLS = [
         proyecto: { type: 'string', description: 'Proyecto del tablero (acepta substring)' },
         salud: { type: 'string', enum: ['verde', 'ambar', 'rojo'], description: 'Semáforo de salud' },
         nota: { type: 'string', description: 'Línea de estado, corta' },
+        responsable: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Quién lleva el proyecto' },
       },
       required: ['proyecto'],
       additionalProperties: false,
@@ -411,16 +417,22 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       const cutoff = new Date(todayISO() + 'T00:00:00')
       cutoff.setDate(cutoff.getDate() - dias)
       const cutoffISO = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`
+      const ownerOf = (gname: string) => board.groups.find((g) => g.name === gname)?.owner ?? 'Eric y Andoni'
       const recent = board.chips
         .filter((c) => c.date && c.date >= cutoffISO)
-        .filter((c) => !quien || !c.who || c.who === quien || c.who === 'Eric y Andoni')
+        .filter((c) => {
+          if (!quien) return true
+          const eff = c.who ?? ownerOf(c.group)
+          return eff === quien || eff === 'Eric y Andoni'
+        })
         .sort((a, b) => (b.date! > a.date! ? 1 : -1))
       if (recent.length === 0) {
         return { text: `Sin novedades en los últimos ${dias} días${quien ? ` para ${quien}` : ''}.` }
       }
-      const lines = recent.map((c) =>
-        `${c.date} · [${c.group}] ${c.text} — ${c.who ? (c.who === 'Eric y Andoni' ? 'los dos' : `para ${c.who}`) : 'sin asignar'}${c.by && c.by !== c.who ? ` (de ${c.by})` : ''}`
-      )
+      const lines = recent.map((c) => {
+        const eff = c.who ?? ownerOf(c.group)
+        return `${c.date} · [${c.group}] ${c.text} — ${eff === 'Eric y Andoni' ? 'los dos' : `para ${eff}`}${c.by && c.by !== eff ? ` (de ${c.by})` : ''}`
+      })
       return { text: lines.join('\n') }
     }
 
@@ -470,8 +482,9 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (name === 'estado_proyecto') {
       const salud = args.salud === 'verde' || args.salud === 'ambar' || args.salud === 'rojo' ? String(args.salud) : undefined
       const nota = args.nota !== undefined ? String(args.nota).trim() : undefined
-      if (!salud && nota === undefined) {
-        return { text: 'Indica "salud" y/o "nota".', isError: true }
+      const responsable = BOARD_PEOPLE.includes(String(args.responsable)) ? String(args.responsable) : undefined
+      if (!salud && nota === undefined && !responsable) {
+        return { text: 'Indica "salud", "nota" y/o "responsable".', isError: true }
       }
       board.groups = board.groups.map((g) =>
         g.name === found.name
@@ -479,12 +492,18 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
               ...g,
               ...(salud ? { health: salud } : {}),
               ...(nota !== undefined ? { statusNote: nota || undefined } : {}),
-              statusDate: todayISO(),
+              ...(responsable ? { owner: responsable } : {}),
+              ...(salud || nota !== undefined ? { statusDate: todayISO() } : {}),
             }
           : g
       )
       await writeBoard(cid, board)
-      return { text: `✓ Estado de "${found.name}": ${salud ? (HEALTH_ICON[salud] + ' ') : ''}${nota ?? '(nota sin cambios)'}` }
+      const parts = [
+        salud ? HEALTH_ICON[salud] : '',
+        nota !== undefined ? nota || '(nota borrada)' : '',
+        responsable ? `responsable: ${responsable}` : '',
+      ].filter(Boolean).join(' · ')
+      return { text: `✓ Estado de "${found.name}": ${parts}` }
     }
 
     // mover_proyecto

@@ -112,8 +112,12 @@ if (has('tablero') || has('nota') || has('quitar-nota') || has('mover')) {
       console.log(`## ${lane}${groups.length === 0 ? ' (vacío)' : ''}`)
       for (const g of groups) {
         const chips = board.chips.filter((c) => c.group === g.name)
-        console.log(`- ${g.name}${chips.length ? ':' : ' (sin notas)'}`)
-        chips.forEach((c) => console.log(`    · ${c.text}${c.who ? ` — ${c.who}` : ''}`))
+        const owner = g.owner === 'Eric' || g.owner === 'Andoni' ? g.owner : 'Los dos'
+        console.log(`- ${g.name} [${owner}]${chips.length ? ':' : ' (sin notas)'}`)
+        chips.forEach((c) => {
+          const exception = c.who && c.who !== (g.owner ?? 'Eric y Andoni')
+          console.log(`    · ${c.text}${exception ? ` — ${c.who}` : ''}`)
+        })
       }
     }
     process.exit(0)
