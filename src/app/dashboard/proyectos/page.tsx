@@ -642,7 +642,220 @@ function ProyectosContent() {
             )
           })}
         </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-4 items-start">
+          {board.lanes.map((lane, li) => {
+            const me = myName(user?.displayName, user?.email)
+            const laneGroups = board.groups.filter((g) => (g.status ?? board.lanes[0]) === lane)
+            return (
+              <section
+                key={li}
+                onDragOver={(e) => { if (dragProject) e.preventDefault() }}
+                onDrop={() => { if (dragProject) { setGroupStatus(dragProject, lane); setDragProject(null) } }}
+                className="min-w-[19rem] w-[19rem] shrink-0 rounded-md bg-surface border border-line p-3"
+              >
+                <div className="flex items-center gap-2 mb-3 group/lane">
+                  <input
+                    className={`text-[10px] font-medium tracking-[0.18em] uppercase bg-transparent outline-none flex-1 ${li === 0 ? 'text-ink' : 'text-ink-40'} focus:text-ink transition-colors`}
+                    value={lane}
+                    onChange={(e) => renameLane(lane, e.target.value)}
+                    title="Renombrar carril"
+                  />
+                  <span className="text-xs text-ink-40">{laneGroups.length}</span>
+                  {laneGroups.length === 0 && board.lanes.length > 1 && (
+                    <button
+                      onClick={() => deleteLane(lane)}
+                      className="opacity-0 group-hover/lane:opacity-100 text-ink-40 hover:text-[#DC2626] transition-all"
+                      title="Eliminar carril"
+                    >
+                      <Trash2 size={12} strokeWidth={1.5} />
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-3">
+                  {laneGroups.map((g) => {
+                    const gOwner = g.owner === 'Eric' || g.owner === 'Andoni' ? g.owner : 'Eric y Andoni'
+                    const groupChips = board.chips
+                      .map((c, i) => ({ c, i }))
+                      .filter(({ c }) => c.group === g.name)
+                    const groupHasMine = includesMe(gOwner, me) ||
+                      groupChips.some(({ c }) => includesMe(effectiveWho(c.who, gOwner), me))
+                    const dimGroup = onlyMine && !groupHasMine
+                    return (
+                      <div
+                        key={g.name}
+                        draggable
+                        onDragStart={() => setDragProject(g.name)}
+                        onDragEnd={() => setDragProject(null)}
+                        onDragOver={(e) => { if (dragChip !== null) { e.preventDefault(); setDragOverGroup(g.name) } }}
+                        onDragLeave={() => setDragOverGroup((k) => (k === g.name ? null : k))}
+                        onDrop={(e) => { if (dragChip !== null) { e.stopPropagation(); dropChip(g.name) } }}
+                        className={`group/header border border-line rounded-md bg-paper p-3 cursor-grab transition-opacity ${
+                          dragProject === g.name ? 'opacity-40' : dimGroup ? 'opacity-35' : ''
+                        } ${dragOverGroup === g.name && dragChip !== null ? 'bg-[color-mix(in_srgb,var(--color-accent)_6%,var(--color-paper))]' : ''}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => cycleColor(g.name)}
+                            title="Cambiar color"
+                            className="w-3 h-3 shrink-0 rounded-full border border-black/10 hover:scale-110 transition-transform"
+                            style={{ background: g.color }}
+                          />
+                          <p className="text-sm font-medium text-ink truncate flex-1">{g.name}</p>
+                          <button
+                            onClick={() => cycleOwner(g.name)}
+                            title="Responsable — clic para cambiar"
+                            className={`shrink-0 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider rounded transition-colors ${
+                              gOwner === 'Eric y Andoni'
+                                ? 'bg-surface text-ink-60 border border-line'
+                                : 'bg-accent text-on-accent'
+                            }`}
+                          >
+                            {ownerLabel(g.owner)}
+                          </button>
+                          {confirmDeleteGroup === g.name ? (
+                            <button
+                              onClick={() => deleteGroup(g.name)}
+                              onBlur={() => setConfirmDeleteGroup(null)}
+                              className="px-2 py-0.5 text-[10px] font-medium bg-[#DC2626] text-white rounded hover:bg-[#B91C1C] transition-colors shrink-0"
+                            >
+                              ¿Eliminar?
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmDeleteGroup(g.name)}
+                              className="opacity-0 group-hover/header:opacity-100 text-ink-40 hover:text-[#DC2626] transition-all shrink-0"
+                              title="Eliminar proyecto"
+                            >
+                              <Trash2 size={12} strokeWidth={1.5} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="mt-1.5 flex items-start gap-1.5">
+                          <button
+                            onClick={() => cycleHealth(g.name)}
+                            title={g.health ? HEALTH.find((h) => h.id === g.health)?.label : 'Salud — clic para marcar'}
+                            className="w-2.5 h-2.5 mt-0.5 shrink-0 rounded-full border transition-transform hover:scale-110"
+                            style={{
+                              background: HEALTH.find((h) => h.id === g.health)?.color ?? 'transparent',
+                              borderColor: g.health ? 'transparent' : 'var(--color-line)',
+                            }}
+                          />
+                          {editingStatus === g.name ? (
+                            <input
+                              autoFocus
+                              className="flex-1 text-xs border border-input rounded px-1.5 py-0.5 text-ink focus:outline-none focus:border-accent"
+                              value={statusDraft}
+                              onChange={(e) => setStatusDraft(e.target.value)}
+                              onBlur={() => saveStatusNote(g.name)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveStatusNote(g.name)
+                                if (e.key === 'Escape') setEditingStatus(null)
+                              }}
+                            />
+                          ) : (
+                            <button
+                              onClick={() => { setEditingStatus(g.name); setStatusDraft(g.statusNote || '') }}
+                              className={`text-left text-xs leading-snug transition-colors ${
+                                g.statusNote
+                                  ? (g.statusDate && g.statusDate < shiftDays(madridToday(), -14) ? 'text-ink-40' : 'text-ink-60') + ' hover:text-ink'
+                                  : 'text-ink-40 opacity-0 group-hover/header:opacity-100 hover:text-ink-60'
+                              }`}
+                            >
+                              {g.statusNote || 'estado…'}
+                            </button>
+                          )}
+                        </div>
+
+                        {groupChips.length > 0 && (
+                          <ul className="mt-2 pt-2 border-t border-line space-y-1">
+                            {groupChips.map(({ c, i }) => {
+                              const eff = effectiveWho(c.who, gOwner)
+                              const isException = !!c.who && c.who !== gOwner
+                              const dimNote = onlyMine && !includesMe(eff, me)
+                              return editingChip === i ? (
+                                <li key={i}>
+                                  <input
+                                    autoFocus
+                                    className="w-full px-2 py-1 text-sm border border-input rounded-md text-ink focus:outline-none focus:border-accent"
+                                    value={editText}
+                                    onChange={(e) => setEditText(e.target.value)}
+                                    onBlur={saveEditChip}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') saveEditChip()
+                                      if (e.key === 'Escape') setEditingChip(null)
+                                    }}
+                                  />
+                                </li>
+                              ) : (
+                                <li
+                                  key={i}
+                                  draggable
+                                  onDragStart={(e) => { e.stopPropagation(); setDragChip(i) }}
+                                  onDragEnd={() => { setDragChip(null); setDragOverGroup(null) }}
+                                  className={`group/chip flex items-start gap-1.5 text-sm cursor-grab select-none rounded px-1 -mx-1 transition-opacity hover:bg-surface ${
+                                    dragChip === i ? 'opacity-40' : dimNote ? 'opacity-35' : ''
+                                  }`}
+                                >
+                                  <span
+                                    onDoubleClick={() => startEditChip(i, c.text)}
+                                    title="Doble clic para editar · arrastra a otra tarjeta"
+                                    className="text-ink min-w-0 flex-1 leading-relaxed"
+                                  >
+                                    {c.text}
+                                  </span>
+                                  {isException && (
+                                    <button
+                                      onClick={() => cycleChipWho(i)}
+                                      title={`${c.who} — clic para cambiar`}
+                                      className="shrink-0 mt-0.5 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide rounded bg-black/10 text-ink"
+                                    >
+                                      {whoTag(c.who!)}
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => removeChip(i)}
+                                    className="shrink-0 mt-0.5 opacity-0 group-hover/chip:opacity-100 text-ink-40 hover:text-[#DC2626] transition-all"
+                                    title="Quitar (hecho)"
+                                  >
+                                    <X size={11} strokeWidth={2} />
+                                  </button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                        {addingGroup === g.name ? (
+                          <input
+                            autoFocus
+                            className="mt-2 px-2 py-1 text-sm border border-dashed border-input rounded-md bg-transparent text-ink placeholder-ink-40 focus:outline-none focus:border-accent w-full"
+                            placeholder="Nota…"
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onBlur={() => { addChip(g.name); setAddingGroup(null) }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') addChip(g.name)
+                              if (e.key === 'Escape') { setDraft(''); setAddingGroup(null) }
+                            }}
+                          />
+                        ) : (
+                          <button
+                            onClick={() => { setAddingGroup(g.name); setDraft('') }}
+                            className="mt-2 text-xs text-ink-40 hover:text-ink transition-colors"
+                          >
+                            + Añadir nota
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
+        </div>
       )}
+
       {/* Nuevo carril */}
       <div className="mt-12 pt-6 border-t border-line flex items-center gap-2">
         <input
