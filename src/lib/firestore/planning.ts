@@ -15,7 +15,16 @@ export interface BoardGroup {
 export interface BoardChip {
   group: string
   text: string
-  who?: string // 'Eric' | 'Andoni' | 'Eric y Andoni' | undefined (sin asignar)
+  who?: string  // 'Eric' | 'Andoni' | 'Eric y Andoni' | undefined (sin asignar)
+  date?: string // YYYY-MM-DD en que se apuntó (para "novedades")
+  by?: string   // quién la apuntó (puede diferir de who)
+}
+
+/** Fecha local de Madrid, YYYY-MM-DD */
+export function madridToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
 }
 
 export const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']

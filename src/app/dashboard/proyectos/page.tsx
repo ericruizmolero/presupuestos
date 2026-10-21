@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
-import { getBoard, saveBoard, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
+import { getBoard, saveBoard, madridToday, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
 import { Check, Plus, X, Trash2 } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -20,6 +20,22 @@ const COLUMNS = [
 function columnOf(who?: string): string {
   if (who === 'Eric' || who === 'Andoni') return who
   return 'Eric y Andoni'
+}
+
+/** El estudio son dos: con el hint de la cuenta basta */
+function myName(displayName?: string | null, email?: string | null): string {
+  const hint = `${displayName || ''} ${email || ''}`.toLowerCase()
+  return hint.includes('andoni') ? 'Andoni' : 'Eric'
+}
+
+const NOVEDADES_DIAS = 14
+
+function dayLabel(date: string, today: string): string {
+  if (date === today) return 'Hoy'
+  const d = new Date(date + 'T00:00:00')
+  const t = new Date(today + 'T00:00:00')
+  if (t.getTime() - d.getTime() === 86400000) return 'Ayer'
+  return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 export default function ProyectosPage() {
@@ -149,7 +165,8 @@ function ProyectosContent() {
   function addChip(group: string, who: string) {
     const text = draft.trim()
     if (!text) { setAddingCell(null); return }
-    setBoard((b) => ({ ...b, chips: [...b.chips, { group, text, who }] }))
+    const by = myName(user?.displayName, user?.email)
+    setBoard((b) => ({ ...b, chips: [...b.chips, { group, text, who, date: madridToday(), by }] }))
     setDraft('')
     // la celda sigue abierta para encadenar varias notas
   }
@@ -209,8 +226,41 @@ function ProyectosContent() {
         </div>
       </div>
       <p className="text-sm text-ink-40 mb-8">
-        Quién está con qué: doble clic edita una nota, arrástrala a otra columna o proyecto para reasignarla.
+        El tablón del estudio: qué hay nuevo y quién está con qué. Doble clic edita una nota; arrástrala a otra columna o proyecto para reasignarla.
       </p>
+
+      {/* Novedades: lo último que ha entrado, por fecha */}
+      {(() => {
+        const today = madridToday()
+        const cutoff = new Date(today + 'T00:00:00')
+        cutoff.setDate(cutoff.getDate() - NOVEDADES_DIAS)
+        const cutoffISO = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`
+        const recent = board.chips
+          .map((c, i) => ({ c, i }))
+          .filter(({ c }) => c.date && c.date >= cutoffISO)
+          .sort((a, b) => (b.c.date! > a.c.date! ? 1 : b.c.date! < a.c.date! ? -1 : b.i - a.i))
+        if (recent.length === 0) return null
+        const colorOf = (gname: string) => board.groups.find((g) => g.name === gname)?.color ?? '#eee'
+        return (
+          <div className="border border-line rounded-md p-4 bg-surface mb-10">
+            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">Novedades</p>
+            <div className="space-y-1.5">
+              {recent.map(({ c, i }) => (
+                <div key={i} className="flex items-baseline gap-2 text-sm">
+                  <span className="text-xs text-ink-40 w-24 shrink-0">{dayLabel(c.date!, today)}</span>
+                  <span className="w-2 h-2 rounded-full shrink-0 self-center" style={{ background: colorOf(c.group) }} />
+                  <span className="text-ink-60 shrink-0 font-medium">{c.group}</span>
+                  <span className="text-ink min-w-0">{c.text}</span>
+                  <span className="text-xs text-ink-40 shrink-0 ml-auto whitespace-nowrap">
+                    {c.who ? (c.who === 'Eric y Andoni' ? 'los dos' : `para ${c.who}`) : 'sin asignar'}
+                    {c.by && c.by !== c.who ? ` · de ${c.by}` : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Nuevo proyecto */}
       <div className="flex items-center gap-3 mb-10">

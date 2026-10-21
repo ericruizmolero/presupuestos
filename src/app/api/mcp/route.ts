@@ -129,7 +129,7 @@ const DEFAULT_LANES = ['Ahora', 'Luego', 'En espera']
 const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', espera: 'En espera' }
 
 interface BoardGroup { name: string; color: string; status?: string }
-interface BoardChip { group: string; text: string; who?: string }
+interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string }
 const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
 interface Board { lanes: string[]; groups: BoardGroup[]; chips: BoardChip[] }
 
@@ -226,8 +226,21 @@ const TOOLS = [
         proyecto: { type: 'string', description: 'Nombre del proyecto del tablero (acepta substring)' },
         texto: { type: 'string', description: 'Texto de la nota, corto' },
         quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Quién lo lleva; omitir si no se sabe' },
+        de: { type: 'string', enum: ['Eric', 'Andoni'], description: 'Quién lo apunta (p. ej. quien estuvo en la reunión); omitir si no se sabe' },
       },
       required: ['proyecto', 'texto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'novedades',
+    description: 'Qué hay nuevo en el tablón del estudio: notas recientes por fecha, con proyecto y a quién le toca. Responde a "¿qué ha pasado?", "¿qué tengo que hacer yo?", "ponme al día".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        dias: { type: 'number', description: 'Ventana en días (default 7)' },
+        quien: { type: 'string', enum: ['Eric', 'Andoni'], description: 'Filtrar a lo que le toca a esta persona (incluye lo de los dos y lo sin asignar)' },
+      },
       additionalProperties: false,
     },
   },
@@ -365,7 +378,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
   }
 
-  if (name === 'ver_tablero' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto') {
+  if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto') {
     const cid = await boardCompanyId()
     if (!cid) return { text: 'No se pudo resolver la empresa (no hay proyectos de horas).', isError: true }
     const board = await readBoard(cid)
@@ -373,6 +386,25 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (name === 'ver_tablero') {
       if (board.groups.length === 0) return { text: 'El tablero está vacío.' }
       return { text: renderBoard(board) }
+    }
+
+    if (name === 'novedades') {
+      const dias = typeof args.dias === 'number' && args.dias > 0 ? args.dias : 7
+      const quien = args.quien === 'Eric' || args.quien === 'Andoni' ? args.quien : null
+      const cutoff = new Date(todayISO() + 'T00:00:00')
+      cutoff.setDate(cutoff.getDate() - dias)
+      const cutoffISO = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`
+      const recent = board.chips
+        .filter((c) => c.date && c.date >= cutoffISO)
+        .filter((c) => !quien || !c.who || c.who === quien || c.who === 'Eric y Andoni')
+        .sort((a, b) => (b.date! > a.date! ? 1 : -1))
+      if (recent.length === 0) {
+        return { text: `Sin novedades en los últimos ${dias} días${quien ? ` para ${quien}` : ''}.` }
+      }
+      const lines = recent.map((c) =>
+        `${c.date} · [${c.group}] ${c.text} — ${c.who ? (c.who === 'Eric y Andoni' ? 'los dos' : `para ${c.who}`) : 'sin asignar'}${c.by && c.by !== c.who ? ` (de ${c.by})` : ''}`
+      )
+      return { text: lines.join('\n') }
     }
 
     if (name === 'anadir_nota') {
@@ -387,7 +419,8 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         created = true
       }
       const who = BOARD_PEOPLE.includes(String(args.quien)) ? String(args.quien) : undefined
-      board.chips.push({ group: group.name, text: texto, ...(who ? { who } : {}) })
+      const by = args.de === 'Eric' || args.de === 'Andoni' ? String(args.de) : undefined
+      board.chips.push({ group: group.name, text: texto, date: todayISO(), ...(who ? { who } : {}), ...(by ? { by } : {}) })
       await writeBoard(cid, board)
       return { text: `✓ Nota en "${group.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}: ${texto}${who ? ` — ${who}` : ''}` }
     }

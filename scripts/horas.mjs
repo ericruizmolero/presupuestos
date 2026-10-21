@@ -131,7 +131,8 @@ if (has('tablero') || has('nota') || has('quitar-nota') || has('mover')) {
       board.groups.push(group)
     }
     const who = (flag('quien') || '').trim()
-    board.chips.push({ group: group.name, text: texto, ...(who ? { who } : {}) })
+    const by = (flag('de') || '').trim()
+    board.chips.push({ group: group.name, text: texto, date: todayISO(), ...(who ? { who } : {}), ...(by ? { by } : {}) })
     await writeBoard(cid, board)
     console.log(`✓ Nota en "${group.name}": ${texto}${who ? ` — ${who}` : ''}`)
     process.exit(0)
