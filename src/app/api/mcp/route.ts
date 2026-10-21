@@ -123,6 +123,75 @@ async function clientMetaFromQuotes(clientNeedle: string) {
   }
 }
 
+// ── Tablero de proyectos (post-its) ───────────────────────────────────────────
+const BOARD_COLORS = ['#FDE68A', '#BFDBFE', '#BBF7D0', '#FECACA', '#E9D5FF', '#FED7AA', '#99F6E4', '#F5D0FE']
+const DEFAULT_LANES = ['Ahora', 'Luego', 'En espera']
+const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', espera: 'En espera' }
+
+interface BoardGroup { name: string; color: string; status?: string }
+interface BoardChip { group: string; text: string }
+interface Board { lanes: string[]; groups: BoardGroup[]; chips: BoardChip[] }
+
+async function boardCompanyId(): Promise<string | null> {
+  const snap = await db().collection('timeProjects').limit(1).get()
+  return (snap.docs[0]?.data()?.companyId as string) || null
+}
+
+/** Lee el tablero aplicando la misma migración de formato que la web */
+async function readBoard(companyId: string): Promise<Board> {
+  const snap = await db().collection('planning').doc(companyId).get()
+  if (!snap.exists) return { lanes: [...DEFAULT_LANES], groups: [], chips: [] }
+  const data = snap.data() as Record<string, unknown>
+  if (data.groups || data.chips) {
+    const lanes = (data.lanes as string[])?.length ? (data.lanes as string[]) : [...DEFAULT_LANES]
+    const groups = ((data.groups ?? []) as BoardGroup[]).map((g) => {
+      const status = LEGACY_STATUS[g.status ?? ''] ?? g.status
+      return { ...g, status: status && lanes.includes(status) ? status : lanes[0] }
+    })
+    return { lanes, groups, chips: (data.chips ?? []) as BoardChip[] }
+  }
+  const entries = (data.entries as Array<{ group?: string; phase?: string }>) ?? []
+  const names = [...new Set(entries.map((e) => e.group || '').filter(Boolean))]
+  return {
+    lanes: [...DEFAULT_LANES],
+    groups: names.map((name, i) => ({ name, color: BOARD_COLORS[i % BOARD_COLORS.length], status: DEFAULT_LANES[0] })),
+    chips: entries.filter((e) => (e.phase || '').trim()).map((e) => ({ group: e.group || '', text: (e.phase || '').trim() })),
+  }
+}
+
+async function writeBoard(companyId: string, board: Board) {
+  await db().collection('planning').doc(companyId).set({
+    lanes: board.lanes,
+    groups: board.groups,
+    chips: board.chips,
+    updatedAt: FieldValue.serverTimestamp(),
+  })
+}
+
+function findBoardGroup(board: Board, needle: string): BoardGroup | string {
+  const n = needle.toLowerCase()
+  const matches = board.groups.filter((g) => g.name.toLowerCase().includes(n))
+  if (matches.length === 1) return matches[0]
+  const list = board.groups.map((g) => `- ${g.name}`).join('\n') || '(tablero vacío)'
+  return matches.length === 0
+    ? `Ningún proyecto del tablero coincide con "${needle}". Proyectos:\n${list}`
+    : `"${needle}" es ambiguo en el tablero. Proyectos:\n${list}`
+}
+
+function renderBoard(board: Board): string {
+  const lines: string[] = []
+  for (const lane of board.lanes) {
+    const groups = board.groups.filter((g) => (g.status ?? board.lanes[0]) === lane)
+    lines.push(`## ${lane}${groups.length === 0 ? ' (vacío)' : ''}`)
+    for (const g of groups) {
+      const chips = board.chips.filter((c) => c.group === g.name)
+      lines.push(`- ${g.name}${chips.length ? ':' : ' (sin notas)'}`)
+      for (const c of chips) lines.push(`    · ${c.text}`)
+    }
+  }
+  return lines.join('\n')
+}
+
 // ── Tools ─────────────────────────────────────────────────────────────────────
 const TOOLS = [
   {
@@ -139,6 +208,50 @@ const TOOLS = [
         proyecto: { type: 'string', description: 'Nombre, cliente o slug del proyecto (acepta substring, p. ej. "vidflare")' },
       },
       required: ['proyecto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ver_tablero',
+    description: 'Muestra el tablero de proyectos (sección Proyectos de la app): carriles de prioridad con los proyectos activos y las notas de lo que se está haciendo en cada uno. Úsalo para responder "¿en qué estamos?".',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'anadir_nota',
+    description: 'Añade una nota (post-it) a un proyecto del tablero. Si el proyecto no existe en el tablero, se crea en el primer carril.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyecto: { type: 'string', description: 'Nombre del proyecto del tablero (acepta substring)' },
+        texto: { type: 'string', description: 'Texto de la nota, corto' },
+      },
+      required: ['proyecto', 'texto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'quitar_nota',
+    description: 'Quita una nota del tablero (p. ej. al terminarla). El texto se busca por coincidencia parcial dentro del proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyecto: { type: 'string', description: 'Proyecto del tablero (acepta substring)' },
+        texto: { type: 'string', description: 'Texto (o parte) de la nota a quitar' },
+      },
+      required: ['proyecto', 'texto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'mover_proyecto',
+    description: 'Mueve un proyecto del tablero a otro carril de prioridad (p. ej. de "Luego" a "Ahora").',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyecto: { type: 'string', description: 'Proyecto del tablero (acepta substring)' },
+        carril: { type: 'string', description: 'Carril destino (acepta substring, p. ej. "espera")' },
+      },
+      required: ['proyecto', 'carril'],
       additionalProperties: false,
     },
   },
@@ -234,6 +347,61 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const rows = entries.map((e) => `[${e.id}] ${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
     const amount = found.hourlyRate ? ` · ${(total * found.hourlyRate).toFixed(2)} € (a ${found.hourlyRate} €/h)` : ''
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
+  }
+
+  if (name === 'ver_tablero' || name === 'anadir_nota' || name === 'quitar_nota' || name === 'mover_proyecto') {
+    const cid = await boardCompanyId()
+    if (!cid) return { text: 'No se pudo resolver la empresa (no hay proyectos de horas).', isError: true }
+    const board = await readBoard(cid)
+
+    if (name === 'ver_tablero') {
+      if (board.groups.length === 0) return { text: 'El tablero está vacío.' }
+      return { text: renderBoard(board) }
+    }
+
+    if (name === 'anadir_nota') {
+      const texto = String(args.texto || '').trim()
+      if (!texto) return { text: 'Falta "texto".', isError: true }
+      const needle = String(args.proyecto || '').trim()
+      let group = board.groups.find((g) => g.name.toLowerCase().includes(needle.toLowerCase()))
+      let created = false
+      if (!group) {
+        group = { name: needle, color: BOARD_COLORS[board.groups.length % BOARD_COLORS.length], status: board.lanes[0] }
+        board.groups.push(group)
+        created = true
+      }
+      board.chips.push({ group: group.name, text: texto })
+      await writeBoard(cid, board)
+      return { text: `✓ Nota en "${group.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}: ${texto}` }
+    }
+
+    const found = findBoardGroup(board, String(args.proyecto || ''))
+    if (typeof found === 'string') return { text: found, isError: true }
+
+    if (name === 'quitar_nota') {
+      const needle = String(args.texto || '').trim().toLowerCase()
+      const matches = board.chips.filter((c) => c.group === found.name && c.text.toLowerCase().includes(needle))
+      if (matches.length === 0) {
+        const list = board.chips.filter((c) => c.group === found.name).map((c) => `- ${c.text}`).join('\n') || '(sin notas)'
+        return { text: `Ninguna nota de "${found.name}" contiene "${args.texto}". Notas:\n${list}`, isError: true }
+      }
+      if (matches.length > 1) {
+        return { text: `"${args.texto}" coincide con varias notas de "${found.name}":\n${matches.map((c) => `- ${c.text}`).join('\n')}\nSé más específico.`, isError: true }
+      }
+      board.chips = board.chips.filter((c) => c !== matches[0])
+      await writeBoard(cid, board)
+      return { text: `✓ Quitada de "${found.name}": ${matches[0].text}` }
+    }
+
+    // mover_proyecto
+    const laneNeedle = String(args.carril || '').trim().toLowerCase()
+    const lanes = board.lanes.filter((l) => l.toLowerCase().includes(laneNeedle))
+    if (lanes.length !== 1) {
+      return { text: `Carril "${args.carril}" ${lanes.length === 0 ? 'no existe' : 'es ambiguo'}. Carriles: ${board.lanes.join(', ')}`, isError: true }
+    }
+    board.groups = board.groups.map((g) => (g.name === found.name ? { ...g, status: lanes[0] } : g))
+    await writeBoard(cid, board)
+    return { text: `✓ "${found.name}" movido a ${lanes[0]}` }
   }
 
   if (name === 'editar_entrada' || name === 'borrar_entrada') {

@@ -73,6 +73,94 @@ async function findProject(needle) {
   return matches[0]
 }
 
+// ── Tablero de proyectos (post-its) ───────────────────────────────────────────
+const BOARD_COLORS = ['#FDE68A', '#BFDBFE', '#BBF7D0', '#FECACA', '#E9D5FF', '#FED7AA', '#99F6E4', '#F5D0FE']
+const DEFAULT_LANES = ['Ahora', 'Luego', 'En espera']
+
+async function boardCompanyId() {
+  const snap = await db.collection('timeProjects').limit(1).get()
+  return snap.docs[0]?.data()?.companyId || null
+}
+
+const LEGACY_STATUS = { ahora: 'Ahora', luego: 'Luego', espera: 'En espera' }
+
+async function readBoard(cid) {
+  const snap = await db.collection('planning').doc(cid).get()
+  if (!snap.exists) return { lanes: [...DEFAULT_LANES], groups: [], chips: [] }
+  const data = snap.data()
+  const lanes = data.lanes?.length ? data.lanes : [...DEFAULT_LANES]
+  const groups = (data.groups ?? []).map((g) => {
+    const status = LEGACY_STATUS[g.status ?? ''] ?? g.status
+    return { ...g, status: status && lanes.includes(status) ? status : lanes[0] }
+  })
+  return { lanes, groups, chips: data.chips ?? [] }
+}
+
+async function writeBoard(cid, board) {
+  const { FieldValue } = await import('firebase-admin/firestore')
+  await db.collection('planning').doc(cid).set({ ...board, updatedAt: FieldValue.serverTimestamp() })
+}
+
+if (has('tablero') || has('nota') || has('quitar-nota') || has('mover')) {
+  const cid = await boardCompanyId()
+  if (!cid) { console.error('✗ No se pudo resolver la empresa'); process.exit(1) }
+  const board = await readBoard(cid)
+
+  if (has('tablero')) {
+    for (const lane of board.lanes) {
+      const groups = board.groups.filter((g) => (g.status ?? board.lanes[0]) === lane)
+      console.log(`## ${lane}${groups.length === 0 ? ' (vacío)' : ''}`)
+      for (const g of groups) {
+        const chips = board.chips.filter((c) => c.group === g.name)
+        console.log(`- ${g.name}${chips.length ? ':' : ' (sin notas)'}`)
+        chips.forEach((c) => console.log(`    · ${c.text}`))
+      }
+    }
+    process.exit(0)
+  }
+
+  const needle = (flag('nota') ?? flag('quitar-nota') ?? flag('mover') ?? '').toLowerCase()
+  // Para estos tres, el valor del flag es el proyecto; el texto/carril va en --texto / --carril
+  let group = board.groups.find((g) => g.name.toLowerCase().includes(needle))
+
+  if (has('nota')) {
+    const texto = (flag('texto') || '').trim()
+    if (!texto) { console.error('✗ Falta --texto'); process.exit(1) }
+    if (!group) {
+      group = { name: flag('nota'), color: BOARD_COLORS[board.groups.length % BOARD_COLORS.length], status: board.lanes[0] }
+      board.groups.push(group)
+    }
+    board.chips.push({ group: group.name, text: texto })
+    await writeBoard(cid, board)
+    console.log(`✓ Nota en "${group.name}": ${texto}`)
+    process.exit(0)
+  }
+
+  if (!group) { console.error(`✗ Proyecto no encontrado en el tablero: ${needle}`); process.exit(1) }
+
+  if (has('quitar-nota')) {
+    const t = (flag('texto') || '').trim().toLowerCase()
+    const matches = board.chips.filter((c) => c.group === group.name && c.text.toLowerCase().includes(t))
+    if (matches.length !== 1) {
+      console.error(matches.length === 0 ? '✗ Ninguna nota coincide' : '✗ Varias notas coinciden, sé más específico')
+      process.exit(1)
+    }
+    board.chips = board.chips.filter((c) => c !== matches[0])
+    await writeBoard(cid, board)
+    console.log(`✓ Quitada de "${group.name}": ${matches[0].text}`)
+    process.exit(0)
+  }
+
+  // --mover
+  const laneNeedle = (flag('carril') || '').trim().toLowerCase()
+  const lanes = board.lanes.filter((l) => l.toLowerCase().includes(laneNeedle))
+  if (lanes.length !== 1) { console.error(`✗ Carril inválido. Carriles: ${board.lanes.join(', ')}`); process.exit(1) }
+  board.groups = board.groups.map((g) => (g.name === group.name ? { ...g, status: lanes[0] } : g))
+  await writeBoard(cid, board)
+  console.log(`✓ "${group.name}" movido a ${lanes[0]}`)
+  process.exit(0)
+}
+
 // ── Comandos ──────────────────────────────────────────────────────────────────
 if (has('list')) {
   const projects = await getProjects()

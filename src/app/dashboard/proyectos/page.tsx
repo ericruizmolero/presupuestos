@@ -225,13 +225,13 @@ function ProyectosContent() {
                 {laneGroups.length === 0 && (
                   <p className="text-xs text-ink-40 -mt-2">Sin proyectos</p>
                 )}
-                <div className="space-y-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {laneGroups.map((g) => {
             const chips = board.chips.filter((c) => c.group === g.name)
             return (
-              <div key={g.name}>
+              <div key={g.name} className="border border-line rounded-md p-4 bg-paper">
                 {/* Group header */}
-                <div className="flex items-center gap-2.5 mb-3 group/header">
+                <div className="flex items-center gap-2.5 mb-3 group/header flex-wrap">
                   <button
                     onClick={() => cycleColor(g.name)}
                     title="Cambiar color"
@@ -298,7 +298,7 @@ function ProyectosContent() {
                     </span>
                   ))}
                   <input
-                    className="px-3 py-1.5 text-sm border border-dashed border-line rounded-md bg-transparent text-ink placeholder-ink-40 focus:outline-none focus:border-input transition-colors w-44"
+                    className="px-3 py-1.5 text-sm border border-dashed border-line rounded-md bg-transparent text-ink placeholder-ink-40 focus:outline-none focus:border-input transition-colors flex-1 min-w-[7rem]"
                     placeholder="Añadir…"
                     value={drafts[g.name] || ''}
                     onChange={(e) => setDrafts((d) => ({ ...d, [g.name]: e.target.value }))}

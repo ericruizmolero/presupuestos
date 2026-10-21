@@ -342,7 +342,8 @@ function ClaudeConnectorHelp() {
             </li>
           </ol>
           <p>
-            Claude podrá listar proyectos, ver registros, apuntar horas y crear proyectos nuevos.
+            Claude podrá listar proyectos, ver registros, apuntar horas, crear proyectos nuevos,
+            y ver y actualizar el tablero de <span className="text-ink">Proyectos</span> (notas, carriles).
             Si no dices lo contrario, apunta con la fecha de hoy y a nombre de “Eric y Andoni”.
           </p>
         </div>
