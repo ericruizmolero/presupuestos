@@ -84,6 +84,18 @@ function ProyectosContent() {
   const [dragChip, setDragChip] = useState<number | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
   const [onlyMine, setOnlyMine] = useState(false)
+  const [dragProject, setDragProject] = useState<string | null>(null)
+  const [view, setView] = useState<'lista' | 'tablero'>('lista')
+
+  // Preferencia de vista por navegador
+  useEffect(() => {
+    const saved = window.localStorage.getItem('proyectos-view')
+    if (saved === 'tablero' || saved === 'lista') setView(saved)
+  }, [])
+  function switchView(v: 'lista' | 'tablero') {
+    setView(v)
+    window.localStorage.setItem('proyectos-view', v)
+  }
 
   const isFirstRender = useRef(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -370,9 +382,22 @@ function ProyectosContent() {
         </button>
       </div>
 
-      {/* Filtro "solo lo mío" */}
+      {/* Vista + filtro */}
       {board.groups.length > 0 && (
-        <div className="flex items-center justify-end mb-4">
+        <div className="flex items-center justify-end gap-2 mb-4">
+          <div className="flex items-center border border-line rounded-md overflow-hidden">
+            {(['lista', 'tablero'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => switchView(v)}
+                className={`px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition-colors ${
+                  view === v ? 'bg-accent text-on-accent' : 'text-ink-40 hover:bg-surface-hover hover:text-ink-60'
+                }`}
+              >
+                {v === 'lista' ? 'Lista' : 'Tablero'}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setOnlyMine((v) => !v)}
             className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
@@ -388,7 +413,7 @@ function ProyectosContent() {
         <p className="text-sm text-ink-40 text-center py-6 border border-line rounded-md">
           Crea un proyecto y empieza a soltar notas
         </p>
-      ) : (
+      ) : view === 'lista' ? (
         <div className="space-y-10">
           {board.lanes.map((lane, li) => {
             const me = myName(user?.displayName, user?.email)
@@ -551,7 +576,7 @@ function ProyectosContent() {
                                 <li
                                   key={i}
                                   draggable
-                                  onDragStart={() => setDragChip(i)}
+                                  onDragStart={(e) => { e.stopPropagation(); setDragChip(i) }}
                                   onDragEnd={() => { setDragChip(null); setDragOverGroup(null) }}
                                   className={`group/chip flex items-start gap-2 text-sm cursor-grab select-none rounded px-1 -mx-1 transition-opacity hover:bg-surface ${
                                     dragChip === i ? 'opacity-40' : dimNote ? 'opacity-35' : ''
