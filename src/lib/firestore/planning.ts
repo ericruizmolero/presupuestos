@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
 
@@ -10,6 +10,9 @@ export interface BoardGroup {
   name: string
   color: string // hex
   status?: string // nombre del carril; default: el primero
+  health?: 'verde' | 'ambar' | 'rojo' // semáforo de salud del proyecto
+  statusNote?: string  // última línea de estado ("esperando feedback del cliente")
+  statusDate?: string  // YYYY-MM-DD de la última actualización de estado
 }
 
 export interface BoardChip {
@@ -79,6 +82,20 @@ export async function getBoard(companyId: string): Promise<Board> {
     chips: entries
       .filter((e) => (e.phase || '').trim())
       .map((e) => ({ group: e.group || '', text: (e.phase || '').trim() })),
+  }
+}
+
+/** Última visita al tablón por usuario (para "novedades desde tu última visita") */
+export async function getBoardLastSeen(userId: string): Promise<string | null> {
+  const snap = await getDoc(doc(db, 'users', userId))
+  return snap.exists() ? ((snap.data().boardLastSeen as string) ?? null) : null
+}
+
+export async function setBoardLastSeen(userId: string, date: string) {
+  try {
+    await updateDoc(doc(db, 'users', userId), { boardLastSeen: date })
+  } catch {
+    // el doc users siempre existe para usuarios activos; si no, no es crítico
   }
 }
 

@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
-import { getBoard, saveBoard, madridToday, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
+import { getBoard, saveBoard, getBoardLastSeen, setBoardLastSeen, madridToday, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
 import { Check, Plus, X, Trash2 } from 'lucide-react'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -28,7 +28,19 @@ function myName(displayName?: string | null, email?: string | null): string {
   return hint.includes('andoni') ? 'Andoni' : 'Eric'
 }
 
-const NOVEDADES_DIAS = 14
+const NOVEDADES_DIAS_MAX = 30 // tope aunque lleves más sin entrar
+
+const HEALTH: Array<{ id: 'verde' | 'ambar' | 'rojo'; color: string; label: string }> = [
+  { id: 'verde', color: '#16A34A', label: 'En orden' },
+  { id: 'ambar', color: '#D97706', label: 'Atención' },
+  { id: 'rojo', color: '#DC2626', label: 'En riesgo' },
+]
+
+function shiftDays(iso: string, days: number): string {
+  const d = new Date(iso + 'T00:00:00')
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function dayLabel(date: string, today: string): string {
   if (date === today) return 'Hoy'
@@ -70,13 +82,19 @@ function ProyectosContent() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [lastSeen, setLastSeen] = useState<string | null>(null)
+
   useEffect(() => {
     if (!user) return
     getUserCompanyId(user.uid).then(async (cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-      setBoard(await getBoard(cid))
+      const [b, seen] = await Promise.all([getBoard(cid), getBoardLastSeen(user.uid)])
+      setBoard(b)
+      setLastSeen(seen)
       setLoading(false)
+      // marcar la visita (el feed de esta sesión usa el valor anterior)
+      setBoardLastSeen(user.uid, madridToday())
     })
   }, [user])
 
@@ -123,6 +141,33 @@ function ProyectosContent() {
 
   function setGroupStatus(name: string, status: string) {
     setBoard((b) => ({ ...b, groups: b.groups.map((g) => (g.name === name ? { ...g, status } : g)) }))
+  }
+
+  /** Rota la salud del proyecto: nada → verde → ámbar → rojo → nada */
+  function cycleHealth(name: string) {
+    setBoard((b) => ({
+      ...b,
+      groups: b.groups.map((g) => {
+        if (g.name !== name) return g
+        const idx = HEALTH.findIndex((h) => h.id === g.health)
+        const next = idx + 1 >= HEALTH.length ? undefined : HEALTH[idx + 1].id
+        return { ...g, health: next, statusDate: madridToday() }
+      }),
+    }))
+  }
+
+  const [editingStatus, setEditingStatus] = useState<string | null>(null)
+  const [statusDraft, setStatusDraft] = useState('')
+
+  function saveStatusNote(name: string) {
+    const note = statusDraft.trim()
+    setBoard((b) => ({
+      ...b,
+      groups: b.groups.map((g) =>
+        g.name === name ? { ...g, statusNote: note || undefined, statusDate: madridToday() } : g
+      ),
+    }))
+    setEditingStatus(null)
   }
 
   function deleteGroup(name: string) {
@@ -229,34 +274,40 @@ function ProyectosContent() {
         El tablón del estudio: qué hay nuevo y quién está con qué. Doble clic edita una nota; arrástrala a otra columna o proyecto para reasignarla.
       </p>
 
-      {/* Novedades: lo último que ha entrado, por fecha */}
+      {/* Novedades desde tu última visita */}
       {(() => {
         const today = madridToday()
-        const cutoff = new Date(today + 'T00:00:00')
-        cutoff.setDate(cutoff.getDate() - NOVEDADES_DIAS)
-        const cutoffISO = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`
+        const me = myName(user?.displayName, user?.email)
+        const floor = shiftDays(today, -NOVEDADES_DIAS_MAX)
+        const cutoffISO = lastSeen && lastSeen > floor ? lastSeen : floor
         const recent = board.chips
           .map((c, i) => ({ c, i }))
           .filter(({ c }) => c.date && c.date >= cutoffISO)
           .sort((a, b) => (b.c.date! > a.c.date! ? 1 : b.c.date! < a.c.date! ? -1 : b.i - a.i))
         if (recent.length === 0) return null
         const colorOf = (gname: string) => board.groups.find((g) => g.name === gname)?.color ?? '#eee'
+        const header = lastSeen && lastSeen > floor
+          ? `Desde tu última visita (${dayLabel(lastSeen, today).toLowerCase()})`
+          : 'Novedades'
         return (
           <div className="border border-line rounded-md p-4 bg-surface mb-10">
-            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">Novedades</p>
+            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">{header}</p>
             <div className="space-y-1.5">
-              {recent.map(({ c, i }) => (
-                <div key={i} className="flex items-baseline gap-2 text-sm">
-                  <span className="text-xs text-ink-40 w-24 shrink-0">{dayLabel(c.date!, today)}</span>
-                  <span className="w-2 h-2 rounded-full shrink-0 self-center" style={{ background: colorOf(c.group) }} />
-                  <span className="text-ink-60 shrink-0 font-medium">{c.group}</span>
-                  <span className="text-ink min-w-0">{c.text}</span>
-                  <span className="text-xs text-ink-40 shrink-0 ml-auto whitespace-nowrap">
-                    {c.who ? (c.who === 'Eric y Andoni' ? 'los dos' : `para ${c.who}`) : 'sin asignar'}
-                    {c.by && c.by !== c.who ? ` · de ${c.by}` : ''}
-                  </span>
-                </div>
-              ))}
+              {recent.map(({ c, i }) => {
+                const mine = c.who === me || c.who === 'Eric y Andoni' || !c.who
+                return (
+                  <div key={i} className={`flex items-baseline gap-2 text-sm ${mine ? '' : 'opacity-55'}`}>
+                    <span className="text-xs text-ink-40 w-24 shrink-0">{dayLabel(c.date!, today)}</span>
+                    <span className="w-2 h-2 rounded-full shrink-0 self-center" style={{ background: colorOf(c.group) }} />
+                    <span className="text-ink-60 shrink-0 font-medium">{c.group}</span>
+                    <span className="text-ink min-w-0">{c.text}</span>
+                    <span className={`text-xs shrink-0 ml-auto whitespace-nowrap ${c.who === me ? 'text-ink font-medium' : 'text-ink-40'}`}>
+                      {c.who ? (c.who === 'Eric y Andoni' ? 'los dos' : c.who === me ? 'para ti' : `para ${c.who}`) : 'sin asignar'}
+                      {c.by && c.by !== c.who ? ` · de ${c.by}` : ''}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )
@@ -339,6 +390,43 @@ function ProyectosContent() {
                           >
                             {board.lanes.map((l) => <option key={l} value={l}>{l}</option>)}
                           </select>
+                          {/* Salud + estado */}
+                          <div className="mt-1.5 flex items-start gap-1.5">
+                            <button
+                              onClick={() => cycleHealth(g.name)}
+                              title={g.health ? HEALTH.find((h) => h.id === g.health)?.label : 'Salud del proyecto — clic para marcar'}
+                              className="w-2.5 h-2.5 mt-0.5 shrink-0 rounded-full border transition-transform hover:scale-110"
+                              style={{
+                                background: HEALTH.find((h) => h.id === g.health)?.color ?? 'transparent',
+                                borderColor: g.health ? 'transparent' : 'var(--color-line)',
+                              }}
+                            />
+                            {editingStatus === g.name ? (
+                              <input
+                                autoFocus
+                                className="flex-1 text-xs border border-input rounded px-1.5 py-0.5 text-ink focus:outline-none focus:border-accent"
+                                value={statusDraft}
+                                onChange={(e) => setStatusDraft(e.target.value)}
+                                onBlur={() => saveStatusNote(g.name)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveStatusNote(g.name)
+                                  if (e.key === 'Escape') setEditingStatus(null)
+                                }}
+                              />
+                            ) : (
+                              <button
+                                onClick={() => { setEditingStatus(g.name); setStatusDraft(g.statusNote || '') }}
+                                title={g.statusDate ? `Actualizado ${g.statusDate} — clic para editar` : 'Añadir línea de estado'}
+                                className={`text-left text-xs leading-snug transition-colors ${
+                                  g.statusNote
+                                    ? (g.statusDate && g.statusDate < shiftDays(madridToday(), -14) ? 'text-ink-40' : 'text-ink-60') + ' hover:text-ink'
+                                    : 'text-ink-40 opacity-0 group-hover/header:opacity-100 hover:text-ink-60'
+                                }`}
+                              >
+                                {g.statusNote || 'estado…'}
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {confirmDeleteGroup === g.name ? (
                           <span className="flex flex-col items-end gap-1 shrink-0">

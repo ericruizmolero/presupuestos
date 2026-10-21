@@ -128,7 +128,8 @@ const BOARD_COLORS = ['#FDE68A', '#BFDBFE', '#BBF7D0', '#FECACA', '#E9D5FF', '#F
 const DEFAULT_LANES = ['Ahora', 'Luego', 'En espera']
 const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', espera: 'En espera' }
 
-interface BoardGroup { name: string; color: string; status?: string }
+interface BoardGroup { name: string; color: string; status?: string; health?: string; statusNote?: string; statusDate?: string }
+const HEALTH_ICON: Record<string, string> = { verde: '🟢', ambar: '🟡', rojo: '🔴' }
 interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string }
 const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
 interface Board { lanes: string[]; groups: BoardGroup[]; chips: BoardChip[] }
@@ -161,10 +162,10 @@ async function readBoard(companyId: string): Promise<Board> {
 }
 
 async function writeBoard(companyId: string, board: Board) {
+  // JSON round-trip: elimina cualquier undefined (Firestore los rechaza)
+  const clean = JSON.parse(JSON.stringify({ lanes: board.lanes, groups: board.groups, chips: board.chips }))
   await db().collection('planning').doc(companyId).set({
-    lanes: board.lanes,
-    groups: board.groups,
-    chips: board.chips,
+    ...clean,
     updatedAt: FieldValue.serverTimestamp(),
   })
 }
@@ -186,7 +187,9 @@ function renderBoard(board: Board): string {
     lines.push(`## ${lane}${groups.length === 0 ? ' (vacío)' : ''}`)
     for (const g of groups) {
       const chips = board.chips.filter((c) => c.group === g.name)
-      lines.push(`- ${g.name}${chips.length ? ':' : ' (sin notas)'}`)
+      const health = g.health ? ` ${HEALTH_ICON[g.health] ?? ''}` : ''
+      const status = g.statusNote ? ` — ${g.statusNote} (${g.statusDate ?? 's/f'})` : ''
+      lines.push(`- ${g.name}${health}${status}${chips.length ? ':' : ' (sin notas)'}`)
       for (const c of chips) lines.push(`    · ${c.text}${c.who ? ` — ${c.who}` : ''}`)
     }
   }
@@ -229,6 +232,20 @@ const TOOLS = [
         de: { type: 'string', enum: ['Eric', 'Andoni'], description: 'Quién lo apunta (p. ej. quien estuvo en la reunión); omitir si no se sabe' },
       },
       required: ['proyecto', 'texto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'estado_proyecto',
+    description: 'Actualiza la salud (verde/ambar/rojo) y/o la línea de estado de un proyecto del tablón ("esperando feedback del cliente", "bloqueado por DNS"...). Al menos uno de los dos.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyecto: { type: 'string', description: 'Proyecto del tablero (acepta substring)' },
+        salud: { type: 'string', enum: ['verde', 'ambar', 'rojo'], description: 'Semáforo de salud' },
+        nota: { type: 'string', description: 'Línea de estado, corta' },
+      },
+      required: ['proyecto'],
       additionalProperties: false,
     },
   },
@@ -378,7 +395,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
   }
 
-  if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto') {
+  if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto' || name === 'estado_proyecto') {
     const cid = await boardCompanyId()
     if (!cid) return { text: 'No se pudo resolver la empresa (no hay proyectos de horas).', isError: true }
     const board = await readBoard(cid)
@@ -448,6 +465,26 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       board.chips = board.chips.filter((c) => c !== matches[0])
       await writeBoard(cid, board)
       return { text: `✓ Quitada de "${found.name}": ${matches[0].text}` }
+    }
+
+    if (name === 'estado_proyecto') {
+      const salud = args.salud === 'verde' || args.salud === 'ambar' || args.salud === 'rojo' ? String(args.salud) : undefined
+      const nota = args.nota !== undefined ? String(args.nota).trim() : undefined
+      if (!salud && nota === undefined) {
+        return { text: 'Indica "salud" y/o "nota".', isError: true }
+      }
+      board.groups = board.groups.map((g) =>
+        g.name === found.name
+          ? {
+              ...g,
+              ...(salud ? { health: salud } : {}),
+              ...(nota !== undefined ? { statusNote: nota || undefined } : {}),
+              statusDate: todayISO(),
+            }
+          : g
+      )
+      await writeBoard(cid, board)
+      return { text: `✓ Estado de "${found.name}": ${salud ? (HEALTH_ICON[salud] + ' ') : ''}${nota ?? '(nota sin cambios)'}` }
     }
 
     // mover_proyecto
