@@ -41,9 +41,13 @@ async function listDocs(type: 'invoice' | 'creditnote', start: number, end: numb
   const seen = new Set<string>()
   // Paginación defensiva: si la API ignora "page", la segunda página repite ids y paramos
   for (let page = 1; page <= 20; page++) {
-    const url = `${BASE}/documents/${type}?starttmp=${start}&endtmp=${end}&page=${page}`
+    const url = `${BASE}/documents/${type}?starttmp=${start}&endtmp=${end}${page > 1 ? `&page=${page}` : ''}`
     const res = await fetch(url, { headers: { key, accept: 'application/json' }, next: { revalidate: 600 } })
-    if (!res.ok) throw new Error(`Holded ${type}: HTTP ${res.status}`)
+    if (!res.ok) {
+      if (page > 1) break // la API no pagina así: nos quedamos con lo que hay
+      const body = (await res.text().catch(() => '')).slice(0, 200)
+      throw new Error(`Holded ${type}: HTTP ${res.status}${body ? ` — ${body}` : ''}`)
+    }
     const docs = (await res.json()) as HoldedDoc[]
     if (!Array.isArray(docs) || docs.length === 0) break
     const fresh = docs.filter((d) => d.id && !seen.has(d.id))
