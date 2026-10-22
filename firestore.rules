@@ -2,23 +2,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // True si el usuario pertenece a la misma empresa que el documento
-    function sameCompany(companyId) {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
+    // Solo el estudio: Eric y Andoni
+    function isTeam() {
+      return request.auth != null
+        && request.auth.token.email in ['ericruizmolero@treseiscero.app', 'andoni@treseiscero.app'];
     }
 
-    // Quotes: lectura pública (links compartidos), escritura por creador o miembros de la empresa
+    // Presupuestos: lectura pública (enlace del cliente /client/…); escritura solo el estudio
     match /quotes/{quoteId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null
-        && (request.auth.uid == resource.data.createdBy
-            || sameCompany(resource.data.companyId));
+      allow write: if isTeam();
     }
 
-    // Todo lo demás requiere autenticación
+    // Horas: lectura pública (vista del cliente /h/…); escritura solo el estudio
+    match /timeProjects/{projectId} {
+      allow read: if true;
+      allow write: if isTeam();
+    }
+    match /timeEntries/{entryId} {
+      allow read: if true;
+      allow write: if isTeam();
+    }
+
+    // Empresa: la vista pública del presupuesto lee su ficha (logo, colores, fuentes) por id;
+    // listar y escribir, solo el estudio
+    match /companies/{companyId} {
+      allow get: if true;
+      allow list, write: if isTeam();
+    }
+
+    // Todo lo demás (tablón de proyectos, usuarios…): solo el estudio
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isTeam();
     }
   }
 }
