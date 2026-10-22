@@ -76,10 +76,6 @@ function BillingSection({ today }: { today: string }) {
               <dt className="text-ink-60 capitalize">{monthName}</dt>
               <dd className="tabular-nums text-ink">{eur(data.byMonth[monthIdx] || 0)}</dd>
             </div>
-            <div className="flex justify-between gap-2">
-              <dt className="text-ink-60">Pendiente de cobro</dt>
-              <dd className={`tabular-nums ${data.pending > 0 ? 'text-[#B45309]' : 'text-ink'}`}>{eur(data.pending)}</dd>
-            </div>
           </dl>
         </>
       )}

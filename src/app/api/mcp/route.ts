@@ -312,7 +312,7 @@ const TOOLS = [
   {
     name: 'facturacion',
     annotations: { readOnlyHint: true },
-    description: 'Facturación del estudio desde Holded: base imponible facturada en el año (facturas menos rectificativas), total con IVA, pendiente de cobro, desglose por mes y por cliente, y última factura. Responde a "¿cuánto llevamos facturado?", "¿qué nos deben?", "¿cómo va el año?".',
+    description: 'Facturación del estudio desde Holded: base imponible facturada en el año (facturas menos rectificativas), total con IVA, desglose por mes y por cliente, y última factura. Responde a "¿cuánto llevamos facturado?", "¿cómo va el año?".',
     inputSchema: {
       type: 'object',
       properties: { anio: { type: 'number', description: 'Año (por defecto el actual)' } },
@@ -582,7 +582,6 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       text: [
         `Facturación ${year} (Holded)`,
         `Base imponible: ${eur(s.base)} · Total con IVA: ${eur(s.total)}`,
-        `Pendiente de cobro: ${eur(s.pending)}`,
         `${s.invoices} facturas${s.creditNotes ? ` · ${s.creditNotes} rectificativas` : ''}`,
         s.lastInvoice ? `Última: ${s.lastInvoice.number ?? ''} ${s.lastInvoice.client ?? ''} ${s.lastInvoice.date} (${eur(s.lastInvoice.base)})`.replace(/\s+/g, ' ') : '',
         monthLines ? `\nPor mes (base)\n${monthLines}` : '',
