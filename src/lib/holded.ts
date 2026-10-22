@@ -1,21 +1,25 @@
 /**
- * Cliente mínimo de la API de Holded (solo servidor: usa HOLDED_API_KEY).
- * Docs: https://developers.holded.com/reference/list-documents-1
+ * Cliente mínimo de la API v2 de Holded (solo servidor: usa HOLDED_API_KEY, un token "pat_…").
+ * Docs: https://www.holded.com/es/desarrolladores — Bearer, paginación por cursor
+ * ({ items, cursor, has_more }), importes como cadenas ("121.00"), fechas YYYY-MM-DD.
  */
 
-const BASE = 'https://api.holded.com/api/invoicing/v1'
+const BASE = 'https://api.holded.com/api/v2'
 
-interface HoldedDoc {
+interface V2Doc {
   id?: string
-  docNumber?: string
-  contactName?: string
-  date?: number          // unix (s)
-  subtotal?: number      // base imponible
-  tax?: number
-  total?: number         // con impuestos
-  paymentsPending?: number
-  draft?: boolean | number | null
-  status?: number
+  document_number?: string
+  contact_id?: string
+  contact_name?: string
+  date?: string
+  due_date?: string
+  subtotal?: string | number
+  tax?: string | number
+  total?: string | number
+  payments_pending?: string | number
+  status?: string
+  draft?: boolean
+  [k: string]: unknown
 }
 
 export interface BillingSummary {
@@ -34,108 +38,90 @@ export function holdedConfigured(): boolean {
   return !!process.env.HOLDED_API_KEY?.trim()
 }
 
-/** Clave clásica (32 hex) va en la cabecera "key"; los tokens personales (pat_…) como Bearer. Se envían ambas. */
-function authHeaders(key: string): Record<string, string> {
-  return { key, Authorization: `Bearer ${key}`, accept: 'application/json' }
-}
-
-/** La clave tal cual, sin espacios, saltos de línea ni comillas que se cuelan al pegarla */
+/** La clave sin espacios, saltos de línea ni comillas que se cuelan al pegarla */
 function holdedKey(): string {
   const key = (process.env.HOLDED_API_KEY || '').trim().replace(/^["']|["']$/g, '').trim()
   if (!key) throw new Error('HOLDED_API_KEY no configurada')
   return key
 }
 
-async function listDocs(type: 'invoice' | 'creditnote', start: number, end: number): Promise<HoldedDoc[]> {
-  const key = holdedKey()
-  const all: HoldedDoc[] = []
-  const seen = new Set<string>()
-  // Paginación defensiva: si la API ignora "page", la segunda página repite ids y paramos
-  for (let page = 1; page <= 20; page++) {
-    const url = `${BASE}/documents/${type}?starttmp=${start}&endtmp=${end}${page > 1 ? `&page=${page}` : ''}`
-    const res = await fetch(url, { headers: authHeaders(key), next: { revalidate: 600 } })
-    if (!res.ok) {
-      if (page > 1) break // la API no pagina así: nos quedamos con lo que hay
-      const body = (await res.text().catch(() => '')).slice(0, 200)
-      // Solo la forma de la clave (nunca su valor) para diagnosticar "Invalid key"
-      const shape = `clave de ${key.length} caracteres, ${/^[0-9a-f]+$/i.test(key) ? 'hexadecimal' : 'no hexadecimal'}`
-      throw new Error(`Holded ${type}: HTTP ${res.status}${body ? ` — ${body}` : ''} (${shape})`)
-    }
-    const docs = (await res.json()) as HoldedDoc[]
-    if (!Array.isArray(docs) || docs.length === 0) break
-    const fresh = docs.filter((d) => d.id && !seen.has(d.id))
-    if (fresh.length === 0) break
-    fresh.forEach((d) => { seen.add(d.id!); all.push(d) })
+function authHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${holdedKey()}`, Accept: 'application/json' }
+}
+
+const num = (v: unknown): number => {
+  const n = typeof v === 'number' ? v : parseFloat(String(v ?? '0'))
+  return Number.isFinite(n) ? n : 0
+}
+
+async function apiError(res: Response, what: string): Promise<Error> {
+  const body = (await res.text().catch(() => '')).slice(0, 200)
+  return new Error(`Holded ${what}: HTTP ${res.status}${body ? ` — ${body}` : ''}`)
+}
+
+/** Recorre todas las páginas de un listado */
+async function listAll(path: 'invoices' | 'credit-notes', params: Record<string, string>): Promise<V2Doc[]> {
+  const all: V2Doc[] = []
+  let cursor: string | undefined
+  for (let page = 0; page < 50; page++) {
+    const qs = new URLSearchParams({ limit: '100', ...params, ...(cursor ? { cursor } : {}) })
+    const res = await fetch(`${BASE}/${path}?${qs}`, { headers: authHeaders(), next: { revalidate: 600 } })
+    if (!res.ok) throw await apiError(res, path)
+    const data = (await res.json()) as { items?: V2Doc[]; cursor?: string; has_more?: boolean }
+    all.push(...(data.items ?? []))
+    if (!data.has_more || !data.cursor) break
+    cursor = data.cursor
   }
   return all
 }
 
-function isDraft(d: HoldedDoc): boolean {
-  return d.draft === true || d.draft === 1
-}
-
-function base(d: HoldedDoc): number {
-  if (typeof d.subtotal === 'number') return d.subtotal
-  return (d.total || 0) - (d.tax || 0)
-}
-
-function madridDate(unix: number): Date {
-  // Fecha local de Madrid para asignar mes sin desfases de zona
-  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' })
-    .format(new Date(unix * 1000))
-  return new Date(iso + 'T00:00:00')
-}
+const range = (year: number) => ({
+  start_date: `${year}-01-01T00:00:00+01:00`,
+  end_date: `${year}-12-31T23:59:59+01:00`,
+})
 
 export async function billingSummary(year: number): Promise<BillingSummary> {
-  const start = Math.floor(Date.UTC(year, 0, 1, -1) / 1000)      // 1 ene 00:00 Madrid (aprox. UTC+1)
-  const end = Math.floor(Date.UTC(year + 1, 0, 1, -1) / 1000) - 1
   const [invoices, credits] = await Promise.all([
-    listDocs('invoice', start, end),
-    listDocs('creditnote', start, end).catch((err) => {
+    listAll('invoices', { ...range(year), approval_status: 'approved' }),
+    listAll('credit-notes', { ...range(year), approval_status: 'approved' }).catch((err) => {
       console.warn('[holded] Rectificativas no disponibles:', err instanceof Error ? err.message : err)
-      return [] as HoldedDoc[]
+      return [] as V2Doc[]
     }),
   ])
 
   const byMonth = Array(12).fill(0) as number[]
   const clients = new Map<string, number>()
-  let baseSum = 0, total = 0, pending = 0, nInv = 0, nCred = 0
+  let base = 0, total = 0, pending = 0, nInv = 0, nCred = 0
   let last: BillingSummary['lastInvoice']
 
   for (const d of invoices) {
-    if (isDraft(d) || !d.date) continue
-    const b = base(d)
-    const dt = madridDate(d.date)
-    if (dt.getFullYear() !== year) continue
+    if (d.draft || !d.date || !d.date.startsWith(String(year)) || d.status === 'cancelled') continue
+    const b = num(d.subtotal)
     nInv++
-    baseSum += b
-    total += d.total || 0
-    pending += d.paymentsPending || 0
-    byMonth[dt.getMonth()] += b
-    const name = d.contactName || 'Sin cliente'
+    base += b
+    total += num(d.total)
+    pending += num(d.payments_pending)
+    byMonth[Number(d.date.slice(5, 7)) - 1] += b
+    const name = d.contact_name || 'Sin cliente'
     clients.set(name, (clients.get(name) || 0) + b)
-    if (!last || d.date * 1000 > new Date(last.date).getTime()) {
-      last = { number: d.docNumber, client: d.contactName, date: dt.toISOString().slice(0, 10), base: b }
-    }
+    if (!last || d.date > last.date) last = { number: d.document_number, client: d.contact_name, date: d.date.slice(0, 10), base: b }
   }
   for (const d of credits) {
-    if (isDraft(d) || !d.date) continue
-    const dt = madridDate(d.date)
-    if (dt.getFullYear() !== year) continue
+    if (d.draft || !d.date || !d.date.startsWith(String(year)) || d.status === 'cancelled') continue
     // Las rectificativas pueden venir en negativo o en positivo: siempre restan
-    const b = -Math.abs(base(d))
+    const b = -Math.abs(num(d.subtotal))
     nCred++
-    baseSum += b
-    total -= Math.abs(d.total || 0)
-    byMonth[dt.getMonth()] += b
-    const name = d.contactName || 'Sin cliente'
+    base += b
+    total -= Math.abs(num(d.total))
+    byMonth[Number(d.date.slice(5, 7)) - 1] += b
+    const name = d.contact_name || 'Sin cliente'
     clients.set(name, (clients.get(name) || 0) + b)
   }
 
   const round = (n: number) => Math.round(n * 100) / 100
   return {
     year,
-    base: round(baseSum),
+    base: round(base),
     total: round(total),
     pending: round(pending),
     invoices: nInv,
@@ -146,37 +132,39 @@ export async function billingSummary(year: number): Promise<BillingSummary> {
   }
 }
 
-/** Últimas facturas de un cliente con su detalle completo (solo lectura). */
-export async function recentInvoices(clientNeedle: string, limit = 3): Promise<Record<string, unknown>[]> {
-  const key = holdedKey()
-  const now = Math.floor(Date.now() / 1000)
-  const docs = await listDocs('invoice', now - 2 * 365 * 86400, now)
-  const n = clientNeedle.toLowerCase()
-  const matches = docs
-    .filter((d) => !isDraft(d) && (d.contactName || '').toLowerCase().includes(n))
-    .sort((a, b) => (b.date || 0) - (a.date || 0))
-    .slice(0, limit)
-  const details = await Promise.all(matches.map(async (d) => {
-    const res = await fetch(`${BASE}/documents/invoice/${d.id}`, { headers: authHeaders(key), cache: 'no-store' })
-    return res.ok ? ((await res.json()) as Record<string, unknown>) : (d as Record<string, unknown>)
-  }))
-  return details
+function lastTwoYears(): Record<string, string> {
+  const now = new Date()
+  const from = new Date(now.getTime() - 2 * 365 * 86400000)
+  return { start_date: from.toISOString(), end_date: now.toISOString(), approval_status: 'approved', sort: '-date' }
 }
 
-/** Nombres de contacto con facturas en los últimos 2 años (para emparejar clientes) */
+/** Últimas facturas de un cliente con su detalle completo (solo lectura). */
+export async function recentInvoices(clientNeedle: string, limit = 3): Promise<Record<string, unknown>[]> {
+  const docs = await listAll('invoices', lastTwoYears())
+  const n = clientNeedle.toLowerCase()
+  const matches = docs
+    .filter((d) => !d.draft && (d.contact_name || '').toLowerCase().includes(n))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, limit)
+  return Promise.all(matches.map(async (d) => {
+    const res = await fetch(`${BASE}/invoices/${d.id}`, { headers: authHeaders(), cache: 'no-store' })
+    return res.ok ? ((await res.json()) as Record<string, unknown>) : (d as Record<string, unknown>)
+  }))
+}
+
+/** Contactos con facturas en los últimos 2 años (para emparejar clientes) */
 export async function invoicedContacts(): Promise<Array<{ name: string; count: number; last: string }>> {
-  const now = Math.floor(Date.now() / 1000)
-  const docs = await listDocs('invoice', now - 2 * 365 * 86400, now)
-  const map = new Map<string, { count: number; last: number }>()
+  const docs = await listAll('invoices', lastTwoYears())
+  const map = new Map<string, { count: number; last: string }>()
   for (const d of docs) {
-    if (isDraft(d)) continue
-    const name = d.contactName || 'Sin cliente'
-    const cur = map.get(name) || { count: 0, last: 0 }
+    if (d.draft) continue
+    const name = d.contact_name || 'Sin cliente'
+    const cur = map.get(name) || { count: 0, last: '' }
     cur.count++
-    cur.last = Math.max(cur.last, d.date || 0)
+    if (String(d.date) > cur.last) cur.last = String(d.date).slice(0, 10)
     map.set(name, cur)
   }
   return [...map.entries()]
-    .map(([name, v]) => ({ name, count: v.count, last: new Date(v.last * 1000).toISOString().slice(0, 10) }))
+    .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.last.localeCompare(a.last))
 }
