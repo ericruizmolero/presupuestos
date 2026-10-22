@@ -72,7 +72,13 @@ function madridDate(unix: number): Date {
 export async function billingSummary(year: number): Promise<BillingSummary> {
   const start = Math.floor(Date.UTC(year, 0, 1, -1) / 1000)      // 1 ene 00:00 Madrid (aprox. UTC+1)
   const end = Math.floor(Date.UTC(year + 1, 0, 1, -1) / 1000) - 1
-  const [invoices, credits] = await Promise.all([listDocs('invoice', start, end), listDocs('creditnote', start, end)])
+  const [invoices, credits] = await Promise.all([
+    listDocs('invoice', start, end),
+    listDocs('creditnote', start, end).catch((err) => {
+      console.warn('[holded] Rectificativas no disponibles:', err instanceof Error ? err.message : err)
+      return [] as HoldedDoc[]
+    }),
+  ])
 
   const byMonth = Array(12).fill(0) as number[]
   const clients = new Map<string, number>()
@@ -121,4 +127,40 @@ export async function billingSummary(year: number): Promise<BillingSummary> {
     byClient: [...clients.entries()].map(([name, b]) => ({ name, base: round(b) })).sort((a, b) => b.base - a.base),
     lastInvoice: last,
   }
+}
+
+/** Últimas facturas de un cliente con su detalle completo (solo lectura). */
+export async function recentInvoices(clientNeedle: string, limit = 3): Promise<Record<string, unknown>[]> {
+  const key = process.env.HOLDED_API_KEY
+  if (!key) throw new Error('HOLDED_API_KEY no configurada')
+  const now = Math.floor(Date.now() / 1000)
+  const docs = await listDocs('invoice', now - 2 * 365 * 86400, now)
+  const n = clientNeedle.toLowerCase()
+  const matches = docs
+    .filter((d) => !isDraft(d) && (d.contactName || '').toLowerCase().includes(n))
+    .sort((a, b) => (b.date || 0) - (a.date || 0))
+    .slice(0, limit)
+  const details = await Promise.all(matches.map(async (d) => {
+    const res = await fetch(`${BASE}/documents/invoice/${d.id}`, { headers: { key, accept: 'application/json' }, cache: 'no-store' })
+    return res.ok ? ((await res.json()) as Record<string, unknown>) : (d as Record<string, unknown>)
+  }))
+  return details
+}
+
+/** Nombres de contacto con facturas en los últimos 2 años (para emparejar clientes) */
+export async function invoicedContacts(): Promise<Array<{ name: string; count: number; last: string }>> {
+  const now = Math.floor(Date.now() / 1000)
+  const docs = await listDocs('invoice', now - 2 * 365 * 86400, now)
+  const map = new Map<string, { count: number; last: number }>()
+  for (const d of docs) {
+    if (isDraft(d)) continue
+    const name = d.contactName || 'Sin cliente'
+    const cur = map.get(name) || { count: 0, last: 0 }
+    cur.count++
+    cur.last = Math.max(cur.last, d.date || 0)
+    map.set(name, cur)
+  }
+  return [...map.entries()]
+    .map(([name, v]) => ({ name, count: v.count, last: new Date(v.last * 1000).toISOString().slice(0, 10) }))
+    .sort((a, b) => b.last.localeCompare(a.last))
 }

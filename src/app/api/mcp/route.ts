@@ -8,7 +8,7 @@
  * cuenta de servicio). Las escrituras usan Firebase Admin (bypassa rules).
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { billingSummary, holdedConfigured } from '@/lib/holded'
+import { billingSummary, holdedConfigured, recentInvoices, invoicedContacts } from '@/lib/holded'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -319,6 +319,19 @@ const TOOLS = [
     },
   },
   {
+    name: 'ver_facturas',
+    annotations: { readOnlyHint: true },
+    description: 'Solo lectura: detalle completo de las últimas facturas emitidas en Holded a un cliente (líneas, impuestos, retención, serie, forma de pago, notas, idioma…), para ver cómo se le factura. Sin "cliente", lista los clientes facturados en los últimos 2 años.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        cliente: { type: 'string', description: 'Nombre (o parte) del contacto en Holded' },
+        cuantas: { type: 'number', description: 'Cuántas facturas recientes (por defecto 3, máx. 6)' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'resumen_semana',
     description: 'El digest del estudio: horas de los últimos 7 días por proyecto (comparadas con la semana anterior), novedades del tablón y proyectos sin actividad en 14+ días. Responde a "ponme al día", "¿cómo va la semana?", "resumen del lunes". Solo muestra lo que ha cambiado.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -494,6 +507,19 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const rows = entries.map((e) => `[${e.id}] ${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
     const amount = found.hourlyRate ? ` · ${(total * found.hourlyRate).toFixed(2)} € (a ${found.hourlyRate} €/h)` : ''
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
+  }
+
+  if (name === 'ver_facturas') {
+    if (!holdedConfigured()) return { text: 'Holded no está conectado (falta HOLDED_API_KEY).', isError: true }
+    const cliente = String(args.cliente || '').trim()
+    if (!cliente) {
+      const contacts = await invoicedContacts()
+      return { text: contacts.map((c) => `${c.name} — ${c.count} facturas, última ${c.last}`).join('\n') || 'Sin facturas en 2 años.' }
+    }
+    const n = Math.min(Math.max(Number(args.cuantas) || 3, 1), 6)
+    const docs = await recentInvoices(cliente, n)
+    if (docs.length === 0) return { text: `No hay facturas recientes para "${cliente}".` }
+    return { text: JSON.stringify(docs, null, 1) }
   }
 
   if (name === 'facturacion') {
