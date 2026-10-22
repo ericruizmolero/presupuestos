@@ -6,7 +6,7 @@
 
 const BASE = 'https://api.holded.com/api/v2'
 
-interface V2Doc {
+export interface V2Doc {
   id?: string
   document_number?: string
   contact_id?: string
@@ -60,12 +60,12 @@ async function apiError(res: Response, what: string): Promise<Error> {
 }
 
 /** Recorre todas las páginas de un listado */
-async function listAll(path: 'invoices' | 'credit-notes', params: Record<string, string>): Promise<V2Doc[]> {
+export async function listAll(path: 'invoices' | 'credit-notes', params: Record<string, string>, fresh = false): Promise<V2Doc[]> {
   const all: V2Doc[] = []
   let cursor: string | undefined
   for (let page = 0; page < 50; page++) {
     const qs = new URLSearchParams({ limit: '100', ...params, ...(cursor ? { cursor } : {}) })
-    const res = await fetch(`${BASE}/${path}?${qs}`, { headers: authHeaders(), next: { revalidate: 600 } })
+    const res = await fetch(`${BASE}/${path}?${qs}`, fresh ? { headers: authHeaders(), cache: 'no-store' } : { headers: authHeaders(), next: { revalidate: 600 } })
     if (!res.ok) throw await apiError(res, path)
     const data = (await res.json()) as { items?: V2Doc[]; cursor?: string; has_more?: boolean }
     all.push(...(data.items ?? []))
@@ -167,4 +167,25 @@ export async function invoicedContacts(): Promise<Array<{ name: string; count: n
   return [...map.entries()]
     .map(([name, v]) => ({ name, ...v }))
     .sort((a, b) => b.last.localeCompare(a.last))
+}
+
+export async function getInvoice(id: string): Promise<V2Doc> {
+  const res = await fetch(`${BASE}/invoices/${id}`, { headers: authHeaders(), cache: 'no-store' })
+  if (!res.ok) throw await apiError(res, `invoice ${id}`)
+  return (await res.json()) as V2Doc
+}
+
+/**
+ * Crea una factura de venta. La API v2 la crea como BORRADOR (aprobar es otro endpoint
+ * que esta app no usa): sin número hasta que se apruebe en Holded.
+ */
+export async function createInvoiceDraft(body: Record<string, unknown>): Promise<V2Doc> {
+  const res = await fetch(`${BASE}/invoices`, {
+    method: 'POST',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw await apiError(res, 'crear factura')
+  return (await res.json()) as V2Doc
 }

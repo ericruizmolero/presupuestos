@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { billingSummary, holdedConfigured, recentInvoices, invoicedContacts } from '@/lib/holded'
+import { PROFILES, proposeAll, createDraft, formatProposal, type TimeData } from '@/lib/invoicing'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -332,6 +333,31 @@ const TOOLS = [
     },
   },
   {
+    name: 'preparar_facturas',
+    annotations: { readOnlyHint: true },
+    description: 'Solo lectura: propone las facturas de fin de mes a partir de las horas registradas (Farco, Greet.video/MJOO, Playground, Kymatio), calcadas de la última factura de cada cliente en Holded: horas, precio (Playground en USD con cambio BCE), IVA, total, y avisa si ya existe factura ese mes. Enséñale esto a Eric ANTES de crear nada.',
+    inputSchema: {
+      type: 'object',
+      properties: { mes: { type: 'string', description: 'YYYY-MM (por defecto el mes actual)' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'crear_borrador_factura',
+    annotations: { destructiveHint: false, idempotentHint: true },
+    description: 'Crea en Holded UNA factura como BORRADOR (sin número, sin enviar) para un cliente y mes, calcada de su última factura. Exige confirmado=true y solo debe llamarse después de enseñar la propuesta de preparar_facturas y recibir el OK explícito de Eric para ese cliente. No crea si ya hay factura ese mes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        cliente: { type: 'string', enum: PROFILES.map((p) => p.key), description: 'farco, vidflare, playground o kymatio' },
+        mes: { type: 'string', description: 'YYYY-MM' },
+        confirmado: { type: 'boolean', description: 'true solo tras el OK explícito de Eric a esta factura' },
+      },
+      required: ['cliente', 'mes', 'confirmado'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'resumen_semana',
     description: 'El digest del estudio: horas de los últimos 7 días por proyecto (comparadas con la semana anterior), novedades del tablón y proyectos sin actividad en 14+ días. Responde a "ponme al día", "¿cómo va la semana?", "resumen del lunes". Solo muestra lo que ha cambiado.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -520,6 +546,28 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const docs = await recentInvoices(cliente, n)
     if (docs.length === 0) return { text: `No hay facturas recientes para "${cliente}".` }
     return { text: JSON.stringify(docs, null, 1) }
+  }
+
+  if (name === 'preparar_facturas' || name === 'crear_borrador_factura') {
+    if (!holdedConfigured()) return { text: 'Holded no está conectado (falta HOLDED_API_KEY).', isError: true }
+    const ym = typeof args.mes === 'string' && /^\d{4}-\d{2}$/.test(args.mes) ? args.mes : todayISO().slice(0, 7)
+    const [tps, tes] = await Promise.all([db().collection('timeProjects').get(), db().collection('timeEntries').get()])
+    const time: TimeData = {
+      projects: tps.docs.map((d) => ({ id: d.id, ...(d.data() as { name?: string; hourlyRate?: number }) })),
+      entries: tes.docs.map((d) => d.data() as { projectId: string; date?: string; hours?: number }),
+    }
+    if (name === 'preparar_facturas') {
+      const props = await proposeAll(ym, time)
+      return { text: `Propuesta de facturas ${ym} (se crearían como BORRADOR en Holded)\n\n${props.map(formatProposal).join('\n\n')}` }
+    }
+    if (args.confirmado !== true) {
+      return { text: 'No creado: falta confirmado=true. Enseña antes la propuesta (preparar_facturas) y espera el OK explícito.', isError: true }
+    }
+    const { proposal, created } = await createDraft(String(args.cliente), ym, time)
+    if (!created) {
+      return { text: `No creado.\n${formatProposal(proposal)}`, isError: true }
+    }
+    return { text: `✓ Borrador creado en Holded (sin número, pendiente de aprobar por vosotros)\n${formatProposal(proposal)}\nId: ${created.id}` }
   }
 
   if (name === 'facturacion') {
