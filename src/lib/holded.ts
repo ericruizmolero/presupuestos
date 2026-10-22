@@ -31,12 +31,18 @@ export interface BillingSummary {
 }
 
 export function holdedConfigured(): boolean {
-  return !!process.env.HOLDED_API_KEY
+  return !!process.env.HOLDED_API_KEY?.trim()
+}
+
+/** La clave tal cual, sin espacios, saltos de línea ni comillas que se cuelan al pegarla */
+function holdedKey(): string {
+  const key = (process.env.HOLDED_API_KEY || '').trim().replace(/^["']|["']$/g, '').trim()
+  if (!key) throw new Error('HOLDED_API_KEY no configurada')
+  return key
 }
 
 async function listDocs(type: 'invoice' | 'creditnote', start: number, end: number): Promise<HoldedDoc[]> {
-  const key = process.env.HOLDED_API_KEY
-  if (!key) throw new Error('HOLDED_API_KEY no configurada')
+  const key = holdedKey()
   const all: HoldedDoc[] = []
   const seen = new Set<string>()
   // Paginación defensiva: si la API ignora "page", la segunda página repite ids y paramos
@@ -135,8 +141,7 @@ export async function billingSummary(year: number): Promise<BillingSummary> {
 
 /** Últimas facturas de un cliente con su detalle completo (solo lectura). */
 export async function recentInvoices(clientNeedle: string, limit = 3): Promise<Record<string, unknown>[]> {
-  const key = process.env.HOLDED_API_KEY
-  if (!key) throw new Error('HOLDED_API_KEY no configurada')
+  const key = holdedKey()
   const now = Math.floor(Date.now() / 1000)
   const docs = await listDocs('invoice', now - 2 * 365 * 86400, now)
   const n = clientNeedle.toLowerCase()
