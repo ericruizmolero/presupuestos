@@ -5,7 +5,7 @@
  * impuestos, cuenta contable, forma de pago, diseño); solo cambian horas, mes, fecha y,
  * en divisa, el tipo de cambio. Se crean siempre como BORRADOR y nunca dos del mismo mes.
  */
-import { listAll, getInvoice, createInvoiceDraft, type V2Doc } from './holded'
+import { listAll, getInvoice, createInvoiceDraft, updateInvoice, type V2Doc } from './holded'
 
 export interface TimeData {
   projects: Array<{ id: string; name?: string; hourlyRate?: number }>
@@ -104,7 +104,7 @@ export interface DraftProposal {
   priceEUR: number
   price: number
   currency: string
-  rate?: { rate: number; date: string }
+  rate?: { rate: number; date: string; source?: string }
   base: number
   taxPct: number
   total: number
@@ -189,7 +189,6 @@ export async function proposeDraft(profile: Profile, ym: string, time: TimeData)
     ...(dueDate ? { due_date: dueDate } : {}),
     language: profile.language,
     currency: profile.currency,
-    ...(rate ? { currency_change: rate.rate } : {}),
     items: [item],
     ...(tpl.payment_method_id ? { payment_method_id: tpl.payment_method_id } : {}),
     ...(tpl.design_id ? { design_id: tpl.design_id } : {}),
@@ -228,6 +227,31 @@ export async function createDraft(key: string, ym: string, time: TimeData): Prom
   if (proposal.skipped) return { proposal }
   if (proposal.existing?.length) return { proposal }
   const created = await createInvoiceDraft(proposal.body)
+
+  // En divisa, el tipo de cambio lo fija Holded al crear (como en las facturas a mano):
+  // se lee del borrador y se recalcula el precio con él.
+  if (profile.currency !== 'EUR' && created.id) {
+    const draft = await getInvoice(String(created.id))
+    const hr = num(draft.currency_change)
+    const precise = hr > 0 && hr !== 1 && Math.round(hr * 100) / 100 !== hr
+    const items = proposal.body.items as Array<Record<string, unknown>>
+    if (precise) {
+      const price = r2(proposal.priceEUR * hr)
+      items[0] = { ...items[0], price }
+      await updateInvoice(String(created.id), { ...proposal.body, items, currency_change: hr })
+      proposal.price = price
+      proposal.rate = { rate: hr, date: proposal.date, source: 'Holded' }
+    } else if (hr > 0 && hr !== 1) {
+      // Holded guarda el cambio redondeado: precio con el cambio preciso del BCE, cambio de Holded intacto
+      proposal.rate = { ...(proposal.rate as { rate: number; date: string }), source: `BCE (Holded fijó ${hr})` }
+    } else {
+      // Holded no fijó cambio: poner el del BCE para que no quede 1:1
+      await updateInvoice(String(created.id), { ...proposal.body, currency_change: proposal.rate?.rate })
+      proposal.rate = { ...(proposal.rate as { rate: number; date: string }), source: 'BCE (Holded no fijó cambio)' }
+    }
+    proposal.base = r2(proposal.hours * proposal.price)
+    proposal.total = r2(proposal.base * (1 + proposal.taxPct / 100))
+  }
   return { proposal, created }
 }
 
@@ -236,7 +260,7 @@ export function formatProposal(p: DraftProposal): string {
   if (p.skipped) return `${p.label} (${p.month}): no se propone — ${p.skipped}`
   return [
     `${p.label} → ${p.contactName}`,
-    `  ${p.hours} h × ${money(p.price)}${p.rate ? ` (${p.priceEUR} € × ${p.rate.rate} BCE ${p.rate.date})` : ''} = base ${money(p.base)} · IVA ${p.taxPct}% · total ${money(p.total)}`,
+    `  ${p.hours} h × ${money(p.price)}${p.rate ? ` (${p.priceEUR} € × ${p.rate.rate} ${p.rate.source ?? `BCE ${p.rate.date}, estimado: el cambio definitivo lo fija Holded al crear`})` : ''} = base ${money(p.base)} · IVA ${p.taxPct}% · total ${money(p.total)}`,
     `  Línea: "${p.lineName}" — ${p.lineDesc.length > 90 ? p.lineDesc.slice(0, 90) + '…' : p.lineDesc}`,
     `  Fecha ${p.date}${p.dueDate ? ` · vence ${p.dueDate}` : ''} · idioma ${p.language} · ${p.currency}${p.templateNumber ? ` · calcada de ${p.templateNumber}` : ''}`,
     p.existing?.length ? `  ⚠ YA EXISTE este mes: ${p.existing.join(', ')} — no se creará` : '',

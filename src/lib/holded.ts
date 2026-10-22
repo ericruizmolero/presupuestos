@@ -189,3 +189,15 @@ export async function createInvoiceDraft(body: Record<string, unknown>): Promise
   if (!res.ok) throw await apiError(res, 'crear factura')
   return (await res.json()) as V2Doc
 }
+
+/** Reemplaza una factura (PUT es reemplazo completo: mandar el cuerpo entero) */
+export async function updateInvoice(id: string, body: Record<string, unknown>): Promise<V2Doc> {
+  const res = await fetch(`${BASE}/invoices/${id}`, {
+    method: 'PUT',
+    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  })
+  if (!res.ok) throw await apiError(res, `actualizar factura ${id}`)
+  return (await res.json().catch(() => ({}))) as V2Doc
+}
