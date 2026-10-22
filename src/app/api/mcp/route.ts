@@ -233,14 +233,75 @@ const TOOLS = [
   {
     name: 'anadir_nota',
     annotations: { destructiveHint: false },
-    description: 'Añade una nota (post-it) a un proyecto del tablero. Si el proyecto no existe en el tablero, se crea en el primer carril. Al volcar notas de una reunión, NO crear una nota-resumen: trocear en una nota por acción concreta, cada una con su "quien" (a quién le toca) y su "de" (quién estuvo en la reunión).',
+    description: 'Añade una o varias notas (tareas) a un proyecto del tablero en una sola llamada. Usa "notas" para varias a la vez (preferido al volcar listas o reuniones) o "texto" para una. Si el proyecto no existe en el tablero, se crea en el primer carril. Al volcar una reunión, una nota por acción concreta, nunca un resumen; cada una con su "quien" si difiere del responsable.',
     inputSchema: {
       type: 'object',
       properties: {
         proyecto: { type: 'string', description: 'Nombre del proyecto del tablero (acepta substring)' },
-        texto: { type: 'string', description: 'Texto de la nota, corto' },
-        quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Solo si difiere del responsable del proyecto; si no, omitir (la nota hereda el responsable)' },
-        de: { type: 'string', enum: ['Eric', 'Andoni'], description: 'Quién lo apunta (p. ej. quien estuvo en la reunión); omitir si no se sabe' },
+        texto: { type: 'string', description: 'Texto de una sola nota, corto' },
+        quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Para la nota de "texto": solo si difiere del responsable del proyecto' },
+        notas: {
+          type: 'array',
+          description: 'Varias notas de golpe',
+          items: {
+            type: 'object',
+            properties: {
+              texto: { type: 'string' },
+              quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Solo si difiere del responsable del proyecto' },
+            },
+            required: ['texto'],
+            additionalProperties: false,
+          },
+        },
+        de: { type: 'string', enum: ['Eric', 'Andoni'], description: 'Quién las apunta (p. ej. quien estuvo en la reunión)' },
+      },
+      required: ['proyecto'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'crear_proyecto_tablero',
+    annotations: { destructiveHint: false },
+    description: 'Crea un proyecto en el tablón del estudio con todo de una vez: carril, responsable, salud, estado, próxima entrega y sus tareas iniciales. Si ya existe, actualiza lo indicado y añade las notas. Para cosas de horas/facturación usa crear_proyecto (otra herramienta).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string', description: 'Nombre del proyecto o cliente' },
+        carril: { type: 'string', description: 'Carril de prioridad (acepta substring: "ahora", "luego", "espera"); por defecto el primero' },
+        responsable: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'] },
+        salud: { type: 'string', enum: ['verde', 'ambar', 'rojo'] },
+        estado: { type: 'string', description: 'Estado en una línea' },
+        deadline: { type: 'string', description: 'Próxima entrega YYYY-MM-DD' },
+        deadline_que: { type: 'string', description: 'Qué se entrega ese día' },
+        notas: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              texto: { type: 'string' },
+              quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'] },
+            },
+            required: ['texto'],
+            additionalProperties: false,
+          },
+        },
+        de: { type: 'string', enum: ['Eric', 'Andoni'], description: 'Quién lo crea' },
+      },
+      required: ['nombre'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'editar_nota',
+    annotations: { destructiveHint: false, idempotentHint: true },
+    description: 'Cambia el texto y/o la persona de una nota del tablero. La nota se busca por coincidencia parcial de su texto dentro del proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyecto: { type: 'string', description: 'Proyecto del tablero (acepta substring)' },
+        texto: { type: 'string', description: 'Texto actual (o parte) de la nota' },
+        nuevo_texto: { type: 'string', description: 'Texto nuevo' },
+        quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Nueva persona' },
       },
       required: ['proyecto', 'texto'],
       additionalProperties: false,
@@ -514,7 +575,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     return { text: sections.join('\n') }
   }
 
-  if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto' || name === 'estado_proyecto') {
+  if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto' || name === 'estado_proyecto' || name === 'crear_proyecto_tablero' || name === 'editar_nota') {
     const cid = await boardCompanyId()
     if (!cid) return { text: 'No se pudo resolver la empresa (no hay proyectos de horas).', isError: true }
     const board = await readBoard(cid)
@@ -550,8 +611,11 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     }
 
     if (name === 'anadir_nota') {
-      const texto = String(args.texto || '').trim()
-      if (!texto) return { text: 'Falta "texto".', isError: true }
+      const items: Array<{ texto: string; quien?: string }> = Array.isArray(args.notas)
+        ? (args.notas as Array<{ texto?: string; quien?: string }>).map((n) => ({ texto: String(n.texto || '').trim(), quien: n.quien }))
+        : [{ texto: String(args.texto || '').trim(), quien: args.quien as string | undefined }]
+      const valid = items.filter((n) => n.texto)
+      if (valid.length === 0) return { text: 'Falta "texto" o "notas".', isError: true }
       const needle = String(args.proyecto || '').trim()
       let group = board.groups.find((g) => g.name.toLowerCase().includes(needle.toLowerCase()))
       let created = false
@@ -560,15 +624,90 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         board.groups.push(group)
         created = true
       }
-      const who = BOARD_PEOPLE.includes(String(args.quien)) ? String(args.quien) : undefined
       const by = args.de === 'Eric' || args.de === 'Andoni' ? String(args.de) : undefined
-      board.chips.push({ group: group.name, text: texto, date: todayISO(), ...(who ? { who } : {}), ...(by ? { by } : {}) })
+      const g = group
+      const existing = new Set(board.chips.filter((c) => c.group === g.name).map((c) => c.text.trim().toLowerCase()))
+      const added: string[] = []
+      const skipped: string[] = []
+      for (const n of valid) {
+        // idempotente: no duplica una nota idéntica ya existente en el proyecto
+        if (existing.has(n.texto.toLowerCase())) { skipped.push(n.texto); continue }
+        existing.add(n.texto.toLowerCase())
+        const who = BOARD_PEOPLE.includes(String(n.quien)) ? String(n.quien) : undefined
+        board.chips.push({ group: g.name, text: n.texto, date: todayISO(), ...(who ? { who } : {}), ...(by ? { by } : {}) })
+        added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}`)
+      }
+      if (added.length) await writeBoard(cid, board)
+      const head = `✓ ${added.length} nota${added.length === 1 ? '' : 's'} en "${g.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}`
+      return { text: `${head}${added.length ? '\n' + added.join('\n') : ''}${skipped.length ? `\nYa existían: ${skipped.join(' · ')}` : ''}` }
+    }
+
+    if (name === 'crear_proyecto_tablero') {
+      const nombre = String(args.nombre || '').trim()
+      if (!nombre) return { text: 'Falta "nombre".', isError: true }
+      let g = board.groups.find((x) => x.name.toLowerCase() === nombre.toLowerCase())
+      const created = !g
+      let lane = board.lanes[0]
+      if (args.carril) {
+        const ln = board.lanes.filter((l) => l.toLowerCase().includes(String(args.carril).toLowerCase()))
+        if (ln.length !== 1) return { text: `Carril "${args.carril}" ${ln.length ? 'ambiguo' : 'no existe'}. Carriles: ${board.lanes.join(', ')}`, isError: true }
+        lane = ln[0]
+      }
+      if (args.deadline && !/^\d{4}-\d{2}-\d{2}$/.test(String(args.deadline))) {
+        return { text: `Deadline inválido (YYYY-MM-DD): ${args.deadline}`, isError: true }
+      }
+      if (!g) {
+        g = { name: nombre, color: BOARD_COLORS[board.groups.length % BOARD_COLORS.length], status: lane }
+        board.groups.push(g)
+      }
+      const patch: Partial<BoardGroup> = {}
+      if (args.carril || created) patch.status = lane
+      if (BOARD_PEOPLE.includes(String(args.responsable))) patch.owner = String(args.responsable)
+      if (args.salud === 'verde' || args.salud === 'ambar' || args.salud === 'rojo') { patch.health = String(args.salud); patch.statusDate = todayISO() }
+      if (args.estado !== undefined) { patch.statusNote = String(args.estado).trim() || undefined; patch.statusDate = todayISO() }
+      if (args.deadline) patch.deadline = String(args.deadline)
+      if (args.deadline_que !== undefined) patch.deadlineLabel = String(args.deadline_que).trim() || undefined
+      const gname = g.name
+      board.groups = board.groups.map((x) => (x.name === gname ? { ...x, ...patch } : x))
+      const by = args.de === 'Eric' || args.de === 'Andoni' ? String(args.de) : undefined
+      const existing = new Set(board.chips.filter((c) => c.group === gname).map((c) => c.text.trim().toLowerCase()))
+      let n = 0
+      for (const raw of (Array.isArray(args.notas) ? args.notas as Array<{ texto?: string; quien?: string }> : [])) {
+        const t = String(raw.texto || '').trim()
+        if (!t || existing.has(t.toLowerCase())) continue
+        existing.add(t.toLowerCase())
+        const who = BOARD_PEOPLE.includes(String(raw.quien)) ? String(raw.quien) : undefined
+        board.chips.push({ group: gname, text: t, date: todayISO(), ...(who ? { who } : {}), ...(by ? { by } : {}) })
+        n++
+      }
       await writeBoard(cid, board)
-      return { text: `✓ Nota en "${group.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}: ${texto}${who ? ` — ${who}` : ''}` }
+      const final = board.groups.find((x) => x.name === gname)!
+      const parts = [
+        `carril ${final.status ?? board.lanes[0]}`,
+        `responsable ${final.owner === 'Eric' || final.owner === 'Andoni' ? final.owner : 'los dos'}`,
+        final.deadline ? `entrega ${final.deadlineLabel || ''} ${final.deadline}`.replace('  ', ' ') : '',
+        n ? `${n} nota${n === 1 ? '' : 's'}` : '',
+      ].filter(Boolean).join(' · ')
+      return { text: `✓ ${created ? 'Creado' : 'Actualizado'} "${gname}": ${parts}` }
     }
 
     const found = findBoardGroup(board, String(args.proyecto || ''))
     if (typeof found === 'string') return { text: found, isError: true }
+
+    if (name === 'editar_nota') {
+      const needle = String(args.texto || '').trim().toLowerCase()
+      const matches = board.chips.filter((c) => c.group === found.name && c.text.toLowerCase().includes(needle))
+      if (matches.length !== 1) {
+        const list = board.chips.filter((c) => c.group === found.name).map((c) => `- ${c.text}`).join('\n') || '(sin notas)'
+        return { text: `${matches.length ? 'Varias' : 'Ninguna'} nota${matches.length ? 's coinciden' : ' coincide'} con "${args.texto}" en "${found.name}":\n${list}`, isError: true }
+      }
+      const nuevo = args.nuevo_texto !== undefined ? String(args.nuevo_texto).trim() : undefined
+      const quien = BOARD_PEOPLE.includes(String(args.quien)) ? String(args.quien) : undefined
+      if (!nuevo && !quien) return { text: 'Indica "nuevo_texto" y/o "quien".', isError: true }
+      board.chips = board.chips.map((c) => (c === matches[0] ? { ...c, ...(nuevo ? { text: nuevo } : {}), ...(quien ? { who: quien } : {}) } : c))
+      await writeBoard(cid, board)
+      return { text: `✓ Nota actualizada en "${found.name}": ${nuevo ?? matches[0].text}${quien ? ` — ${quien}` : ''}` }
+    }
 
     if (name === 'quitar_nota' || name === 'asignar_nota') {
       const needle = String(args.texto || '').trim().toLowerCase()

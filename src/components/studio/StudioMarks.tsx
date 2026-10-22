@@ -40,13 +40,14 @@ export function Faces({ who, size = 22, ring = 'var(--color-paper)' }: { who?: s
  * proyecto; si el proyecto activa showLogo y hay logo, la pastilla lleva el logo.
  */
 export function ProjectMark({
-  name, color, showLogo = false, size = 22, compact = false, onBadgeClick, onToggleLogo,
+  name, color, showLogo = false, size = 22, compact = false, hideName = false, onBadgeClick, onToggleLogo,
 }: {
   name: string
   color: string
   showLogo?: boolean
   size?: number
   compact?: boolean
+  hideName?: boolean
   onBadgeClick?: () => void
   onToggleLogo?: () => void
 }) {
@@ -79,7 +80,7 @@ export function ProjectMark({
           {badge}
         </button>
       ) : badge}
-      <span className={`${compact ? 'text-sm text-ink-60' : 'text-sm font-medium text-ink'} truncate`}>{name}</span>
+      {!hideName && <span className={`${compact ? 'text-sm text-ink-60' : 'text-sm font-medium text-ink'} truncate`}>{name}</span>}
       {logo && onToggleLogo && (
         <button
           type="button"
