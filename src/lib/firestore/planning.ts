@@ -11,6 +11,7 @@ export interface BoardGroup {
   color: string // hex
   status?: string // nombre del carril; default: el primero
   owner?: string // responsable del proyecto: 'Eric' | 'Andoni' | 'Eric y Andoni' (default)
+  showLogo?: boolean // mostrar el logo del cliente en la pastilla en vez de la inicial
   health?: 'verde' | 'ambar' | 'rojo' // semáforo de salud del proyecto
   statusNote?: string  // última línea de estado ("esperando feedback del cliente")
   statusDate?: string  // YYYY-MM-DD de la última actualización de estado

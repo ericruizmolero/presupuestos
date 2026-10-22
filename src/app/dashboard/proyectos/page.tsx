@@ -6,11 +6,12 @@ import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { getBoard, saveBoard, getBoardLastSeen, setBoardLastSeen, madridToday, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
-import { Check, Plus, X, Trash2 } from 'lucide-react'
+import { Check, Plus, X, Trash2, Clock, FileText, StickyNote } from 'lucide-react'
 import { Faces, ProjectMark } from '@/components/studio/StudioMarks'
-import { logoFor } from '@/lib/studioAssets'
 import { getTimeProjects, getTimeEntriesByCompany } from '@/lib/firestore/time'
 import type { TimeProject, TimeEntry } from '@/types/time'
+import { getQuotes } from '@/lib/firestore/quotes'
+import type { Quote } from '@/types/quote'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -35,6 +36,30 @@ function myName(displayName?: string | null, email?: string | null): string {
 }
 
 const NOVEDADES_DIAS_MAX = 30 // tope aunque lleves más sin entrar
+const NEWS_LIMIT = 12
+
+const QUOTE_STATUS: Record<string, string> = { borrador: 'borrador', enviado: 'enviado', aceptado: 'aceptado', rechazado: 'rechazado' }
+
+function nrm(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function fmtH(h: number): string {
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(h)
+}
+
+/** Fecha de Firestore (Timestamp, {seconds}, string ISO o Date) → YYYY-MM-DD en Madrid */
+function toISODate(v: unknown): string {
+  if (!v) return ''
+  if (typeof v === 'string') return v.slice(0, 10)
+  let d: Date | null = null
+  const o = v as { toDate?: () => Date; seconds?: number }
+  if (typeof o.toDate === 'function') d = o.toDate()
+  else if (typeof o.seconds === 'number') d = new Date(o.seconds * 1000)
+  else if (v instanceof Date) d = v
+  if (!d || isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
 
 const HEALTH: Array<{ id: 'verde' | 'ambar' | 'rojo'; color: string; label: string }> = [
   { id: 'verde', color: '#16A34A', label: 'En orden' },
@@ -104,15 +129,18 @@ function ProyectosContent() {
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [timeProjects, setTimeProjects] = useState<TimeProject[]>([])
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
+  const [quotes, setQuotes] = useState<Quote[]>([])
+  const [showAllNews, setShowAllNews] = useState(false)
 
   useEffect(() => {
     if (!user) return
     getUserCompanyId(user.uid).then(async (cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-      const [b, seen, tps, tes] = await Promise.all([
-        getBoard(cid), getBoardLastSeen(user.uid), getTimeProjects(cid), getTimeEntriesByCompany(cid),
+      const [b, seen, tps, tes, qs] = await Promise.all([
+        getBoard(cid), getBoardLastSeen(user.uid), getTimeProjects(cid), getTimeEntriesByCompany(cid), getQuotes(cid),
       ])
+      setQuotes(qs)
       setTimeProjects(tps)
       setTimeEntries(tes)
       setBoard(b)
@@ -151,6 +179,10 @@ function ProyectosContent() {
     const color = BOARD_COLORS[board.groups.length % BOARD_COLORS.length]
     setBoard((b) => ({ ...b, groups: [...b.groups, { name, color, status: b.lanes[0] }] }))
     setNewGroup('')
+  }
+
+  function toggleLogo(name: string) {
+    setBoard((b) => ({ ...b, groups: b.groups.map((g) => (g.name === name ? { ...g, showLogo: !g.showLogo } : g)) }))
   }
 
   function cycleColor(name: string) {
@@ -332,127 +364,188 @@ function ProyectosContent() {
       </p>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_19rem] gap-4 mb-10 items-start">
-      {/* Novedades desde tu última visita */}
+      {/* Novedades: notas del tablón, horas apuntadas y presupuestos, desde tu última visita */}
       {(() => {
         const today = madridToday()
         const me = myName(user?.displayName, user?.email)
         const floor = shiftDays(today, -NOVEDADES_DIAS_MAX)
         const cutoffISO = lastSeen && lastSeen > floor ? lastSeen : floor
-        const recent = board.chips
-          .map((c, i) => ({ c, i }))
-          .filter(({ c }) => c.date && c.date >= cutoffISO)
-          .sort((a, b) => (b.c.date! > a.c.date! ? 1 : b.c.date! < a.c.date! ? -1 : b.i - a.i))
-        if (recent.length === 0) {
-          return (
-            <div className="border border-line rounded-md p-4 bg-surface">
-              <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-2">Novedades</p>
-              <p className="text-sm text-ink-40">Nada nuevo desde tu última visita.</p>
-            </div>
-          )
+        const groupFor = (name: string) => {
+          const n = nrm(name)
+          return board.groups.find((g) => {
+            const gn = nrm(g.name)
+            return gn && n && (gn.includes(n) || n.includes(gn))
+          })
         }
+        type Ev = {
+          key: string; date: string; kind: 'nota' | 'horas' | 'presupuesto'
+          project: string; color: string; showLogo?: boolean
+          text: string; who?: string; meta: string; mine: boolean
+        }
+        const events: Ev[] = []
+
+        // Notas del tablón
+        board.chips.forEach((c, i) => {
+          if (!c.date || c.date < cutoffISO) return
+          const g = board.groups.find((x) => x.name === c.group)
+          const eff = effectiveWho(c.who, g?.owner)
+          events.push({
+            key: `n${i}`, date: c.date, kind: 'nota', project: c.group,
+            color: g?.color ?? '#E5E5E5', showLogo: g?.showLogo,
+            text: c.text, who: eff,
+            meta: (eff === 'Eric y Andoni' ? 'los dos' : eff === me ? 'para ti' : `para ${eff}`) + (c.by && c.by !== eff ? ` · de ${c.by}` : ''),
+            mine: includesMe(eff, me),
+          })
+        })
+
+        // Horas: agrupadas por día y proyecto
+        const hourGroups = new Map<string, TimeEntry[]>()
+        for (const e of timeEntries) {
+          if (!e.date || e.date < cutoffISO) continue
+          const k = `${e.date}|${e.projectId}`
+          if (!hourGroups.has(k)) hourGroups.set(k, [])
+          hourGroups.get(k)!.push(e)
+        }
+        hourGroups.forEach((list, k) => {
+          const [date, projectId] = k.split('|')
+          const tp = timeProjects.find((p) => p.id === projectId)
+          const pname = tp?.name ?? 'Proyecto'
+          const g = groupFor(pname)
+          const total = list.reduce((s, e) => s + (e.hours || 0), 0)
+          const people = [...new Set(list.map((e) => e.person).filter(Boolean))]
+          const who = people.length === 1 ? people[0] : 'Eric y Andoni'
+          const concepts = list.map((e) => e.description).filter(Boolean)
+          const shown = concepts.slice(0, 2).join(' · ')
+          events.push({
+            key: `h${k}`, date, kind: 'horas', project: g?.name ?? pname,
+            color: g?.color ?? '#E5E5E5', showLogo: g?.showLogo,
+            text: `${fmtH(total)} h${shown ? ` — ${shown}` : ''}${concepts.length > 2 ? ` (+${concepts.length - 2})` : ''}`,
+            who, meta: who === 'Eric y Andoni' ? 'los dos' : who === me ? 'tú' : who,
+            mine: includesMe(who, me),
+          })
+        })
+
+        // Presupuestos creados
+        for (const q of quotes) {
+          const date = toISODate((q as unknown as { createdAt?: unknown }).createdAt)
+          if (!date || date < cutoffISO) continue
+          const client = q.client?.company || q.client?.name || 'Sin cliente'
+          const g = groupFor(client)
+          events.push({
+            key: `q${q.id}`, date, kind: 'presupuesto', project: g?.name ?? client,
+            color: g?.color ?? '#E5E5E5', showLogo: g?.showLogo,
+            text: `Nuevo presupuesto${q.quoteNumber ? ` ${q.quoteNumber}` : ''} · ${QUOTE_STATUS[q.status] ?? q.status}`,
+            meta: 'presupuesto', mine: true,
+          })
+        }
+
+        events.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
         const header = lastSeen && lastSeen > floor
           ? `Desde tu última visita (${dayLabel(lastSeen, today).toLowerCase()})`
           : 'Novedades'
+
+        if (events.length === 0) {
+          return (
+            <div className="border border-line rounded-md p-4 bg-surface">
+              <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-2">{header}</p>
+              <p className="text-sm text-ink-40">Nada nuevo: ni notas, ni horas, ni presupuestos.</p>
+            </div>
+          )
+        }
+        const visible = showAllNews ? events : events.slice(0, NEWS_LIMIT)
+        const KindIcon = ({ kind }: { kind: Ev['kind'] }) =>
+          kind === 'horas' ? <Clock size={12} strokeWidth={1.5} />
+          : kind === 'presupuesto' ? <FileText size={12} strokeWidth={1.5} />
+          : <StickyNote size={12} strokeWidth={1.5} />
         return (
           <div className="border border-line rounded-md p-4 bg-surface min-w-0">
             <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">{header}</p>
-            <div className="space-y-1.5">
-              {recent.map(({ c, i }) => {
-                const gOwner = board.groups.find((g) => g.name === c.group)?.owner
-                const eff = effectiveWho(c.who, gOwner)
-                const mine = includesMe(eff, me)
-                return (
-                  <div key={i} className={`flex items-baseline gap-2 text-sm ${mine ? '' : 'opacity-55'}`}>
-                    <span className="text-xs text-ink-40 w-24 shrink-0">{dayLabel(c.date!, today)}</span>
-                    <span className="shrink-0 w-28 flex items-center self-center">
-                      {logoFor(c.group)
-                        ? <img src={logoFor(c.group)!} alt={c.group} title={c.group} className="h-3 max-w-[6.5rem] object-contain object-left" />
-                        : <span className="text-ink-60 font-medium truncate">{c.group}</span>}
-                    </span>
-                    <span className="text-ink min-w-0">{c.text}</span>
-                    <span className={`text-xs shrink-0 ml-auto whitespace-nowrap flex items-center gap-1.5 ${eff === me ? 'text-ink font-medium' : 'text-ink-40'}`}>
-                      <Faces who={eff} size={16} ring="var(--color-surface)" />
-                      {eff === 'Eric y Andoni' ? 'los dos' : eff === me ? 'para ti' : `para ${eff}`}
-                      {c.by && c.by !== eff ? ` · de ${c.by}` : ''}
-                    </span>
-                  </div>
-                )
-              })}
+            <div className="space-y-2">
+              {visible.map((ev) => (
+                <div key={ev.key} className={`flex items-center gap-2.5 text-sm ${ev.mine ? '' : 'opacity-55'}`}>
+                  <span className="text-xs text-ink-40 w-16 shrink-0 tabular-nums">{dayLabel(ev.date, today)}</span>
+                  <span className="text-ink-40 shrink-0" title={ev.kind}><KindIcon kind={ev.kind} /></span>
+                  <span className="shrink-0 w-36 min-w-0">
+                    <ProjectMark name={ev.project} color={ev.color} showLogo={ev.showLogo} size={18} compact />
+                  </span>
+                  <span className="text-ink min-w-0 flex-1 truncate" title={ev.text}>{ev.text}</span>
+                  <span className={`text-xs shrink-0 whitespace-nowrap flex items-center gap-1.5 ${ev.meta === 'para ti' || ev.meta === 'tú' ? 'text-ink font-medium' : 'text-ink-40'}`}>
+                    {ev.who && <Faces who={ev.who} size={16} ring="var(--color-surface)" />}
+                    {ev.meta}
+                  </span>
+                </div>
+              ))}
             </div>
+            {events.length > NEWS_LIMIT && (
+              <button
+                onClick={() => setShowAllNews((v) => !v)}
+                className="mt-3 text-xs text-ink-40 hover:text-ink transition-colors"
+              >
+                {showAllNews ? 'Ver menos' : `Ver todo (${events.length})`}
+              </button>
+            )}
           </div>
         )
       })()}
 
-      {/* Para el sync semanal: la semana en horas y lo que está parado */}
+      {/* Este mes: horas por proyecto en el mes en curso */}
       {(() => {
         const today = madridToday()
-        const weekStart = shiftDays(today, -6)
-        const prevStart = shiftDays(today, -13)
+        const month = today.slice(0, 7)
         const staleCut = shiftDays(today, -14)
-        const nrm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-        const matchTP = (gname: string) => {
-          const n = nrm(gname)
-          return timeProjects.filter((p) => {
-            const pn = nrm(p.name || '')
-            return pn && n && (pn.includes(n) || n.includes(pn))
-          }).map((p) => p.id)
-        }
-        let week = 0
-        let prev = 0
-        const rows = board.groups.map((g) => {
-          const ids = matchTP(g.name)
-          let w = 0
-          let lastHours = ''
-          for (const e of timeEntries) {
-            if (!ids.includes(e.projectId) || !e.date) continue
-            if (e.date >= weekStart) w += e.hours || 0
-            else if (e.date >= prevStart) prev += e.hours || 0
-            if (e.date > lastHours) lastHours = e.date
-          }
-          week += w
+        const rows = timeProjects.map((p) => {
+          let h = 0
+          for (const e of timeEntries) if (e.projectId === p.id && e.date?.startsWith(month)) h += e.hours || 0
+          const n = nrm(p.name || '')
+          const g = board.groups.find((x) => {
+            const gn = nrm(x.name)
+            return gn && n && (gn.includes(n) || n.includes(gn))
+          })
+          return { p, h, g }
+        }).filter((r) => r.h > 0).sort((a, b) => b.h - a.h)
+        const total = rows.reduce((s, r) => s + r.h, 0)
+        const monthName = new Date(today + 'T00:00:00').toLocaleDateString('es-ES', { month: 'long' })
+
+        // Proyectos del tablón sin notas, estado ni horas en 14 días
+        const stale = board.groups.filter((g) => {
           let last = g.statusDate ?? ''
           for (const c of board.chips) if (c.group === g.name && c.date && c.date > last) last = c.date
-          if (lastHours > last) last = lastHours
-          return { g, w, last }
+          const n = nrm(g.name)
+          for (const p of timeProjects) {
+            const pn = nrm(p.name || '')
+            if (!(pn && n && (pn.includes(n) || n.includes(pn)))) continue
+            for (const e of timeEntries) if (e.projectId === p.id && e.date && e.date > last) last = e.date
+          }
+          return !last || last < staleCut
         })
-        const active = rows.filter((r) => r.w > 0).sort((a, b) => b.w - a.w)
-        const stale = rows.filter((r) => !r.last || r.last < staleCut)
-        const fmt = (h: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(h)
-        const delta = week - prev
+
         return (
           <div className="border border-line rounded-md p-4 bg-paper">
-            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">Para el sync · últimos 7 días</p>
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-2xl font-medium tracking-tight text-ink tabular-nums">{fmt(week)} h</span>
-              {prev > 0 || week > 0 ? (
-                <span className={`text-xs tabular-nums ${delta >= 0 ? 'text-ink-60' : 'text-ink-40'}`}>
-                  {delta === 0 ? '= que la semana anterior' : `${delta > 0 ? '+' : '−'}${fmt(Math.abs(delta))} h vs anterior`}
-                </span>
-              ) : null}
-            </div>
-            {active.length > 0 && (
-              <ul className="space-y-1.5 mb-3">
-                {active.map(({ g, w }) => (
-                  <li key={g.name} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="min-w-0 flex items-center">
-                      {logoFor(g.name)
-                        ? <img src={logoFor(g.name)!} alt={g.name} title={g.name} className="h-3 max-w-[7rem] object-contain object-left" />
-                        : <span className="truncate text-ink-60">{g.name}</span>}
+            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">Este mes · {monthName}</p>
+            <p className="text-2xl font-medium tracking-tight text-ink tabular-nums mb-3">{fmtH(total)} h</p>
+            {rows.length > 0 ? (
+              <ul className="space-y-2 mb-3">
+                {rows.map(({ p, h, g }) => (
+                  <li key={p.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0">
+                      <ProjectMark name={g?.name ?? p.name} color={g?.color ?? '#E5E5E5'} showLogo={g?.showLogo} size={18} compact />
                     </span>
-                    <span className="tabular-nums text-ink-60 shrink-0">{fmt(w)} h</span>
+                    <span className="tabular-nums text-ink-60 shrink-0">{fmtH(h)} h</span>
                   </li>
                 ))}
               </ul>
+            ) : (
+              <p className="text-sm text-ink-40 mb-3">Aún no hay horas este mes.</p>
             )}
             {stale.length > 0 && (
               <div className="pt-3 border-t border-line mb-3">
                 <p className="text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mb-1.5">Sin movimiento en 14+ días</p>
-                <p className="text-sm text-ink-60 leading-relaxed">{stale.map((r) => r.g.name).join(' · ')}</p>
+                <p className="text-sm text-ink-60 leading-relaxed">{stale.map((g) => g.name).join(' · ')}</p>
               </div>
             )}
             <div className="pt-3 border-t border-line">
               <p className="text-xs text-ink-40 leading-relaxed">
-                ¿Qué se entregó? · ¿Qué está bloqueado? · ¿Seguimos construyendo lo mismo?
+                Para el sync: ¿qué se entregó? · ¿qué está bloqueado? · ¿seguimos construyendo lo mismo?
               </p>
             </div>
           </div>
@@ -555,7 +648,7 @@ function ProyectosContent() {
                         <div className="px-4 py-3 flex items-start gap-2 group/header lg:border-r lg:border-line">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-2 min-h-[24px]">
-                              <ProjectMark name={g.name} color={g.color} onMonogramClick={() => cycleColor(g.name)} />
+                              <ProjectMark name={g.name} color={g.color} showLogo={g.showLogo} onBadgeClick={() => cycleColor(g.name)} onToggleLogo={() => toggleLogo(g.name)} />
                               <button
                                 onClick={() => cycleOwner(g.name)}
                                 title={`Responsable: ${ownerLabel(g.owner)} — clic para cambiar`}
@@ -782,7 +875,7 @@ function ProyectosContent() {
                       >
                         <div className="flex items-center gap-2">
                           <div className="flex-1 min-w-0 flex items-center min-h-[24px]">
-                            <ProjectMark name={g.name} color={g.color} onMonogramClick={() => cycleColor(g.name)} />
+                            <ProjectMark name={g.name} color={g.color} showLogo={g.showLogo} onBadgeClick={() => cycleColor(g.name)} onToggleLogo={() => toggleLogo(g.name)} />
                           </div>
                           <button
                             onClick={() => cycleOwner(g.name)}
