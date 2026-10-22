@@ -122,3 +122,37 @@ export function toISODate(v: unknown): string {
   if (!d || isNaN(d.getTime())) return ''
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
 }
+
+/**
+ * Detecta una fecha en el texto de una nota: "23/10", "23/10/26", "23/10 10:00",
+ * "mañana 10:00", "hoy a las 16h". Sin año, el más cercano que no esté muy en el pasado.
+ */
+export function parseWhen(text: string, today: string): { due?: string; time?: string } {
+  const t = text.toLowerCase()
+  const timeM = t.match(/\b(\d{1,2})[:.h](\d{2})\b|\b(\d{1,2})\s?h\b/)
+  const time = timeM
+    ? `${String(Number(timeM[1] ?? timeM[3])).padStart(2, '0')}:${timeM[2] ?? '00'}`
+    : undefined
+  const validTime = time && Number(time.slice(0, 2)) < 24 ? time : undefined
+
+  const dm = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/)
+  if (dm) {
+    const d = Number(dm[1]), m = Number(dm[2])
+    if (d >= 1 && d <= 31 && m >= 1 && m <= 12) {
+      let y = dm[3] ? Number(dm[3].length === 2 ? `20${dm[3]}` : dm[3]) : Number(today.slice(0, 4))
+      let iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      if (!dm[3] && daysUntil(iso, today) < -60) { y++; iso = `${y}-${iso.slice(5)}` }
+      return { due: iso, time: validTime }
+    }
+  }
+  if (/\bpasado mañana\b/.test(t)) return { due: shiftDays(today, 2), time: validTime }
+  if (/\bmañana\b/.test(t) && validTime) return { due: shiftDays(today, 1), time: validTime }
+  if (/\bhoy\b/.test(t) && validTime) return { due: today, time: validTime }
+  return {}
+}
+
+/** "vie 23 oct · 10:00" */
+export function fmtWhen(due: string, time?: string): string {
+  const d = new Date(due + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+  return time ? `${d} · ${time}` : d
+}

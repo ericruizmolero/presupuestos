@@ -201,8 +201,11 @@ function ProyectosContent() {
   }
 
   // ── Notas ──────────────────────────────────────────────────────────────────
-  function addChip(group: string, text: string, who?: Person) {
-    const chip: BoardChip = { group, text, date: madridToday(), by: me, ...(who ? { who } : {}) }
+  function addChip(group: string, text: string, who?: Person, due?: string, time?: string) {
+    const chip: BoardChip = {
+      group, text, date: madridToday(), by: me,
+      ...(who ? { who } : {}), ...(due ? { due } : {}), ...(due && time ? { time } : {}),
+    }
     setBoard((b) => ({ ...b, chips: [...b.chips, chip] }))
   }
 
@@ -215,13 +218,46 @@ function ProyectosContent() {
     if (!removed) return
     setBoard((b) => ({ ...b, chips: b.chips.filter((_, idx) => idx !== i) }))
     showToast({
-      message: `Hecha: ${removed.text}`,
+      message: `Cerrada: ${removed.text}`,
       undo: () => setBoard((b) => {
         const chips = [...b.chips]
         chips.splice(Math.min(i, chips.length), 0, removed)
         return { ...b, chips }
       }),
     })
+  }
+
+  /** ○ pendiente → ◐ hecha, esperando feedback → cerrada (se quita, con deshacer) */
+  function advanceChip(i: number) {
+    const chip = board.chips[i]
+    if (!chip) return
+    if (chip.state === 'esperando') { doneChip(i); return }
+    setBoard((b) => ({
+      ...b,
+      chips: b.chips.map((c, idx) => (idx === i ? { ...c, state: 'esperando', stateDate: madridToday() } : c)),
+    }))
+    showToast({
+      message: `Esperando feedback: ${chip.text}`,
+      undo: () => setBoard((b) => ({
+        ...b,
+        chips: b.chips.map((c, idx) => {
+          if (idx !== i) return c
+          const { state: _s, stateDate: _d, ...rest } = c
+          return rest
+        }),
+      })),
+    })
+  }
+
+  function setChipWhen(i: number, due?: string, time?: string) {
+    setBoard((b) => ({
+      ...b,
+      chips: b.chips.map((c, idx) => {
+        if (idx !== i) return c
+        const { due: _d, time: _t, ...rest } = c
+        return due ? { ...rest, due, ...(time ? { time } : {}) } : rest
+      }),
+    }))
   }
 
   function assignChip(i: number, who: Person | undefined) {
@@ -259,8 +295,18 @@ function ProyectosContent() {
     return board.chips
       .map((c, i) => ({ c, i }))
       .filter(({ c }) => c.group === name)
-      // recientes arriba; sin fecha al final
-      .sort((a, b) => (a.c.date && b.c.date ? b.c.date.localeCompare(a.c.date) || b.i - a.i : a.c.date ? -1 : b.c.date ? 1 : a.i - b.i))
+      // pendientes antes que las que esperan feedback; dentro, recientes arriba y sin fecha al final
+      .sort((a, b) => {
+        const wa = a.c.state === 'esperando' ? 1 : 0
+        const wb = b.c.state === 'esperando' ? 1 : 0
+        if (wa !== wb) return wa - wb
+        // con fecha (reunión/entrega) primero, la más cercana arriba
+        if (a.c.due || b.c.due) {
+          if (a.c.due && b.c.due) return (a.c.due + (a.c.time ?? '')).localeCompare(b.c.due + (b.c.time ?? ''))
+          return a.c.due ? -1 : 1
+        }
+        return a.c.date && b.c.date ? b.c.date.localeCompare(a.c.date) || b.i - a.i : a.c.date ? -1 : b.c.date ? 1 : a.i - b.i
+      })
   }
 
   function involvesMe(g: BoardGroup): boolean {
@@ -282,8 +328,10 @@ function ProyectosContent() {
         me={me}
         onlyMine={onlyMine}
         compact={compact}
-        onAdd={(text, who) => addChip(g.name, text, who)}
+        onAdd={(text, who, due, time) => addChip(g.name, text, who, due, time)}
+        onSetWhen={setChipWhen}
         onEdit={editChip}
+        onAdvance={advanceChip}
         onDone={doneChip}
         onAssign={assignChip}
         dragChip={dragChip}

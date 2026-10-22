@@ -104,9 +104,20 @@ export function StudioSidebar({ board, timeProjects, timeEntries, quotes, lastSe
   const groupFor = (name: string) => board.groups.find((g) => sameProject(g.name, name))
 
   // ── Próximas entregas ──
-  const upcoming = board.groups
-    .filter((g) => g.deadline && daysUntil(g.deadline, today) <= 30)
-    .sort((a, b) => a.deadline!.localeCompare(b.deadline!))
+  // Entregas de proyecto (30 días) y reuniones/fechas de notas (14 días), juntas por fecha
+  type Upcoming = { key: string; date: string; time?: string; label: string; project: string; color: string; showLogo?: boolean }
+  const upcoming: Upcoming[] = [
+    ...board.groups
+      .filter((g) => g.deadline && daysUntil(g.deadline, today) <= 30)
+      .map((g): Upcoming => ({ key: `p${g.name}`, date: g.deadline!, label: g.deadlineLabel || 'Entrega', project: g.name, color: g.color, showLogo: g.showLogo })),
+    ...board.chips
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.due && c.state !== 'esperando' && daysUntil(c.due, today) >= -1 && daysUntil(c.due, today) <= 14)
+      .map(({ c, i }): Upcoming => {
+        const g = board.groups.find((x) => x.name === c.group)
+        return { key: `n${i}`, date: c.due!, time: c.time, label: c.text, project: c.group, color: g?.color ?? '#E5E5E5', showLogo: g?.showLogo }
+      }),
+  ].sort((a, b) => (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')))
 
   // ── Este mes ──
   const month = today.slice(0, 7)
@@ -190,17 +201,18 @@ export function StudioSidebar({ board, timeProjects, timeEntries, quotes, lastSe
     <aside className="space-y-6 lg:sticky lg:top-6">
       {upcoming.length > 0 && (
         <section>
-          <p className={`${EYEBROW} mb-2.5`}>Próximas entregas</p>
+          <p className={`${EYEBROW} mb-2.5`}>Próximas fechas</p>
           <ul className="space-y-2.5">
-            {upcoming.map((g) => {
-              const cd = countdown(g.deadline!, today)
+            {upcoming.map((u) => {
+              const cd = countdown(u.date, today)
               return (
-                <li key={g.name}>
+                <li key={u.key}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0"><ProjectMark name={g.name} color={g.color} showLogo={g.showLogo} size={18} compact /></span>
+                    <span className="min-w-0"><ProjectMark name={u.project} color={u.color} showLogo={u.showLogo} size={18} compact /></span>
                     <span className={`shrink-0 whitespace-nowrap px-1.5 py-px rounded text-[11px] font-medium ${cd.pill}`}>{cd.text}</span>
                   </div>
-                  <p className="text-xs text-ink-40 mt-0.5 pl-[26px]">{g.deadlineLabel || 'Entrega'} · {fmtDay(g.deadline!)}</p>
+                  <p className="text-xs text-ink-60 mt-0.5 pl-[26px] line-clamp-2">{u.label}</p>
+                  <p className="text-[11px] text-ink-40 pl-[26px]">{fmtDay(u.date)}{u.time ? ` · ${u.time}` : ''}</p>
                 </li>
               )
             })}
@@ -226,6 +238,38 @@ export function StudioSidebar({ board, timeProjects, timeEntries, quotes, lastSe
           <p className="text-sm text-ink-40">Aún no hay horas este mes.</p>
         )}
       </section>
+
+      {(() => {
+        const waiting = board.chips
+          .filter((c) => c.state === 'esperando')
+          .sort((a, b) => (a.stateDate ?? '').localeCompare(b.stateDate ?? ''))
+        if (waiting.length === 0) return null
+        return (
+          <section className="pt-5 border-t border-line">
+            <div className="flex items-baseline justify-between mb-2.5">
+              <p className={EYEBROW}>Esperando feedback</p>
+              <span className="text-[11px] text-[#B45309] tabular-nums">{waiting.length}</span>
+            </div>
+            <ul className="space-y-2">
+              {waiting.map((c, i) => {
+                const g = board.groups.find((x) => x.name === c.group)
+                const days = c.stateDate ? -daysUntil(c.stateDate, today) : 0
+                return (
+                  <li key={i} className="text-sm">
+                    <div className="flex items-center justify-between gap-2 text-xs text-ink-40">
+                      <span className="truncate text-ink-60">{c.group}</span>
+                      <span className={`shrink-0 tabular-nums ${days >= 7 ? 'text-[#B45309]' : ''}`}>
+                        {days <= 0 ? 'hoy' : days === 1 ? 'desde ayer' : `hace ${days} días`}
+                      </span>
+                    </div>
+                    <p className="text-ink leading-snug line-clamp-2" title={g ? `${g.name}` : undefined}>{c.text}</p>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )
+      })()}
 
       <BillingSection today={today} />
 

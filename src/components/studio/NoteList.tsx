@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Check, UserRound } from 'lucide-react'
-import type { BoardChip } from '@/lib/firestore/planning'
+import { Plus, Check, CalendarClock } from 'lucide-react'
+import { madridToday, type BoardChip } from '@/lib/firestore/planning'
 import { Faces } from './StudioMarks'
-import { effectiveWho, fmtDay, fmtShort, includesMe, parseMention, type Person } from './boardUtils'
+import {
+  countdown, effectiveWho, fmtDay, fmtShort, fmtWhen, includesMe, parseMention, parseWhen, type Person,
+} from './boardUtils'
 
 export interface IndexedNote { c: BoardChip; i: number }
 
@@ -15,10 +17,13 @@ interface Props {
   me: string
   onlyMine: boolean
   compact?: boolean
-  onAdd: (text: string, who?: Person) => void
+  onAdd: (text: string, who?: Person, due?: string, time?: string) => void
   onEdit: (i: number, text: string) => void
+  /** Avanza el estado: pendiente → esperando feedback → cerrada */
+  onAdvance: (i: number) => void
   onDone: (i: number) => void
   onAssign: (i: number, who: Person | undefined) => void
+  onSetWhen: (i: number, due?: string, time?: string) => void
   dragChip: number | null
   onDragStart: (i: number) => void
   onDragEnd: () => void
@@ -31,15 +36,21 @@ const ASSIGN_OPTIONS: Array<{ who: Person | undefined; label: string }> = [
   { who: 'Eric y Andoni', label: 'Los dos' },
 ]
 
-/** Lista de notas de un proyecto: clic para editar, círculo para marcar hecha, menú para asignar. */
+const whoName = (w: string) => (w === 'Eric y Andoni' ? 'Los dos' : w)
+
+/** Notas de un proyecto: clic en el texto edita, el círculo avanza el estado, el nombre reasigna. */
 export function NoteList({
   notes, owner, me, onlyMine, compact = false,
-  onAdd, onEdit, onDone, onAssign, dragChip, onDragStart, onDragEnd,
+  onAdd, onEdit, onAdvance, onDone, onAssign, onSetWhen, dragChip, onDragStart, onDragEnd,
 }: Props) {
+  const today = madridToday()
   const [editing, setEditing] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
   const [draft, setDraft] = useState('')
   const [assignMenu, setAssignMenu] = useState<number | null>(null)
+  const [whenEditing, setWhenEditing] = useState<number | null>(null)
+  const [whenDate, setWhenDate] = useState('')
+  const [whenTime, setWhenTime] = useState('')
 
   function commitEdit() {
     if (editing === null) return
@@ -52,18 +63,33 @@ export function NoteList({
   function submitDraft() {
     const { text, who } = parseMention(draft)
     if (!text) return
-    onAdd(text, who)
+    const { due, time } = parseWhen(text, today)
+    onAdd(text, who, due, time)
     setDraft('')
+  }
+
+  function openWhen(i: number, c: BoardChip) {
+    setWhenEditing(i)
+    setWhenDate(c.due || '')
+    setWhenTime(c.time || '')
+  }
+
+  function saveWhen() {
+    if (whenEditing === null) return
+    onSetWhen(whenEditing, whenDate || undefined, whenDate && whenTime ? whenTime : undefined)
+    setWhenEditing(null)
   }
 
   return (
     <div>
       {notes.length > 0 && (
-        <ul className={compact ? 'space-y-0.5' : 'space-y-0.5'}>
+        <ul className="space-y-0.5">
           {notes.map(({ c, i }) => {
             const eff = effectiveWho(c.who, owner)
-            const isException = !!c.who && c.who !== owner
             const dim = onlyMine && !includesMe(eff, me)
+            const waiting = c.state === 'esperando'
+            const cd = c.due ? countdown(c.due, today) : null
+
             if (editing === i) {
               return (
                 <li key={i} className="py-0.5">
@@ -81,6 +107,7 @@ export function NoteList({
                 </li>
               )
             }
+
             return (
               <li
                 key={i}
@@ -91,43 +118,107 @@ export function NoteList({
                   dragChip === i ? 'opacity-40' : dim ? 'opacity-35' : ''
                 }`}
               >
-                {/* Marcar como hecha */}
-                <button
-                  onClick={() => onDone(i)}
-                  title="Marcar como hecha"
-                  aria-label="Marcar como hecha"
-                  className="mt-[3px] shrink-0 w-3.5 h-3.5 rounded-full border border-input text-transparent hover:text-ink-60 hover:border-ink-40 flex items-center justify-center transition-colors"
-                >
-                  <Check size={9} strokeWidth={3} />
-                </button>
-                <span
-                  onClick={() => { setEditing(i); setEditText(c.text) }}
-                  title="Clic para editar"
-                  className="min-w-0 flex-1 text-sm text-ink leading-snug cursor-text"
-                >
-                  {c.text}
-                </span>
-                {c.date && !compact && (
-                  <span
-                    className="shrink-0 mt-px text-[11px] text-ink-40 tabular-nums whitespace-nowrap"
-                    title={`Apuntada el ${fmtDay(c.date)}${c.by ? ` por ${c.by}` : ''}`}
+                {/* Estado: ○ pendiente → ◐ esperando feedback → cerrada */}
+                {waiting ? (
+                  <button
+                    onClick={() => onAdvance(i)}
+                    title="Hecha, esperando feedback — clic para cerrarla"
+                    aria-label="Cerrar tarea"
+                    className="mt-[3px] shrink-0 w-3.5 h-3.5 rounded-full border border-[#D97706] overflow-hidden flex transition-transform hover:scale-110"
                   >
-                    {fmtShort(c.date)}{c.by ? ` · ${c.by}` : ''}
-                  </span>
+                    <span className="w-1/2 h-full bg-[#D97706]" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onAdvance(i)}
+                    title="Pendiente — clic para marcarla hecha (esperando feedback)"
+                    aria-label="Marcar hecha, esperando feedback"
+                    className="mt-[3px] shrink-0 w-3.5 h-3.5 rounded-full border border-input text-transparent hover:text-ink-60 hover:border-ink-40 flex items-center justify-center transition-colors"
+                  >
+                    <Check size={9} strokeWidth={3} />
+                  </button>
                 )}
-                {/* Asignación: cara si es excepción, icono al pasar si hereda */}
-                <button
-                  onClick={() => setAssignMenu(assignMenu === i ? null : i)}
-                  title={isException ? `Para ${c.who} — cambiar` : 'Asignar a alguien'}
-                  aria-label="Asignar"
-                  className={`shrink-0 rounded-full transition-opacity ${isException ? '' : 'opacity-0 group-hover/note:opacity-100 text-ink-40 hover:text-ink'}`}
-                >
-                  {isException ? <Faces who={c.who} size={16} ring="var(--color-paper)" /> : <UserRound size={14} strokeWidth={1.5} />}
-                </button>
+
+                <div className="min-w-0 flex-1">
+                  <span
+                    onClick={() => { setEditing(i); setEditText(c.text) }}
+                    title={`Clic para editar${c.by ? ` · apuntada por ${c.by}` : ''}${c.date ? ` el ${fmtDay(c.date)}` : ''}`}
+                    className={`text-sm leading-snug cursor-text ${waiting ? 'text-ink-60' : 'text-ink'}`}
+                  >
+                    {c.text}
+                  </span>
+
+                  {/* Fecha de reunión/entrega de la nota */}
+                  {whenEditing === i ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <input
+                        type="date" autoFocus value={whenDate}
+                        onChange={(e) => setWhenDate(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveWhen(); if (e.key === 'Escape') setWhenEditing(null) }}
+                        className="text-xs border border-input rounded px-1.5 py-0.5 text-ink focus:outline-none focus:border-accent"
+                      />
+                      <input
+                        type="time" value={whenTime}
+                        onChange={(e) => setWhenTime(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveWhen(); if (e.key === 'Escape') setWhenEditing(null) }}
+                        className="text-xs border border-input rounded px-1.5 py-0.5 text-ink focus:outline-none focus:border-accent"
+                      />
+                      <button onClick={saveWhen} className="text-xs px-1.5 py-0.5 rounded bg-accent text-on-accent">OK</button>
+                      {c.due && (
+                        <button onClick={() => { onSetWhen(i, undefined, undefined); setWhenEditing(null) }} className="text-xs text-ink-40 hover:text-[#B91C1C]">
+                          Quitar fecha
+                        </button>
+                      )}
+                    </div>
+                  ) : c.due && cd ? (
+                    <button
+                      onClick={() => openWhen(i, c)}
+                      title="Cambiar fecha"
+                      className="mt-0.5 flex items-center gap-1.5 text-xs"
+                    >
+                      <CalendarClock size={11} strokeWidth={1.5} className={cd.tone} />
+                      <span className="text-ink-60">{fmtWhen(c.due, c.time)}</span>
+                      {!waiting && (
+                        <span className={`px-1.5 py-px rounded text-[10px] font-medium ${cd.pill}`}>{cd.text}</span>
+                      )}
+                    </button>
+                  ) : null}
+                </div>
+
+                {/* Fecha rápida: aparece al pasar si la nota no tiene */}
+                {!c.due && whenEditing !== i && (
+                  <button
+                    onClick={() => openWhen(i, c)}
+                    title="Poner fecha (reunión o entrega)"
+                    aria-label="Poner fecha"
+                    className="shrink-0 mt-0.5 opacity-0 group-hover/note:opacity-100 text-ink-40 hover:text-ink transition-opacity"
+                  >
+                    <CalendarClock size={13} strokeWidth={1.5} />
+                  </button>
+                )}
+
+                {/* Estado o fecha de alta + a quién le toca (clic para reasignar) */}
+                <span className="shrink-0 mt-px flex items-center gap-1.5 text-[11px] whitespace-nowrap">
+                  {waiting ? (
+                    <span className="text-[#B45309]" title={c.stateDate ? `Esperando feedback desde el ${fmtDay(c.stateDate)}` : 'Esperando feedback'}>
+                      esperando{c.stateDate && !compact ? ` · ${fmtShort(c.stateDate)}` : ''}
+                    </span>
+                  ) : c.date && !compact ? (
+                    <span className="text-ink-40 tabular-nums">{fmtShort(c.date)}</span>
+                  ) : null}
+                  <button
+                    onClick={() => setAssignMenu(assignMenu === i ? null : i)}
+                    title="A quién le toca — clic para cambiar"
+                    className={`rounded px-1 -mx-1 hover:bg-surface-hover transition-colors ${eff === me ? 'text-ink font-medium' : 'text-ink-60'}`}
+                  >
+                    {whoName(eff)}
+                  </button>
+                </span>
+
                 {assignMenu === i && (
                   <>
                     <div className="fixed inset-0 z-20" onClick={() => setAssignMenu(null)} aria-hidden="true" />
-                    <div className="absolute right-0 top-full mt-1 z-30 w-44 bg-paper border border-line rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.04)] py-1">
+                    <div className="absolute right-0 top-full mt-1 z-30 w-48 bg-paper border border-line rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.04)] py-1">
                       {ASSIGN_OPTIONS.map((o) => {
                         const active = o.who === undefined ? !c.who : c.who === o.who
                         return (
@@ -137,7 +228,7 @@ export function NoteList({
                             className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-surface-hover ${active ? 'text-ink font-medium' : 'text-ink-60'}`}
                           >
                             <Faces who={o.who ?? owner} size={16} />
-                            {o.who === undefined ? `${o.label} (${owner === 'Eric y Andoni' ? 'los dos' : owner})` : o.label}
+                            {o.who === undefined ? `${o.label} (${whoName(owner).toLowerCase()})` : o.label}
                             {active && <Check size={12} strokeWidth={2} className="ml-auto" />}
                           </button>
                         )
@@ -156,7 +247,7 @@ export function NoteList({
         <Plus size={13} strokeWidth={1.5} className="shrink-0" />
         <input
           className="flex-1 min-w-0 bg-transparent text-sm text-ink placeholder-ink-40 outline-none"
-          placeholder={compact ? 'Añadir nota…' : 'Añadir nota…  (@andoni o @eric para asignar)'}
+          placeholder={compact ? 'Añadir nota…' : 'Añadir nota…  (@andoni o @eric para asignar · 23/10 10:00 para fecha)'}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {

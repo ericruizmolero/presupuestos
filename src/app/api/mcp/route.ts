@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { billingSummary, holdedConfigured, recentInvoices, invoicedContacts } from '@/lib/holded'
 import { PROFILES, proposeAll, createDraft, formatProposal, type TimeData } from '@/lib/invoicing'
+import { parseWhen } from '@/components/studio/boardUtils'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -132,7 +133,7 @@ const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', 
 
 interface BoardGroup { name: string; color: string; status?: string; owner?: string; health?: string; statusNote?: string; statusDate?: string; deadline?: string; deadlineLabel?: string }
 const HEALTH_ICON: Record<string, string> = { verde: '🟢', ambar: '🟡', rojo: '🔴' }
-interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string }
+interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string; state?: string; stateDate?: string; due?: string; time?: string }
 const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
 interface Board { lanes: string[]; groups: BoardGroup[]; chips: BoardChip[] }
 
@@ -198,7 +199,9 @@ function renderBoard(board: Board): string {
       for (const c of chips) {
         const exception = c.who && c.who !== (g.owner ?? 'Eric y Andoni')
         const meta = [c.date, c.by ? `de ${c.by}` : ''].filter(Boolean).join(' ')
-        lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}${meta ? ` (${meta})` : ''}`)
+        const st = c.state === 'esperando' ? ` [esperando feedback${c.stateDate ? ' desde ' + c.stateDate : ''}]` : ''
+        const when = c.due ? ` 📅 ${c.due}${c.time ? ' ' + c.time : ''}` : ''
+        lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}${when}${st}${meta ? ` (${meta})` : ''}`)
       }
     }
   }
@@ -242,6 +245,8 @@ const TOOLS = [
         proyecto: { type: 'string', description: 'Nombre del proyecto del tablero (acepta substring)' },
         texto: { type: 'string', description: 'Texto de una sola nota, corto' },
         quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Para la nota de "texto": solo si difiere del responsable del proyecto' },
+        fecha: { type: 'string', description: 'Para la nota de "texto": YYYY-MM-DD si es reunión/entrega' },
+        hora: { type: 'string', description: 'Para la nota de "texto": HH:MM' },
         notas: {
           type: 'array',
           description: 'Varias notas de golpe',
@@ -250,6 +255,9 @@ const TOOLS = [
             properties: {
               texto: { type: 'string' },
               quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Solo si difiere del responsable del proyecto' },
+              fecha: { type: 'string', description: 'YYYY-MM-DD si es una reunión o entrega con fecha' },
+              hora: { type: 'string', description: 'HH:MM opcional' },
+              estado: { type: 'string', enum: ['pendiente', 'esperando'], description: '"esperando" = hecha, esperando feedback' },
             },
             required: ['texto'],
             additionalProperties: false,
@@ -296,7 +304,7 @@ const TOOLS = [
   {
     name: 'editar_nota',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Cambia el texto y/o la persona de una nota del tablero. La nota se busca por coincidencia parcial de su texto dentro del proyecto.',
+    description: 'Cambia una nota del tablero: texto, persona, estado (pendiente / esperando feedback) o fecha de reunión/entrega. La nota se busca por coincidencia parcial de su texto dentro del proyecto. Una nota "hecha pero esperando feedback" se marca con estado=esperando; quitar_nota la cierra del todo.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -304,6 +312,9 @@ const TOOLS = [
         texto: { type: 'string', description: 'Texto actual (o parte) de la nota' },
         nuevo_texto: { type: 'string', description: 'Texto nuevo' },
         quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Nueva persona' },
+        estado: { type: 'string', enum: ['pendiente', 'esperando'], description: '"esperando" = hecha, esperando feedback; para cerrarla del todo usa quitar_nota' },
+        fecha: { type: 'string', description: 'YYYY-MM-DD de la reunión/entrega; cadena vacía para quitarla' },
+        hora: { type: 'string', description: 'HH:MM' },
       },
       required: ['proyecto', 'texto'],
       additionalProperties: false,
@@ -658,20 +669,23 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       .map((x) => `- ${x.name}${x.last ? ` (última actividad ${x.last})` : ' (sin actividad registrada)'}`)
 
     const daysTo = (d: string) => Math.round((new Date(d + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000)
-    const upcoming = board.groups
-      .filter((g) => g.deadline && daysTo(g.deadline) <= 30)
-      .sort((a, b) => a.deadline!.localeCompare(b.deadline!))
-      .map((g) => {
-        const d = daysTo(g.deadline!)
-        const when = d < 0 ? `vencido hace ${-d} días` : d === 0 ? 'HOY' : d === 1 ? 'mañana' : `en ${d} días`
-        return `- ${g.name}: ${g.deadlineLabel || 'Entrega'} el ${g.deadline} (${when})`
-      })
+    const whenTxt = (d: number) => (d < 0 ? `vencido hace ${-d} días` : d === 0 ? 'HOY' : d === 1 ? 'mañana' : `en ${d} días`)
+    const upcoming = [
+      ...board.groups
+        .filter((g) => g.deadline && daysTo(g.deadline) <= 30)
+        .map((g) => ({ k: g.deadline!, t: `- ${g.name}: ${g.deadlineLabel || 'Entrega'} el ${g.deadline} (${whenTxt(daysTo(g.deadline!))})` })),
+      ...board.chips
+        .filter((c) => c.due && c.state !== 'esperando' && daysTo(c.due) >= -1 && daysTo(c.due) <= 14)
+        .map((c) => ({ k: c.due! + (c.time ?? ''), t: `- ${c.group}: ${c.text} — ${c.due}${c.time ? ' ' + c.time : ''} (${whenTxt(daysTo(c.due!))})` })),
+    ].sort((a, b) => a.k.localeCompare(b.k)).map((x) => x.t)
 
     if (hoursLines.length === 0 && news.length === 0 && stale.length === 0 && upcoming.length === 0) {
       return { text: 'Semana tranquila: sin horas, sin novedades y ningún proyecto parado.' }
     }
     const sections: string[] = [`Resumen ${weekStart} → ${today}`]
-    if (upcoming.length) sections.push(`\nPróximas entregas\n${upcoming.join('\n')}`)
+    if (upcoming.length) sections.push(`\nPróximas fechas\n${upcoming.join('\n')}`)
+    const waitingList = board.chips.filter((c) => c.state === 'esperando').map((c) => `- ${c.group}: ${c.text}${c.stateDate ? ` (desde ${c.stateDate})` : ''}`)
+    if (waitingList.length) sections.push(`\nEsperando feedback\n${waitingList.join('\n')}`)
     if (hoursLines.length) {
       sections.push(`\nHoras: ${+weekTotal.toFixed(2)} h esta semana (${+prevTotal.toFixed(2)} h la anterior)\n${hoursLines.join('\n')}`)
     }
@@ -716,9 +730,9 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     }
 
     if (name === 'anadir_nota') {
-      const items: Array<{ texto: string; quien?: string }> = Array.isArray(args.notas)
-        ? (args.notas as Array<{ texto?: string; quien?: string }>).map((n) => ({ texto: String(n.texto || '').trim(), quien: n.quien }))
-        : [{ texto: String(args.texto || '').trim(), quien: args.quien as string | undefined }]
+      const items: Array<{ texto: string; quien?: string; fecha?: string; hora?: string; estado?: string }> = Array.isArray(args.notas)
+        ? (args.notas as Array<{ texto?: string; quien?: string; fecha?: string; hora?: string; estado?: string }>).map((n) => ({ texto: String(n.texto || '').trim(), quien: n.quien, fecha: n.fecha, hora: n.hora, estado: n.estado }))
+        : [{ texto: String(args.texto || '').trim(), quien: args.quien as string | undefined, fecha: args.fecha as string | undefined, hora: args.hora as string | undefined, estado: undefined as string | undefined }]
       const valid = items.filter((n) => n.texto)
       if (valid.length === 0) return { text: 'Falta "texto" o "notas".', isError: true }
       const needle = String(args.proyecto || '').trim()
@@ -739,8 +753,17 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         if (existing.has(n.texto.toLowerCase())) { skipped.push(n.texto); continue }
         existing.add(n.texto.toLowerCase())
         const who = BOARD_PEOPLE.includes(String(n.quien)) ? String(n.quien) : undefined
-        board.chips.push({ group: g.name, text: n.texto, date: todayISO(), ...(who ? { who } : {}), ...(by ? { by } : {}) })
-        added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}`)
+        const parsed = parseWhen(n.texto, todayISO())
+        const due = n.fecha && /^\d{4}-\d{2}-\d{2}$/.test(n.fecha) ? n.fecha : parsed.due
+        const time = n.hora && /^\d{1,2}:\d{2}$/.test(n.hora) ? n.hora.padStart(5, '0') : parsed.time
+        const waiting = n.estado === 'esperando'
+        board.chips.push({
+          group: g.name, text: n.texto, date: todayISO(),
+          ...(who ? { who } : {}), ...(by ? { by } : {}),
+          ...(due ? { due } : {}), ...(due && time ? { time } : {}),
+          ...(waiting ? { state: 'esperando', stateDate: todayISO() } : {}),
+        })
+        added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}${due ? ` 📅 ${due}${time ? ' ' + time : ''}` : ''}${waiting ? ' [esperando feedback]' : ''}`)
       }
       if (added.length) await writeBoard(cid, board)
       const head = `✓ ${added.length} nota${added.length === 1 ? '' : 's'} en "${g.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}`
@@ -808,10 +831,31 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       }
       const nuevo = args.nuevo_texto !== undefined ? String(args.nuevo_texto).trim() : undefined
       const quien = BOARD_PEOPLE.includes(String(args.quien)) ? String(args.quien) : undefined
-      if (!nuevo && !quien) return { text: 'Indica "nuevo_texto" y/o "quien".', isError: true }
-      board.chips = board.chips.map((c) => (c === matches[0] ? { ...c, ...(nuevo ? { text: nuevo } : {}), ...(quien ? { who: quien } : {}) } : c))
+      const estado = args.estado === 'pendiente' || args.estado === 'esperando' ? String(args.estado) : undefined
+      const fecha = args.fecha !== undefined ? String(args.fecha).trim() : undefined
+      const hora = args.hora !== undefined ? String(args.hora).trim() : undefined
+      if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { text: `Fecha inválida (YYYY-MM-DD): ${fecha}`, isError: true }
+      if (!nuevo && !quien && !estado && fecha === undefined && hora === undefined) {
+        return { text: 'Indica qué cambiar: nuevo_texto, quien, estado, fecha u hora.', isError: true }
+      }
+      board.chips = board.chips.map((c) => {
+        if (c !== matches[0]) return c
+        let next: BoardChip = { ...c, ...(nuevo ? { text: nuevo } : {}), ...(quien ? { who: quien } : {}) }
+        if (estado === 'esperando') next = { ...next, state: 'esperando', stateDate: todayISO() }
+        if (estado === 'pendiente') { const { state: _s, stateDate: _d, ...rest } = next; next = rest }
+        if (fecha === '') { const { due: _d, time: _t, ...rest } = next; next = rest }
+        else if (fecha) next = { ...next, due: fecha }
+        if (hora !== undefined && next.due) next = hora ? { ...next, time: hora.padStart(5, '0') } : (({ time: _t, ...rest }) => rest)(next)
+        return next
+      })
       await writeBoard(cid, board)
-      return { text: `✓ Nota actualizada en "${found.name}": ${nuevo ?? matches[0].text}${quien ? ` — ${quien}` : ''}` }
+      const after = board.chips.find((c) => c.group === found.name && c.text === (nuevo ?? matches[0].text))
+      const extra = [
+        quien ? quien : '',
+        after?.state === 'esperando' ? 'esperando feedback' : estado === 'pendiente' ? 'pendiente' : '',
+        after?.due ? `📅 ${after.due}${after.time ? ' ' + after.time : ''}` : fecha === '' ? 'sin fecha' : '',
+      ].filter(Boolean).join(' · ')
+      return { text: `✓ Nota actualizada en "${found.name}": ${nuevo ?? matches[0].text}${extra ? ` — ${extra}` : ''}` }
     }
 
     if (name === 'quitar_nota' || name === 'asignar_nota') {
