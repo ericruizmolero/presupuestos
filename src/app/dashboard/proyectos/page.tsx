@@ -7,16 +7,16 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { getBoard, saveBoard, getBoardLastSeen, setBoardLastSeen, madridToday, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
 import { Check, Plus, X, Trash2 } from 'lucide-react'
+import { Faces, ProjectMark } from '@/components/studio/StudioMarks'
+import { logoFor } from '@/lib/studioAssets'
+import { getTimeProjects, getTimeEntriesByCompany } from '@/lib/firestore/time'
+import type { TimeProject, TimeEntry } from '@/types/time'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 function ownerLabel(owner?: string): string {
   if (owner === 'Eric' || owner === 'Andoni') return owner
   return 'Los dos'
-}
-
-function whoTag(who: string): string {
-  return who === 'Eric y Andoni' ? 'E+A' : who.charAt(0)
 }
 
 /** Responsable efectivo de una nota: su excepción o el owner del proyecto */
@@ -102,13 +102,19 @@ function ProyectosContent() {
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [lastSeen, setLastSeen] = useState<string | null>(null)
+  const [timeProjects, setTimeProjects] = useState<TimeProject[]>([])
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
 
   useEffect(() => {
     if (!user) return
     getUserCompanyId(user.uid).then(async (cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-      const [b, seen] = await Promise.all([getBoard(cid), getBoardLastSeen(user.uid)])
+      const [b, seen, tps, tes] = await Promise.all([
+        getBoard(cid), getBoardLastSeen(user.uid), getTimeProjects(cid), getTimeEntriesByCompany(cid),
+      ])
+      setTimeProjects(tps)
+      setTimeEntries(tes)
       setBoard(b)
       setLastSeen(seen)
       setLoading(false)
@@ -302,7 +308,10 @@ function ProyectosContent() {
   return (
     <div className="px-8 py-12 max-w-6xl">
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-medium tracking-tight text-ink">Proyectos</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-medium tracking-tight text-ink">Proyectos</h1>
+          <Faces who="Eric y Andoni" size={26} />
+        </div>
         <div className="h-5">
           {saveStatus === 'saving' && (
             <span className="w-2.5 h-2.5 inline-block border border-ink-40 border-t-transparent rounded-full animate-spin" />
@@ -322,6 +331,7 @@ function ProyectosContent() {
         El tablón del estudio: qué hay nuevo y quién lleva qué. Cada proyecto tiene responsable; las notas lo heredan salvo excepción. Doble clic edita; arrastra una nota a otro proyecto para moverla.
       </p>
 
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_19rem] gap-4 mb-10 items-start">
       {/* Novedades desde tu última visita */}
       {(() => {
         const today = madridToday()
@@ -332,13 +342,19 @@ function ProyectosContent() {
           .map((c, i) => ({ c, i }))
           .filter(({ c }) => c.date && c.date >= cutoffISO)
           .sort((a, b) => (b.c.date! > a.c.date! ? 1 : b.c.date! < a.c.date! ? -1 : b.i - a.i))
-        if (recent.length === 0) return null
-        const colorOf = (gname: string) => board.groups.find((g) => g.name === gname)?.color ?? '#eee'
+        if (recent.length === 0) {
+          return (
+            <div className="border border-line rounded-md p-4 bg-surface">
+              <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-2">Novedades</p>
+              <p className="text-sm text-ink-40">Nada nuevo desde tu última visita.</p>
+            </div>
+          )
+        }
         const header = lastSeen && lastSeen > floor
           ? `Desde tu última visita (${dayLabel(lastSeen, today).toLowerCase()})`
           : 'Novedades'
         return (
-          <div className="border border-line rounded-md p-4 bg-surface mb-10">
+          <div className="border border-line rounded-md p-4 bg-surface min-w-0">
             <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">{header}</p>
             <div className="space-y-1.5">
               {recent.map(({ c, i }) => {
@@ -348,10 +364,14 @@ function ProyectosContent() {
                 return (
                   <div key={i} className={`flex items-baseline gap-2 text-sm ${mine ? '' : 'opacity-55'}`}>
                     <span className="text-xs text-ink-40 w-24 shrink-0">{dayLabel(c.date!, today)}</span>
-                    <span className="w-2 h-2 rounded-full shrink-0 self-center" style={{ background: colorOf(c.group) }} />
-                    <span className="text-ink-60 shrink-0 font-medium">{c.group}</span>
+                    <span className="shrink-0 w-28 flex items-center self-center">
+                      {logoFor(c.group)
+                        ? <img src={logoFor(c.group)!} alt={c.group} title={c.group} className="h-3 max-w-[6.5rem] object-contain object-left" />
+                        : <span className="text-ink-60 font-medium truncate">{c.group}</span>}
+                    </span>
                     <span className="text-ink min-w-0">{c.text}</span>
-                    <span className={`text-xs shrink-0 ml-auto whitespace-nowrap ${eff === me ? 'text-ink font-medium' : 'text-ink-40'}`}>
+                    <span className={`text-xs shrink-0 ml-auto whitespace-nowrap flex items-center gap-1.5 ${eff === me ? 'text-ink font-medium' : 'text-ink-40'}`}>
+                      <Faces who={eff} size={16} ring="var(--color-surface)" />
                       {eff === 'Eric y Andoni' ? 'los dos' : eff === me ? 'para ti' : `para ${eff}`}
                       {c.by && c.by !== eff ? ` · de ${c.by}` : ''}
                     </span>
@@ -362,6 +382,83 @@ function ProyectosContent() {
           </div>
         )
       })()}
+
+      {/* Para el sync semanal: la semana en horas y lo que está parado */}
+      {(() => {
+        const today = madridToday()
+        const weekStart = shiftDays(today, -6)
+        const prevStart = shiftDays(today, -13)
+        const staleCut = shiftDays(today, -14)
+        const nrm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+        const matchTP = (gname: string) => {
+          const n = nrm(gname)
+          return timeProjects.filter((p) => {
+            const pn = nrm(p.name || '')
+            return pn && n && (pn.includes(n) || n.includes(pn))
+          }).map((p) => p.id)
+        }
+        let week = 0
+        let prev = 0
+        const rows = board.groups.map((g) => {
+          const ids = matchTP(g.name)
+          let w = 0
+          let lastHours = ''
+          for (const e of timeEntries) {
+            if (!ids.includes(e.projectId) || !e.date) continue
+            if (e.date >= weekStart) w += e.hours || 0
+            else if (e.date >= prevStart) prev += e.hours || 0
+            if (e.date > lastHours) lastHours = e.date
+          }
+          week += w
+          let last = g.statusDate ?? ''
+          for (const c of board.chips) if (c.group === g.name && c.date && c.date > last) last = c.date
+          if (lastHours > last) last = lastHours
+          return { g, w, last }
+        })
+        const active = rows.filter((r) => r.w > 0).sort((a, b) => b.w - a.w)
+        const stale = rows.filter((r) => !r.last || r.last < staleCut)
+        const fmt = (h: number) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 1 }).format(h)
+        const delta = week - prev
+        return (
+          <div className="border border-line rounded-md p-4 bg-paper">
+            <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">Para el sync · últimos 7 días</p>
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="text-2xl font-medium tracking-tight text-ink tabular-nums">{fmt(week)} h</span>
+              {prev > 0 || week > 0 ? (
+                <span className={`text-xs tabular-nums ${delta >= 0 ? 'text-ink-60' : 'text-ink-40'}`}>
+                  {delta === 0 ? '= que la semana anterior' : `${delta > 0 ? '+' : '−'}${fmt(Math.abs(delta))} h vs anterior`}
+                </span>
+              ) : null}
+            </div>
+            {active.length > 0 && (
+              <ul className="space-y-1.5 mb-3">
+                {active.map(({ g, w }) => (
+                  <li key={g.name} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 flex items-center">
+                      {logoFor(g.name)
+                        ? <img src={logoFor(g.name)!} alt={g.name} title={g.name} className="h-3 max-w-[7rem] object-contain object-left" />
+                        : <span className="truncate text-ink-60">{g.name}</span>}
+                    </span>
+                    <span className="tabular-nums text-ink-60 shrink-0">{fmt(w)} h</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {stale.length > 0 && (
+              <div className="pt-3 border-t border-line mb-3">
+                <p className="text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mb-1.5">Sin movimiento en 14+ días</p>
+                <p className="text-sm text-ink-60 leading-relaxed">{stale.map((r) => r.g.name).join(' · ')}</p>
+              </div>
+            )}
+            <div className="pt-3 border-t border-line">
+              <p className="text-xs text-ink-40 leading-relaxed">
+                ¿Qué se entregó? · ¿Qué está bloqueado? · ¿Seguimos construyendo lo mismo?
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+      </div>
 
       {/* Nuevo proyecto */}
       <div className="flex items-center gap-3 mb-10">
@@ -400,10 +497,11 @@ function ProyectosContent() {
           </div>
           <button
             onClick={() => setOnlyMine((v) => !v)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors ${
+            className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1 text-xs font-medium rounded-md border transition-colors ${
               onlyMine ? 'bg-accent text-on-accent border-accent' : 'border-line text-ink-60 hover:border-input hover:text-ink'
             }`}
           >
+            <Faces who={myName(user?.displayName, user?.email)} size={18} ring="transparent" />
             Solo lo mío
           </button>
         </div>
@@ -455,25 +553,15 @@ function ProyectosContent() {
                       >
                         {/* Izquierda: identidad del proyecto */}
                         <div className="px-4 py-3 flex items-start gap-2 group/header lg:border-r lg:border-line">
-                          <button
-                            onClick={() => cycleColor(g.name)}
-                            title="Cambiar color"
-                            className="w-3 h-3 mt-1 shrink-0 rounded-full border border-black/10 hover:scale-110 transition-transform"
-                            style={{ background: g.color }}
-                          />
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-medium text-ink truncate">{g.name}</p>
+                            <div className="flex items-center justify-between gap-2 min-h-[24px]">
+                              <ProjectMark name={g.name} color={g.color} onMonogramClick={() => cycleColor(g.name)} />
                               <button
                                 onClick={() => cycleOwner(g.name)}
-                                title="Responsable del proyecto — clic para cambiar"
-                                className={`shrink-0 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider rounded transition-colors ${
-                                  gOwner === 'Eric y Andoni'
-                                    ? 'bg-surface text-ink-60 border border-line'
-                                    : 'bg-accent text-on-accent'
-                                }`}
+                                title={`Responsable: ${ownerLabel(g.owner)} — clic para cambiar`}
+                                className="shrink-0 rounded-full transition-transform hover:scale-105"
                               >
-                                {ownerLabel(g.owner)}
+                                <Faces who={gOwner} size={24} />
                               </button>
                             </div>
                             <select
@@ -592,13 +680,11 @@ function ProyectosContent() {
                                   <button
                                     onClick={() => cycleChipWho(i)}
                                     title={isException ? `${c.who} — clic para cambiar` : `Hereda del proyecto (${ownerLabel(g.owner)}) — clic para hacer excepción`}
-                                    className={`shrink-0 mt-0.5 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide rounded transition-all ${
-                                      isException
-                                        ? 'bg-black/10 text-ink'
-                                        : 'opacity-0 group-hover/chip:opacity-100 bg-black/[0.04] text-ink-40'
+                                    className={`shrink-0 mt-0.5 rounded-full transition-all ${
+                                      isException ? '' : 'opacity-0 group-hover/chip:opacity-60 grayscale'
                                     }`}
                                   >
-                                    {isException ? whoTag(c.who!) : '·'}
+                                    <Faces who={isException ? c.who : gOwner} size={16} ring="var(--color-paper)" />
                                   </button>
                                   <button
                                     onClick={() => removeChip(i)}
@@ -695,23 +781,15 @@ function ProyectosContent() {
                         } ${dragOverGroup === g.name && dragChip !== null ? 'bg-[color-mix(in_srgb,var(--color-accent)_6%,var(--color-paper))]' : ''}`}
                       >
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => cycleColor(g.name)}
-                            title="Cambiar color"
-                            className="w-3 h-3 shrink-0 rounded-full border border-black/10 hover:scale-110 transition-transform"
-                            style={{ background: g.color }}
-                          />
-                          <p className="text-sm font-medium text-ink truncate flex-1">{g.name}</p>
+                          <div className="flex-1 min-w-0 flex items-center min-h-[24px]">
+                            <ProjectMark name={g.name} color={g.color} onMonogramClick={() => cycleColor(g.name)} />
+                          </div>
                           <button
                             onClick={() => cycleOwner(g.name)}
-                            title="Responsable — clic para cambiar"
-                            className={`shrink-0 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider rounded transition-colors ${
-                              gOwner === 'Eric y Andoni'
-                                ? 'bg-surface text-ink-60 border border-line'
-                                : 'bg-accent text-on-accent'
-                            }`}
+                            title={`Responsable: ${ownerLabel(g.owner)} — clic para cambiar`}
+                            className="shrink-0 rounded-full transition-transform hover:scale-105"
                           >
-                            {ownerLabel(g.owner)}
+                            <Faces who={gOwner} size={22} />
                           </button>
                           {confirmDeleteGroup === g.name ? (
                             <button
@@ -808,9 +886,9 @@ function ProyectosContent() {
                                     <button
                                       onClick={() => cycleChipWho(i)}
                                       title={`${c.who} — clic para cambiar`}
-                                      className="shrink-0 mt-0.5 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide rounded bg-black/10 text-ink"
+                                      className="shrink-0 mt-0.5 rounded-full"
                                     >
-                                      {whoTag(c.who!)}
+                                      <Faces who={c.who} size={16} />
                                     </button>
                                   )}
                                   <button

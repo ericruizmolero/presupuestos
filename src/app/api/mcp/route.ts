@@ -205,11 +205,13 @@ function renderBoard(board: Board): string {
 const TOOLS = [
   {
     name: 'listar_proyectos',
+    annotations: { readOnlyHint: true },
     description: 'Lista los proyectos de horas de treseiscero con horas acumuladas, tarifa, idioma y enlace público.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'ver_registro',
+    annotations: { readOnlyHint: true },
     description: 'Muestra el registro de horas de un proyecto (entradas, total e importe).',
     inputSchema: {
       type: 'object',
@@ -222,11 +224,13 @@ const TOOLS = [
   },
   {
     name: 'ver_tablero',
+    annotations: { readOnlyHint: true },
     description: 'Muestra el tablero de proyectos (sección Proyectos de la app): carriles de prioridad con los proyectos activos y las notas de lo que se está haciendo en cada uno. Úsalo para responder "¿en qué estamos?".',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'anadir_nota',
+    annotations: { destructiveHint: false },
     description: 'Añade una nota (post-it) a un proyecto del tablero. Si el proyecto no existe en el tablero, se crea en el primer carril. Al volcar notas de una reunión, NO crear una nota-resumen: trocear en una nota por acción concreta, cada una con su "quien" (a quién le toca) y su "de" (quién estuvo en la reunión).',
     inputSchema: {
       type: 'object',
@@ -241,7 +245,14 @@ const TOOLS = [
     },
   },
   {
+    name: 'resumen_semana',
+    description: 'El digest del estudio: horas de los últimos 7 días por proyecto (comparadas con la semana anterior), novedades del tablón y proyectos sin actividad en 14+ días. Responde a "ponme al día", "¿cómo va la semana?", "resumen del lunes". Solo muestra lo que ha cambiado.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true },
+  },
+  {
     name: 'estado_proyecto',
+    annotations: { destructiveHint: false, idempotentHint: true },
     description: 'Actualiza la salud (verde/ambar/rojo) y/o la línea de estado de un proyecto del tablón ("esperando feedback del cliente", "bloqueado por DNS"...). Al menos uno de los dos.',
     inputSchema: {
       type: 'object',
@@ -257,6 +268,7 @@ const TOOLS = [
   },
   {
     name: 'novedades',
+    annotations: { readOnlyHint: true },
     description: 'Qué hay nuevo en el tablón del estudio: notas recientes por fecha, con proyecto y a quién le toca. Responde a "¿qué ha pasado?", "¿qué tengo que hacer yo?", "ponme al día".',
     inputSchema: {
       type: 'object',
@@ -269,6 +281,7 @@ const TOOLS = [
   },
   {
     name: 'asignar_nota',
+    annotations: { destructiveHint: false, idempotentHint: true },
     description: 'Asigna (o reasigna) una nota del tablero a Eric, Andoni o ambos. El texto se busca por coincidencia parcial dentro del proyecto.',
     inputSchema: {
       type: 'object',
@@ -283,6 +296,7 @@ const TOOLS = [
   },
   {
     name: 'quitar_nota',
+    annotations: { destructiveHint: true },
     description: 'Quita una nota del tablero (p. ej. al terminarla). El texto se busca por coincidencia parcial dentro del proyecto.',
     inputSchema: {
       type: 'object',
@@ -296,6 +310,7 @@ const TOOLS = [
   },
   {
     name: 'mover_proyecto',
+    annotations: { destructiveHint: false, idempotentHint: true },
     description: 'Mueve un proyecto del tablero a otro carril de prioridad (p. ej. de "Luego" a "Ahora").',
     inputSchema: {
       type: 'object',
@@ -309,6 +324,7 @@ const TOOLS = [
   },
   {
     name: 'editar_entrada',
+    annotations: { destructiveHint: false, idempotentHint: true },
     description: 'Edita una entrada de horas existente. El id de la entrada sale de ver_registro. Solo se cambian los campos indicados.',
     inputSchema: {
       type: 'object',
@@ -325,6 +341,7 @@ const TOOLS = [
   },
   {
     name: 'borrar_entrada',
+    annotations: { destructiveHint: true },
     description: 'Borra una entrada de horas (irreversible). El id sale de ver_registro.',
     inputSchema: {
       type: 'object',
@@ -337,6 +354,7 @@ const TOOLS = [
   },
   {
     name: 'crear_proyecto',
+    annotations: { destructiveHint: false },
     description: 'Crea un proyecto de bolsa de horas para un cliente. Si el cliente tiene presupuestos en la app, hereda automáticamente el idioma del más reciente y la tarifa del más reciente en modo por horas; "tarifa" e "idioma" solo hacen falta para forzarlos o si el cliente es nuevo. Devuelve el enlace público del proyecto.',
     inputSchema: {
       type: 'object',
@@ -351,6 +369,7 @@ const TOOLS = [
   },
   {
     name: 'anadir_horas',
+    annotations: { destructiveHint: false, idempotentHint: true },
     description: 'Añade una o varias entradas de horas a un proyecto de treseiscero. Si no se indica fecha se usa hoy (Madrid); si no se indica persona se usa "Eric y Andoni". El concepto va en el idioma del proyecto.',
     inputSchema: {
       type: 'object',
@@ -399,6 +418,85 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const rows = entries.map((e) => `[${e.id}] ${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
     const amount = found.hourlyRate ? ` · ${(total * found.hourlyRate).toFixed(2)} € (a ${found.hourlyRate} €/h)` : ''
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
+  }
+
+  if (name === 'resumen_semana') {
+    const cid = await boardCompanyId()
+    if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
+    const today = todayISO()
+    const shift = (d: number) => {
+      const x = new Date(today + 'T00:00:00')
+      x.setDate(x.getDate() + d)
+      return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`
+    }
+    const weekStart = shift(-6)        // últimos 7 días, hoy incluido
+    const prevStart = shift(-13)       // los 7 anteriores
+    const staleCut = shift(-14)
+
+    const [projects, entriesSnap, board] = await Promise.all([
+      getProjects(),
+      db().collection('timeEntries').where('companyId', '==', cid).get(),
+      readBoard(cid),
+    ])
+    const entries = entriesSnap.docs.map((d) => d.data() as { projectId: string; date?: string; hours?: number })
+
+    // Horas por proyecto: esta semana vs la anterior
+    const hoursLines: string[] = []
+    let weekTotal = 0
+    let prevTotal = 0
+    for (const p of projects) {
+      let w = 0, pw = 0
+      for (const e of entries) {
+        if (e.projectId !== p.id || !e.date) continue
+        if (e.date >= weekStart) w += e.hours || 0
+        else if (e.date >= prevStart) pw += e.hours || 0
+      }
+      weekTotal += w
+      prevTotal += pw
+      if (w === 0 && pw === 0) continue
+      const delta = w - pw
+      const arrow = delta > 0 ? `▲ ${+delta.toFixed(2)}` : delta < 0 ? `▼ ${+(-delta).toFixed(2)}` : '='
+      hoursLines.push(`- ${p.name}: ${+w.toFixed(2)} h (${arrow} vs semana anterior)`)
+    }
+
+    // Novedades del tablón en la semana
+    const ownerOf = (gname: string) => board.groups.find((g) => g.name === gname)?.owner ?? 'Eric y Andoni'
+    const news = board.chips
+      .filter((c) => c.date && c.date >= weekStart)
+      .sort((a, b) => (b.date! > a.date! ? 1 : -1))
+      .map((c) => {
+        const eff = c.who ?? ownerOf(c.group)
+        return `- ${c.date} [${c.group}] ${c.text} — ${eff === 'Eric y Andoni' ? 'los dos' : `para ${eff}`}`
+      })
+
+    // Proyectos del tablón sin actividad (notas, estado ni horas) en 14 días
+    const lastActivity = (gname: string) => {
+      const g = board.groups.find((x) => x.name === gname)
+      let last = g?.statusDate ?? ''
+      for (const c of board.chips) if (c.group === gname && c.date && c.date > last) last = c.date
+      const n = gname.toLowerCase()
+      const tp = projects.find((p) => {
+        const pn = (p.name || '').toLowerCase()
+        return pn.includes(n) || n.includes(pn)
+      })
+      if (tp) for (const e of entries) if (e.projectId === tp.id && e.date && e.date > last) last = e.date
+      return last
+    }
+    const stale = board.groups
+      .map((g) => ({ name: g.name, last: lastActivity(g.name) }))
+      .filter((x) => !x.last || x.last < staleCut)
+      .map((x) => `- ${x.name}${x.last ? ` (última actividad ${x.last})` : ' (sin actividad registrada)'}`)
+
+    if (hoursLines.length === 0 && news.length === 0 && stale.length === 0) {
+      return { text: 'Semana tranquila: sin horas, sin novedades y ningún proyecto parado.' }
+    }
+    const sections: string[] = [`Resumen ${weekStart} → ${today}`]
+    if (hoursLines.length) {
+      sections.push(`\nHoras: ${+weekTotal.toFixed(2)} h esta semana (${+prevTotal.toFixed(2)} h la anterior)\n${hoursLines.join('\n')}`)
+    }
+    if (news.length) sections.push(`\nNovedades del tablón\n${news.join('\n')}`)
+    if (stale.length) sections.push(`\nSin movimiento en 14+ días\n${stale.join('\n')}`)
+    return { text: sections.join('\n') }
   }
 
   if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto' || name === 'estado_proyecto') {
@@ -624,13 +722,31 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const database = db()
     const batch = database.batch()
     const added: string[] = []
+    const skipped: string[] = []
     let sum = 0
+
+    // Idempotencia: una entrada idéntica (fecha + horas + concepto) ya registrada
+    // en el proyecto no se duplica — protege contra reintentos del agente.
+    const existingSnap = await database.collection('timeEntries').where('projectId', '==', found.id).get()
+    const seen = new Set(
+      existingSnap.docs.map((d) => {
+        const x = d.data() as { date?: string; hours?: number; description?: string }
+        return `${x.date}|${x.hours}|${(x.description || '').trim().toLowerCase()}`
+      })
+    )
+
     for (const e of entradas) {
       const hours = Number(e.horas)
       if (!hours || hours <= 0) return { text: `Horas inválidas: ${e.horas}`, isError: true }
       if (e.fecha && !/^\d{4}-\d{2}-\d{2}$/.test(e.fecha)) {
         return { text: `Fecha inválida (usa YYYY-MM-DD): ${e.fecha}`, isError: true }
       }
+      const key = `${e.fecha || todayISO()}|${hours}|${(e.concepto || '').trim().toLowerCase()}`
+      if (seen.has(key)) {
+        skipped.push(`= ${e.fecha || todayISO()}  ${hours} h  ${(e.concepto || '').trim()}`)
+        continue
+      }
+      seen.add(key)
       const entry = {
         projectId: found.id,
         companyId: found.companyId || '',
@@ -645,9 +761,15 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       sum += hours
       added.push(`✓ ${entry.date}  ${entry.hours} h  ${entry.person}  ${entry.description}`)
     }
-    await batch.commit()
+    if (added.length > 0) await batch.commit()
+    const skippedNote = skipped.length
+      ? `\nYa existían (no se duplican):\n${skipped.join('\n')}`
+      : ''
+    if (added.length === 0) {
+      return { text: `Nada nuevo que añadir a "${found.name}".${skippedNote}` }
+    }
     return {
-      text: `${added.join('\n')}\nAñadidas ${added.length} entrada(s) (${sum} h) a "${found.name}" → ${PUBLIC_BASE}/h/${found.slug}`,
+      text: `${added.join('\n')}\nAñadidas ${added.length} entrada(s) (${sum} h) a "${found.name}" → ${PUBLIC_BASE}/h/${found.slug}${skippedNote}`,
     }
   }
 
