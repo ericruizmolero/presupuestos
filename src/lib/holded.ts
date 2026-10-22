@@ -52,7 +52,9 @@ async function listDocs(type: 'invoice' | 'creditnote', start: number, end: numb
     if (!res.ok) {
       if (page > 1) break // la API no pagina así: nos quedamos con lo que hay
       const body = (await res.text().catch(() => '')).slice(0, 200)
-      throw new Error(`Holded ${type}: HTTP ${res.status}${body ? ` — ${body}` : ''}`)
+      // Solo la forma de la clave (nunca su valor) para diagnosticar "Invalid key"
+      const shape = `clave de ${key.length} caracteres, ${/^[0-9a-f]+$/i.test(key) ? 'hexadecimal' : 'no hexadecimal'}`
+      throw new Error(`Holded ${type}: HTTP ${res.status}${body ? ` — ${body}` : ''} (${shape})`)
     }
     const docs = (await res.json()) as HoldedDoc[]
     if (!Array.isArray(docs) || docs.length === 0) break
