@@ -49,7 +49,6 @@ function ProyectosContent() {
 
   // ── UI ─────────────────────────────────────────────────────────────────────
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
-  const [view, setView] = useState<'lista' | 'tablero'>('lista')
   const [onlyMine, setOnlyMine] = useState(false)
   const [openProject, setOpenProject] = useState<string | null>(null)
   const [addingInLane, setAddingInLane] = useState<string | null>(null)
@@ -57,25 +56,12 @@ function ProyectosContent() {
   const [newLane, setNewLane] = useState('')
   const [dragChip, setDragChip] = useState<number | null>(null)
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null)
-  const [dragProject, setDragProject] = useState<string | null>(null)
   const [toast, setToast] = useState<Toast>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isFirstRender = useRef(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem('proyectos-view')
-      if (saved === 'tablero' || saved === 'lista') setView(saved)
-    } catch { /* sin almacenamiento: vista por defecto */ }
-  }, [])
-
-  function switchView(v: 'lista' | 'tablero') {
-    setView(v)
-    try { window.localStorage.setItem('proyectos-view', v) } catch { /* noop */ }
-  }
 
   useEffect(() => {
     if (!user) return
@@ -411,17 +397,6 @@ function ProyectosContent() {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center border border-line rounded-md overflow-hidden">
-            {(['lista', 'tablero'] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => switchView(v)}
-                className={`px-3 py-1.5 text-xs font-medium transition-colors ${view === v ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover'}`}
-              >
-                {v === 'lista' ? 'Lista' : 'Tablero'}
-              </button>
-            ))}
-          </div>
           <button
             onClick={() => setOnlyMine((v) => !v)}
             className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1 text-xs font-medium rounded-md border transition-colors ${
@@ -436,7 +411,6 @@ function ProyectosContent() {
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_17rem] gap-10 items-start">
         <main className="min-w-0">
-          {view === 'lista' ? (
             <div className="space-y-8">
               {lanesWithGroups().map(({ lane, groups }, li) => (
                 <section key={lane + li}>
@@ -465,40 +439,6 @@ function ProyectosContent() {
                 </section>
               ))}
             </div>
-          ) : (
-            <div className="flex gap-4 overflow-x-auto pb-4 items-start">
-              {lanesWithGroups().map(({ lane, groups }, li) => (
-                <section
-                  key={lane + li}
-                  onDragOver={(e) => { if (dragProject) e.preventDefault() }}
-                  onDrop={() => { if (dragProject) { patchGroup(dragProject, { status: lane }); setDragProject(null) } }}
-                  className="w-[19rem] shrink-0 rounded-md bg-surface border border-line p-3"
-                >
-                  {laneHeader(lane, li, groups.length)}
-                  <div className="space-y-2.5">
-                    {groups.map((g) => (
-                      <div
-                        key={g.name}
-                        draggable
-                        onDragStart={() => setDragProject(g.name)}
-                        onDragEnd={() => setDragProject(null)}
-                        onDragOver={(e) => { if (dragChip !== null) { e.preventDefault(); setDragOverGroup(g.name) } }}
-                        onDragLeave={() => setDragOverGroup((k) => (k === g.name ? null : k))}
-                        onDrop={(e) => { if (dragChip !== null) { e.stopPropagation(); dropChip(g.name) } }}
-                        className={`border border-line rounded-md bg-paper p-3 transition-opacity ${
-                          dragProject === g.name ? 'opacity-40' : onlyMine && !involvesMe(g) ? 'opacity-35' : ''
-                        } ${dragOverGroup === g.name && dragChip !== null ? 'ring-2 ring-accent/20' : ''}`}
-                      >
-                        <ProjectSummary g={g} size="sm" onOpen={() => setOpenProject(g.name)} />
-                        <div className="mt-2.5 pt-2 border-t border-line">{noteListFor(g, true)}</div>
-                      </div>
-                    ))}
-                    {newProjectControl(lane, 'card')}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
 
           {/* Nuevo carril */}
           <div className="mt-8 flex items-center gap-2">
