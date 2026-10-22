@@ -128,7 +128,7 @@ const BOARD_COLORS = ['#FDE68A', '#BFDBFE', '#BBF7D0', '#FECACA', '#E9D5FF', '#F
 const DEFAULT_LANES = ['Ahora', 'Luego', 'En espera']
 const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', espera: 'En espera' }
 
-interface BoardGroup { name: string; color: string; status?: string; owner?: string; health?: string; statusNote?: string; statusDate?: string }
+interface BoardGroup { name: string; color: string; status?: string; owner?: string; health?: string; statusNote?: string; statusDate?: string; deadline?: string; deadlineLabel?: string }
 const HEALTH_ICON: Record<string, string> = { verde: '🟢', ambar: '🟡', rojo: '🔴' }
 interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string }
 const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
@@ -190,11 +190,13 @@ function renderBoard(board: Board): string {
       const owner = g.owner === 'Eric' || g.owner === 'Andoni' ? g.owner : 'Los dos'
       const health = g.health ? ` ${HEALTH_ICON[g.health] ?? ''}` : ''
       const status = g.statusNote ? ` — ${g.statusNote} (${g.statusDate ?? 's/f'})` : ''
-      lines.push(`- ${g.name} [${owner}]${health}${status}${chips.length ? ':' : ' (sin notas)'}`)
+      const dl = g.deadline ? ` ⏰ ${g.deadlineLabel || 'Entrega'} ${g.deadline}` : ''
+      lines.push(`- ${g.name} [${owner}]${health}${dl}${status}${chips.length ? ':' : ' (sin notas)'}`)
       // etiqueta por nota solo si difiere del responsable del proyecto
       for (const c of chips) {
         const exception = c.who && c.who !== (g.owner ?? 'Eric y Andoni')
-        lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}`)
+        const meta = [c.date, c.by ? `de ${c.by}` : ''].filter(Boolean).join(' ')
+        lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}${meta ? ` (${meta})` : ''}`)
       }
     }
   }
@@ -253,7 +255,7 @@ const TOOLS = [
   {
     name: 'estado_proyecto',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Actualiza la salud (verde/ambar/rojo) y/o la línea de estado de un proyecto del tablón ("esperando feedback del cliente", "bloqueado por DNS"...). Al menos uno de los dos.',
+    description: 'Actualiza la metadata de un proyecto del tablón: salud (verde/ambar/rojo), línea de estado ("esperando feedback del cliente"), responsable, y deadline de la próxima entrega con qué se entrega. Indica solo lo que cambia.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -261,6 +263,8 @@ const TOOLS = [
         salud: { type: 'string', enum: ['verde', 'ambar', 'rojo'], description: 'Semáforo de salud' },
         nota: { type: 'string', description: 'Línea de estado, corta' },
         responsable: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Quién lleva el proyecto' },
+        deadline: { type: 'string', description: 'Fecha de la próxima entrega YYYY-MM-DD ("el miércoles" → conviértelo); cadena vacía para quitarla' },
+        deadline_que: { type: 'string', description: 'Qué se entrega ese día ("Lanzamiento", "Entrega fase 1")' },
       },
       required: ['proyecto'],
       additionalProperties: false,
@@ -487,10 +491,21 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       .filter((x) => !x.last || x.last < staleCut)
       .map((x) => `- ${x.name}${x.last ? ` (última actividad ${x.last})` : ' (sin actividad registrada)'}`)
 
-    if (hoursLines.length === 0 && news.length === 0 && stale.length === 0) {
+    const daysTo = (d: string) => Math.round((new Date(d + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000)
+    const upcoming = board.groups
+      .filter((g) => g.deadline && daysTo(g.deadline) <= 30)
+      .sort((a, b) => a.deadline!.localeCompare(b.deadline!))
+      .map((g) => {
+        const d = daysTo(g.deadline!)
+        const when = d < 0 ? `vencido hace ${-d} días` : d === 0 ? 'HOY' : d === 1 ? 'mañana' : `en ${d} días`
+        return `- ${g.name}: ${g.deadlineLabel || 'Entrega'} el ${g.deadline} (${when})`
+      })
+
+    if (hoursLines.length === 0 && news.length === 0 && stale.length === 0 && upcoming.length === 0) {
       return { text: 'Semana tranquila: sin horas, sin novedades y ningún proyecto parado.' }
     }
     const sections: string[] = [`Resumen ${weekStart} → ${today}`]
+    if (upcoming.length) sections.push(`\nPróximas entregas\n${upcoming.join('\n')}`)
     if (hoursLines.length) {
       sections.push(`\nHoras: ${+weekTotal.toFixed(2)} h esta semana (${+prevTotal.toFixed(2)} h la anterior)\n${hoursLines.join('\n')}`)
     }
@@ -581,8 +596,13 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       const salud = args.salud === 'verde' || args.salud === 'ambar' || args.salud === 'rojo' ? String(args.salud) : undefined
       const nota = args.nota !== undefined ? String(args.nota).trim() : undefined
       const responsable = BOARD_PEOPLE.includes(String(args.responsable)) ? String(args.responsable) : undefined
-      if (!salud && nota === undefined && !responsable) {
-        return { text: 'Indica "salud", "nota" y/o "responsable".', isError: true }
+      const deadline = args.deadline !== undefined ? String(args.deadline).trim() : undefined
+      const deadlineQue = args.deadline_que !== undefined ? String(args.deadline_que).trim() : undefined
+      if (deadline && !/^\d{4}-\d{2}-\d{2}$/.test(deadline)) {
+        return { text: `Deadline inválido (usa YYYY-MM-DD): ${deadline}`, isError: true }
+      }
+      if (!salud && nota === undefined && !responsable && deadline === undefined && deadlineQue === undefined) {
+        return { text: 'Indica qué cambiar: salud, nota, responsable o deadline.', isError: true }
       }
       board.groups = board.groups.map((g) =>
         g.name === found.name
@@ -591,6 +611,8 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
               ...(salud ? { health: salud } : {}),
               ...(nota !== undefined ? { statusNote: nota || undefined } : {}),
               ...(responsable ? { owner: responsable } : {}),
+              ...(deadline !== undefined ? { deadline: deadline || undefined } : {}),
+              ...(deadline === '' ? { deadlineLabel: undefined } : deadlineQue !== undefined ? { deadlineLabel: deadlineQue || undefined } : {}),
               ...(salud || nota !== undefined ? { statusDate: todayISO() } : {}),
             }
           : g
@@ -600,6 +622,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         salud ? HEALTH_ICON[salud] : '',
         nota !== undefined ? nota || '(nota borrada)' : '',
         responsable ? `responsable: ${responsable}` : '',
+        deadline === '' ? 'deadline quitado' : deadline ? `deadline: ${deadlineQue || 'entrega'} el ${deadline}` : '',
       ].filter(Boolean).join(' · ')
       return { text: `✓ Estado de "${found.name}": ${parts}` }
     }

@@ -6,7 +6,7 @@ import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { getBoard, saveBoard, getBoardLastSeen, setBoardLastSeen, madridToday, BOARD_COLORS, DEFAULT_LANES, type Board } from '@/lib/firestore/planning'
-import { Check, Plus, X, Trash2, Clock, FileText, StickyNote } from 'lucide-react'
+import { Check, Plus, X, Trash2, Clock, FileText, StickyNote, CalendarClock } from 'lucide-react'
 import { Faces, ProjectMark } from '@/components/studio/StudioMarks'
 import { getTimeProjects, getTimeEntriesByCompany } from '@/lib/firestore/time'
 import type { TimeProject, TimeEntry } from '@/types/time'
@@ -37,6 +37,29 @@ function myName(displayName?: string | null, email?: string | null): string {
 
 const NOVEDADES_DIAS_MAX = 30 // tope aunque lleves más sin entrar
 const NEWS_LIMIT = 12
+
+function daysUntil(date: string, today: string): number {
+  return Math.round((new Date(date + 'T00:00:00').getTime() - new Date(today + 'T00:00:00').getTime()) / 86400000)
+}
+
+/** "mié 28 oct" */
+function fmtDay(date: string): string {
+  return new Date(date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+
+/** "22 oct" */
+function fmtShort(date: string): string {
+  return new Date(date + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+}
+
+function countdown(date: string, today: string): { text: string; tone: string } {
+  const d = daysUntil(date, today)
+  if (d < 0) return { text: `vencido hace ${-d} ${-d === 1 ? 'día' : 'días'}`, tone: 'text-[#DC2626]' }
+  if (d === 0) return { text: 'hoy', tone: 'text-[#DC2626] font-medium' }
+  if (d === 1) return { text: 'mañana', tone: 'text-[#DC2626]' }
+  if (d <= 7) return { text: `en ${d} días`, tone: 'text-[#B45309]' }
+  return { text: `en ${d} días`, tone: 'text-ink-60' }
+}
 
 const QUOTE_STATUS: Record<string, string> = { borrador: 'borrador', enviado: 'enviado', aceptado: 'aceptado', rechazado: 'rechazado' }
 
@@ -239,6 +262,83 @@ function ProyectosContent() {
         return { ...g, health: next, statusDate: madridToday() }
       }),
     }))
+  }
+
+  const [editingDeadline, setEditingDeadline] = useState<string | null>(null)
+  const [dlDate, setDlDate] = useState('')
+  const [dlLabel, setDlLabel] = useState('')
+
+  function saveDeadline(name: string) {
+    setBoard((b) => ({
+      ...b,
+      groups: b.groups.map((g) => {
+        if (g.name !== name) return g
+        const { deadline: _d, deadlineLabel: _l, ...rest } = g
+        return dlDate ? { ...rest, deadline: dlDate, ...(dlLabel.trim() ? { deadlineLabel: dlLabel.trim() } : {}) } : rest
+      }),
+    }))
+    setEditingDeadline(null)
+  }
+
+  /** Fila de deadline de un proyecto (se llama como función para no remontar inputs) */
+  function renderDeadline(g: Board['groups'][number]) {
+    const today = madridToday()
+    if (editingDeadline === g.name) {
+      return (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <input
+            type="date"
+            autoFocus
+            value={dlDate}
+            onChange={(e) => setDlDate(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveDeadline(g.name); if (e.key === 'Escape') setEditingDeadline(null) }}
+            className="text-xs border border-input rounded px-1.5 py-0.5 text-ink focus:outline-none focus:border-accent"
+          />
+          <input
+            value={dlLabel}
+            placeholder="Qué se entrega"
+            onChange={(e) => setDlLabel(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveDeadline(g.name); if (e.key === 'Escape') setEditingDeadline(null) }}
+            className="flex-1 min-w-[6rem] text-xs border border-input rounded px-1.5 py-0.5 text-ink focus:outline-none focus:border-accent"
+          />
+          <button onClick={() => saveDeadline(g.name)} className="text-xs px-1.5 py-0.5 rounded bg-accent text-on-accent">OK</button>
+          {g.deadline && (
+            <button
+              onClick={() => { setDlDate(''); setDlLabel(''); setBoard((b) => ({ ...b, groups: b.groups.map((x) => { if (x.name !== g.name) return x; const { deadline: _d, deadlineLabel: _l, ...rest } = x; return rest }) })); setEditingDeadline(null) }}
+              className="text-xs text-ink-40 hover:text-[#DC2626]"
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+      )
+    }
+    if (!g.deadline) {
+      return (
+        <button
+          onClick={() => { setEditingDeadline(g.name); setDlDate(''); setDlLabel('') }}
+          className="mt-1 flex items-center gap-1 text-xs text-ink-40 opacity-0 group-hover/header:opacity-100 hover:text-ink-60 transition-opacity"
+        >
+          <CalendarClock size={12} strokeWidth={1.5} />
+          deadline…
+        </button>
+      )
+    }
+    const cd = countdown(g.deadline, today)
+    return (
+      <button
+        onClick={() => { setEditingDeadline(g.name); setDlDate(g.deadline!); setDlLabel(g.deadlineLabel || '') }}
+        title="Editar deadline"
+        className="mt-1.5 flex items-start gap-1.5 text-left text-xs leading-snug"
+      >
+        <CalendarClock size={12} strokeWidth={1.5} className={`mt-px shrink-0 ${cd.tone}`} />
+        <span>
+          <span className="text-ink">{g.deadlineLabel || 'Entrega'}</span>
+          <span className="text-ink-40"> · {fmtDay(g.deadline)} · </span>
+          <span className={cd.tone}>{cd.text}</span>
+        </span>
+      </button>
+    )
   }
 
   const [editingStatus, setEditingStatus] = useState<string | null>(null)
@@ -519,8 +619,36 @@ function ProyectosContent() {
           return !last || last < staleCut
         })
 
+        // Entregas vencidas o en los próximos 30 días
+        const upcoming = board.groups
+          .filter((g) => g.deadline && daysUntil(g.deadline, today) <= 30)
+          .sort((a, b) => a.deadline!.localeCompare(b.deadline!))
+
         return (
           <div className="border border-line rounded-md p-4 bg-paper">
+            {upcoming.length > 0 && (
+              <div className="pb-3 mb-3 border-b border-line">
+                <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-2.5">Próximas entregas</p>
+                <ul className="space-y-2">
+                  {upcoming.map((g) => {
+                    const cd = countdown(g.deadline!, today)
+                    return (
+                      <li key={g.name} className="text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="min-w-0">
+                            <ProjectMark name={g.name} color={g.color} showLogo={g.showLogo} size={18} compact />
+                          </span>
+                          <span className={`text-xs shrink-0 tabular-nums ${cd.tone}`}>{cd.text}</span>
+                        </div>
+                        <p className="text-xs text-ink-40 mt-0.5 pl-[26px]">
+                          {g.deadlineLabel || 'Entrega'} · {fmtDay(g.deadline!)}
+                        </p>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
             <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3">Este mes · {monthName}</p>
             <p className="text-2xl font-medium tracking-tight text-ink tabular-nums mb-3">{fmtH(total)} h</p>
             {rows.length > 0 ? (
@@ -608,7 +736,11 @@ function ProyectosContent() {
         <div className="space-y-10">
           {board.lanes.map((lane, li) => {
             const me = myName(user?.displayName, user?.email)
-            const laneGroups = board.groups.filter((g) => (g.status ?? board.lanes[0]) === lane)
+            const laneGroups = board.groups
+              .filter((g) => (g.status ?? board.lanes[0]) === lane)
+              .map((g, idx) => ({ g, idx }))
+              .sort((a, b) => (a.g.deadline && b.g.deadline ? a.g.deadline.localeCompare(b.g.deadline) : a.g.deadline ? -1 : b.g.deadline ? 1 : a.idx - b.idx))
+              .map(({ g }) => g)
             return (
               <section key={li}>
                 <div className="flex items-center gap-2 mb-3 group/lane">
@@ -636,6 +768,7 @@ function ProyectosContent() {
                     const groupChips = board.chips
                       .map((c, i) => ({ c, i }))
                       .filter(({ c }) => c.group === g.name)
+                      .sort((a, b) => (a.c.date && b.c.date ? b.c.date.localeCompare(a.c.date) || b.i - a.i : a.c.date ? -1 : b.c.date ? 1 : a.i - b.i))
                     const groupHasMine = includesMe(gOwner, me) ||
                       groupChips.some(({ c }) => includesMe(effectiveWho(c.who, gOwner), me))
                     const dimGroup = onlyMine && !groupHasMine
@@ -701,6 +834,7 @@ function ProyectosContent() {
                                 </button>
                               )}
                             </div>
+                            {renderDeadline(g)}
                           </div>
                           {confirmDeleteGroup === g.name ? (
                             <span className="flex flex-col items-end gap-1 shrink-0">
@@ -770,6 +904,14 @@ function ProyectosContent() {
                                   >
                                     {c.text}
                                   </span>
+                                  {c.date && (
+                                    <span
+                                      className="shrink-0 mt-0.5 text-[11px] text-ink-40 tabular-nums whitespace-nowrap"
+                                      title={`Apuntada el ${fmtDay(c.date)}${c.by ? ` por ${c.by}` : ''}`}
+                                    >
+                                      {fmtShort(c.date)}{c.by ? ` · ${c.by}` : ''}
+                                    </span>
+                                  )}
                                   <button
                                     onClick={() => cycleChipWho(i)}
                                     title={isException ? `${c.who} — clic para cambiar` : `Hereda del proyecto (${ownerLabel(g.owner)}) — clic para hacer excepción`}
@@ -825,7 +967,11 @@ function ProyectosContent() {
         <div className="flex gap-4 overflow-x-auto pb-4 items-start">
           {board.lanes.map((lane, li) => {
             const me = myName(user?.displayName, user?.email)
-            const laneGroups = board.groups.filter((g) => (g.status ?? board.lanes[0]) === lane)
+            const laneGroups = board.groups
+              .filter((g) => (g.status ?? board.lanes[0]) === lane)
+              .map((g, idx) => ({ g, idx }))
+              .sort((a, b) => (a.g.deadline && b.g.deadline ? a.g.deadline.localeCompare(b.g.deadline) : a.g.deadline ? -1 : b.g.deadline ? 1 : a.idx - b.idx))
+              .map(({ g }) => g)
             return (
               <section
                 key={li}
@@ -857,6 +1003,7 @@ function ProyectosContent() {
                     const groupChips = board.chips
                       .map((c, i) => ({ c, i }))
                       .filter(({ c }) => c.group === g.name)
+                      .sort((a, b) => (a.c.date && b.c.date ? b.c.date.localeCompare(a.c.date) || b.i - a.i : a.c.date ? -1 : b.c.date ? 1 : a.i - b.i))
                     const groupHasMine = includesMe(gOwner, me) ||
                       groupChips.some(({ c }) => includesMe(effectiveWho(c.who, gOwner), me))
                     const dimGroup = onlyMine && !groupHasMine
@@ -937,6 +1084,7 @@ function ProyectosContent() {
                             </button>
                           )}
                         </div>
+                        {renderDeadline(g)}
 
                         {groupChips.length > 0 && (
                           <ul className="mt-2 pt-2 border-t border-line space-y-1">
@@ -975,6 +1123,14 @@ function ProyectosContent() {
                                   >
                                     {c.text}
                                   </span>
+                                  {c.date && (
+                                    <span
+                                      className="shrink-0 mt-0.5 text-[11px] text-ink-40 tabular-nums whitespace-nowrap"
+                                      title={`Apuntada el ${fmtDay(c.date)}${c.by ? ` por ${c.by}` : ''}`}
+                                    >
+                                      {fmtShort(c.date)}{c.by ? ` · ${c.by}` : ''}
+                                    </span>
+                                  )}
                                   {isException && (
                                     <button
                                       onClick={() => cycleChipWho(i)}
