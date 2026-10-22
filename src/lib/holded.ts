@@ -34,6 +34,11 @@ export function holdedConfigured(): boolean {
   return !!process.env.HOLDED_API_KEY?.trim()
 }
 
+/** Clave clásica (32 hex) va en la cabecera "key"; los tokens personales (pat_…) como Bearer. Se envían ambas. */
+function authHeaders(key: string): Record<string, string> {
+  return { key, Authorization: `Bearer ${key}`, accept: 'application/json' }
+}
+
 /** La clave tal cual, sin espacios, saltos de línea ni comillas que se cuelan al pegarla */
 function holdedKey(): string {
   const key = (process.env.HOLDED_API_KEY || '').trim().replace(/^["']|["']$/g, '').trim()
@@ -48,7 +53,7 @@ async function listDocs(type: 'invoice' | 'creditnote', start: number, end: numb
   // Paginación defensiva: si la API ignora "page", la segunda página repite ids y paramos
   for (let page = 1; page <= 20; page++) {
     const url = `${BASE}/documents/${type}?starttmp=${start}&endtmp=${end}${page > 1 ? `&page=${page}` : ''}`
-    const res = await fetch(url, { headers: { key, accept: 'application/json' }, next: { revalidate: 600 } })
+    const res = await fetch(url, { headers: authHeaders(key), next: { revalidate: 600 } })
     if (!res.ok) {
       if (page > 1) break // la API no pagina así: nos quedamos con lo que hay
       const body = (await res.text().catch(() => '')).slice(0, 200)
@@ -152,7 +157,7 @@ export async function recentInvoices(clientNeedle: string, limit = 3): Promise<R
     .sort((a, b) => (b.date || 0) - (a.date || 0))
     .slice(0, limit)
   const details = await Promise.all(matches.map(async (d) => {
-    const res = await fetch(`${BASE}/documents/invoice/${d.id}`, { headers: { key, accept: 'application/json' }, cache: 'no-store' })
+    const res = await fetch(`${BASE}/documents/invoice/${d.id}`, { headers: authHeaders(key), cache: 'no-store' })
     return res.ok ? ((await res.json()) as Record<string, unknown>) : (d as Record<string, unknown>)
   }))
   return details
