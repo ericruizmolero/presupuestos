@@ -1,8 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { signInWithEmail, signInWithGoogle } from '@/lib/auth'
+import { signInWithEmail, signInWithGoogle, signOut } from '@/lib/auth'
+import { isAllowedEmail } from '@/lib/access'
+
+const DENIED = 'Esta cuenta no tiene acceso. La app es solo para el equipo de treseiscero.'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,13 +14,27 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('denied')) setError(DENIED)
+  }, [])
+
+  /** Tras iniciar sesión: solo entran las cuentas del estudio */
+  async function enterIfAllowed(email?: string | null) {
+    if (!isAllowedEmail(email)) {
+      await signOut()
+      setError(DENIED)
+      return
+    }
+    router.replace('/dashboard')
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      await signInWithEmail(email, password)
-      router.replace('/dashboard')
+      const cred = await signInWithEmail(email, password)
+      await enterIfAllowed(cred?.user?.email ?? email)
     } catch {
       setError('Email o contraseña incorrectos.')
     } finally {
@@ -29,9 +46,10 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     try {
-      await signInWithGoogle()
-      router.replace('/dashboard')
+      const cred = await signInWithGoogle()
+      await enterIfAllowed(cred?.user?.email)
     } catch {
+      await signOut().catch(() => {})
       setError('No se pudo iniciar sesión con Google.')
     } finally {
       setLoading(false)

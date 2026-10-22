@@ -1,5 +1,6 @@
 'use client'
 
+import { isAllowedEmail } from './access'
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -26,7 +27,10 @@ export async function signUpWithEmail(email: string, password: string, displayNa
 
 export async function signInWithGoogle() {
   const credential = await signInWithPopup(auth, googleProvider)
-  await ensureUserDoc(credential.user, credential.user.displayName ?? '')
+  // Solo las cuentas del estudio tienen documento de usuario; el resto se rechaza en el login
+  if (isAllowedEmail(credential.user.email)) {
+    await ensureUserDoc(credential.user, credential.user.displayName ?? '')
+  }
   return credential
 }
 
