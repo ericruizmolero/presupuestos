@@ -17,6 +17,7 @@ import { Check, Plus, Trash2 } from 'lucide-react'
 import { Faces } from '@/components/studio/StudioMarks'
 import { ProjectSummary } from '@/components/studio/ProjectSummary'
 import { ProjectSheet } from '@/components/studio/ProjectSheet'
+import { TaskSheet } from '@/components/studio/TaskSheet'
 import { NoteList, type IndexedNote, type NoteState } from '@/components/studio/NoteList'
 import { StudioSidebar } from '@/components/studio/StudioSidebar'
 import { effectiveWho, includesMe, myName, ownerOf, type Person } from '@/components/studio/boardUtils'
@@ -51,6 +52,7 @@ function ProyectosContent() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [onlyMine, setOnlyMine] = useState(false)
   const [openProject, setOpenProject] = useState<string | null>(null)
+  const [openTask, setOpenTask] = useState<number | null>(null)
   const [addingInLane, setAddingInLane] = useState<string | null>(null)
   const [newProjectName, setNewProjectName] = useState('')
   const [newLane, setNewLane] = useState('')
@@ -213,6 +215,19 @@ function ProyectosContent() {
     })
   }
 
+  /** Edita campos de una nota (y quita los indicados) */
+  function patchChip(i: number, patch: Partial<BoardChip>, remove: Array<keyof BoardChip> = []) {
+    setBoard((b) => ({
+      ...b,
+      chips: b.chips.map((c, idx) => {
+        if (idx !== i) return c
+        const next: Record<string, unknown> = { ...c, ...patch }
+        for (const k of remove) delete next[k]
+        return next as unknown as BoardChip
+      }),
+    }))
+  }
+
   /** Cambia el estado de una nota; marcar hecha no la quita (se tacha) */
   function setChipState(i: number, state: NoteState) {
     setBoard((b) => ({
@@ -320,6 +335,7 @@ function ProyectosContent() {
         onSetState={setChipState}
         onArchive={doneChip}
         onArchiveDone={() => archiveDone(g.name)}
+        onOpen={setOpenTask}
         onAssign={assignChip}
         dragChip={dragChip}
         onDragStart={setDragChip}
@@ -479,6 +495,24 @@ function ProyectosContent() {
           onClose={() => setOpenProject(null)}
         />
       )}
+
+      {openTask !== null && board.chips[openTask] && (() => {
+        const c = board.chips[openTask]
+        const g = board.groups.find((x) => x.name === c.group)
+        return (
+          <TaskSheet
+            key={openTask}
+            chip={c}
+            groups={board.groups}
+            owner={ownerOf(g?.owner)}
+            me={me}
+            onPatch={(patch, remove) => patchChip(openTask, patch, remove)}
+            onState={(st) => setChipState(openTask, st)}
+            onArchive={() => { doneChip(openTask); setOpenTask(null) }}
+            onClose={() => setOpenTask(null)}
+          />
+        )
+      })()}
 
       {toast && (
         <div

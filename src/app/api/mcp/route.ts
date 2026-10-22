@@ -133,7 +133,7 @@ const LEGACY_STATUS: Record<string, string> = { ahora: 'Ahora', luego: 'Luego', 
 
 interface BoardGroup { name: string; color: string; status?: string; owner?: string; health?: string; statusNote?: string; statusDate?: string; deadline?: string; deadlineLabel?: string }
 const HEALTH_ICON: Record<string, string> = { verde: '🟢', ambar: '🟡', rojo: '🔴' }
-interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string; state?: string; stateDate?: string; due?: string; time?: string }
+interface BoardChip { group: string; text: string; who?: string; date?: string; by?: string; state?: string; stateDate?: string; due?: string; time?: string; body?: string; bodyBy?: string; bodyDate?: string }
 const BOARD_PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
 interface Board { lanes: string[]; groups: BoardGroup[]; chips: BoardChip[] }
 
@@ -201,7 +201,8 @@ function renderBoard(board: Board): string {
         const meta = [c.date, c.by ? `de ${c.by}` : ''].filter(Boolean).join(' ')
         const st = c.state === 'esperando' ? ` [esperando feedback${c.stateDate ? ' desde ' + c.stateDate : ''}]` : c.state === 'hecha' ? ' [hecha]' : ''
         const when = c.due ? ` 📅 ${c.due}${c.time ? ' ' + c.time : ''}` : ''
-        lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}${when}${st}${meta ? ` (${meta})` : ''}`)
+        const bodyHint = c.body ? ` 📝 ${c.body.replace(/\s+/g, ' ').slice(0, 80)}${c.body.length > 80 ? '…' : ''}` : ''
+        lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}${when}${st}${meta ? ` (${meta})` : ''}${bodyHint}`)
       }
     }
   }
@@ -258,6 +259,7 @@ const TOOLS = [
               fecha: { type: 'string', description: 'YYYY-MM-DD si es una reunión o entrega con fecha' },
               hora: { type: 'string', description: 'HH:MM opcional' },
               estado: { type: 'string', enum: ['pendiente', 'esperando', 'hecha'], description: 'esperando = esperando feedback; hecha = terminada (se queda tachada hasta archivarla)' },
+              detalle: { type: 'string', description: 'Texto libre dentro de la tarea (aclaraciones, contexto, enlaces)' },
             },
             required: ['texto'],
             additionalProperties: false,
@@ -304,7 +306,7 @@ const TOOLS = [
   {
     name: 'editar_nota',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Cambia una nota del tablero: texto, persona, estado (pendiente / esperando feedback) o fecha de reunión/entrega. La nota se busca por coincidencia parcial de su texto dentro del proyecto. Una nota "hecha pero esperando feedback" se marca con estado=esperando; quitar_nota la cierra del todo.',
+    description: 'Cambia una nota (tarea) del tablero: título, persona, estado (pendiente / esperando feedback / hecha), fecha de reunión/entrega o su texto interno (detalle, tipo página de Notion; usa anadir_detalle para sumar una aclaración sin borrar lo anterior). La nota se busca por coincidencia parcial de su texto dentro del proyecto. Una nota "hecha pero esperando feedback" se marca con estado=esperando; quitar_nota la cierra del todo.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -315,6 +317,8 @@ const TOOLS = [
         estado: { type: 'string', enum: ['pendiente', 'esperando', 'hecha'], description: 'esperando = esperando feedback; hecha = terminada (tachada); para quitarla del tablón usa quitar_nota' },
         fecha: { type: 'string', description: 'YYYY-MM-DD de la reunión/entrega; cadena vacía para quitarla' },
         hora: { type: 'string', description: 'HH:MM' },
+        detalle: { type: 'string', description: 'Texto libre dentro de la tarea (reemplaza el actual; cadena vacía lo borra)' },
+        anadir_detalle: { type: 'string', description: 'Añade un párrafo al final del texto de la tarea sin borrar lo que hay' },
       },
       required: ['proyecto', 'texto'],
       additionalProperties: false,
@@ -417,6 +421,20 @@ const TOOLS = [
         quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Nuevo responsable' },
       },
       required: ['proyecto', 'texto', 'quien'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ver_tarea',
+    annotations: { readOnlyHint: true },
+    description: 'Abre una tarea del tablero con todo su contenido: título, estado, persona, fecha, quién y cuándo la creó, y el texto interno completo (detalle). La tarea se busca por coincidencia parcial de su título dentro del proyecto.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        proyecto: { type: 'string', description: 'Proyecto del tablero (acepta substring)' },
+        texto: { type: 'string', description: 'Título (o parte) de la tarea' },
+      },
+      required: ['proyecto', 'texto'],
       additionalProperties: false,
     },
   },
@@ -694,7 +712,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     return { text: sections.join('\n') }
   }
 
-  if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto' || name === 'estado_proyecto' || name === 'crear_proyecto_tablero' || name === 'editar_nota') {
+  if (name === 'ver_tablero' || name === 'novedades' || name === 'anadir_nota' || name === 'asignar_nota' || name === 'quitar_nota' || name === 'mover_proyecto' || name === 'estado_proyecto' || name === 'crear_proyecto_tablero' || name === 'editar_nota' || name === 'ver_tarea') {
     const cid = await boardCompanyId()
     if (!cid) return { text: 'No se pudo resolver la empresa (no hay proyectos de horas).', isError: true }
     const board = await readBoard(cid)
@@ -730,9 +748,9 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     }
 
     if (name === 'anadir_nota') {
-      const items: Array<{ texto: string; quien?: string; fecha?: string; hora?: string; estado?: string }> = Array.isArray(args.notas)
-        ? (args.notas as Array<{ texto?: string; quien?: string; fecha?: string; hora?: string; estado?: string }>).map((n) => ({ texto: String(n.texto || '').trim(), quien: n.quien, fecha: n.fecha, hora: n.hora, estado: n.estado }))
-        : [{ texto: String(args.texto || '').trim(), quien: args.quien as string | undefined, fecha: args.fecha as string | undefined, hora: args.hora as string | undefined, estado: undefined as string | undefined }]
+      const items: Array<{ texto: string; quien?: string; fecha?: string; hora?: string; estado?: string; detalle?: string }> = Array.isArray(args.notas)
+        ? (args.notas as Array<{ texto?: string; quien?: string; fecha?: string; hora?: string; estado?: string; detalle?: string }>).map((n) => ({ texto: String(n.texto || '').trim(), quien: n.quien, fecha: n.fecha, hora: n.hora, estado: n.estado, detalle: n.detalle }))
+        : [{ texto: String(args.texto || '').trim(), quien: args.quien as string | undefined, fecha: args.fecha as string | undefined, hora: args.hora as string | undefined, estado: undefined as string | undefined, detalle: undefined as string | undefined }]
       const valid = items.filter((n) => n.texto)
       if (valid.length === 0) return { text: 'Falta "texto" o "notas".', isError: true }
       const needle = String(args.proyecto || '').trim()
@@ -762,6 +780,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           ...(who ? { who } : {}), ...(by ? { by } : {}),
           ...(due ? { due } : {}), ...(due && time ? { time } : {}),
           ...(waiting ? { state: n.estado, stateDate: todayISO() } : {}),
+          ...(n.detalle?.trim() ? { body: n.detalle.trim(), ...(by ? { bodyBy: by } : {}), bodyDate: todayISO() } : {}),
         })
         added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}${due ? ` 📅 ${due}${time ? ' ' + time : ''}` : ''}${waiting ? ' [esperando feedback]' : ''}`)
       }
@@ -822,6 +841,31 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const found = findBoardGroup(board, String(args.proyecto || ''))
     if (typeof found === 'string') return { text: found, isError: true }
 
+    if (name === 'ver_tarea') {
+      const needle = String(args.texto || '').trim().toLowerCase()
+      const matches = board.chips.filter((c) => c.group === found.name && c.text.toLowerCase().includes(needle))
+      if (matches.length !== 1) {
+        const list = board.chips.filter((c) => c.group === found.name).map((c) => `- ${c.text}`).join('\n') || '(sin tareas)'
+        return { text: `${matches.length ? 'Varias' : 'Ninguna'} tarea${matches.length ? 's coinciden' : ' coincide'} con "${args.texto}" en "${found.name}":\n${list}`, isError: true }
+      }
+      const c = matches[0]
+      const owner = found.owner === 'Eric' || found.owner === 'Andoni' ? found.owner : 'Eric y Andoni'
+      const who = c.who ?? owner
+      const estado = c.state === 'esperando' ? `esperando feedback${c.stateDate ? ' desde ' + c.stateDate : ''}` : c.state === 'hecha' ? `hecha${c.stateDate ? ' el ' + c.stateDate : ''}` : 'pendiente'
+      return {
+        text: [
+          `# ${c.text}`,
+          `Proyecto: ${found.name}`,
+          `Estado: ${estado}`,
+          `Asignada a: ${who === 'Eric y Andoni' ? 'los dos' : who}${c.who ? '' : ' (responsable del proyecto)'}`,
+          c.due ? `Fecha: ${c.due}${c.time ? ' ' + c.time : ''}` : '',
+          `Creada: ${c.date ?? '—'}${c.by ? ' por ' + c.by : ''}`,
+          '',
+          c.body ? `${c.body}${c.bodyBy ? `\n\n(editado por ${c.bodyBy}${c.bodyDate ? ' el ' + c.bodyDate : ''})` : ''}` : '(sin texto interno)',
+        ].filter((l) => l !== '').join('\n').replace('\n(sin', '\n\n(sin'),
+      }
+    }
+
     if (name === 'editar_nota') {
       const needle = String(args.texto || '').trim().toLowerCase()
       const matches = board.chips.filter((c) => c.group === found.name && c.text.toLowerCase().includes(needle))
@@ -835,8 +879,10 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       const fecha = args.fecha !== undefined ? String(args.fecha).trim() : undefined
       const hora = args.hora !== undefined ? String(args.hora).trim() : undefined
       if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { text: `Fecha inválida (YYYY-MM-DD): ${fecha}`, isError: true }
-      if (!nuevo && !quien && !estado && fecha === undefined && hora === undefined) {
-        return { text: 'Indica qué cambiar: nuevo_texto, quien, estado, fecha u hora.', isError: true }
+      const detalle = args.detalle !== undefined ? String(args.detalle).trim() : undefined
+      const masDetalle = args.anadir_detalle !== undefined ? String(args.anadir_detalle).trim() : undefined
+      if (!nuevo && !quien && !estado && fecha === undefined && hora === undefined && detalle === undefined && !masDetalle) {
+        return { text: 'Indica qué cambiar: nuevo_texto, quien, estado, fecha, hora, detalle o anadir_detalle.', isError: true }
       }
       board.chips = board.chips.map((c) => {
         if (c !== matches[0]) return c
@@ -846,6 +892,9 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         if (fecha === '') { const { due: _d, time: _t, ...rest } = next; next = rest }
         else if (fecha) next = { ...next, due: fecha }
         if (hora !== undefined && next.due) next = hora ? { ...next, time: hora.padStart(5, '0') } : (({ time: _t, ...rest }) => rest)(next)
+        if (detalle === '') { const { body: _b, bodyBy: _bb, bodyDate: _bd, ...rest } = next; next = rest }
+        else if (detalle) next = { ...next, body: detalle, bodyDate: todayISO() }
+        if (masDetalle) next = { ...next, body: next.body ? `${next.body}\n\n${masDetalle}` : masDetalle, bodyDate: todayISO() }
         return next
       })
       await writeBoard(cid, board)
@@ -854,6 +903,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         quien ? quien : '',
         after?.state === 'esperando' ? 'esperando feedback' : after?.state === 'hecha' ? 'hecha' : estado === 'pendiente' ? 'pendiente' : '',
         after?.due ? `📅 ${after.due}${after.time ? ' ' + after.time : ''}` : fecha === '' ? 'sin fecha' : '',
+        detalle !== undefined || masDetalle ? (after?.body ? 'detalle actualizado' : 'detalle borrado') : '',
       ].filter(Boolean).join(' · ')
       return { text: `✓ Nota actualizada en "${found.name}": ${nuevo ?? matches[0].text}${extra ? ` — ${extra}` : ''}` }
     }

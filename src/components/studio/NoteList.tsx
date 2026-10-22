@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Check, CalendarClock, Archive } from 'lucide-react'
+import { Plus, Check, CalendarClock, Archive, AlignLeft } from 'lucide-react'
 import { madridToday, type BoardChip } from '@/lib/firestore/planning'
 import { Faces } from './StudioMarks'
 import {
@@ -32,6 +32,8 @@ interface Props {
   onArchive: (i: number) => void
   onArchiveDone: () => void
   onAssign: (i: number, who: Person | undefined) => void
+  /** Abre la tarea como página */
+  onOpen: (i: number) => void
   onSetWhen: (i: number, due?: string, time?: string) => void
   dragChip: number | null
   onDragStart: (i: number) => void
@@ -50,7 +52,7 @@ const whoName = (w: string) => (w === 'Eric y Andoni' ? 'Los dos' : w)
 /** Notas de un proyecto: clic en el texto edita, el círculo avanza el estado, el nombre reasigna. */
 export function NoteList({
   notes, owner, me, onlyMine, compact = false,
-  onAdd, onEdit, onSetState, onArchive, onArchiveDone, onAssign, onSetWhen, dragChip, onDragStart, onDragEnd,
+  onAdd, onEdit, onSetState, onArchive, onArchiveDone, onAssign, onOpen, onSetWhen, dragChip, onDragStart, onDragEnd,
 }: Props) {
   const today = madridToday()
   const [editing, setEditing] = useState<number | null>(null)
@@ -161,12 +163,21 @@ export function NoteList({
 
                 <div className="min-w-0 flex-1">
                   <span
-                    onClick={() => { setEditing(i); setEditText(c.text) }}
-                    title={`Clic para editar${c.by ? ` · apuntada por ${c.by}` : ''}${c.date ? ` el ${fmtDay(c.date)}` : ''}`}
-                    className={`text-sm leading-snug cursor-text ${done ? 'text-ink-40 line-through decoration-ink-40' : waiting ? 'text-ink-60' : 'text-ink'}`}
+                    onClick={() => onOpen(i)}
+                    title={`Abrir tarea${c.by ? ` · apuntada por ${c.by}` : ''}${c.date ? ` el ${fmtDay(c.date)}` : ''}`}
+                    className={`text-sm leading-snug cursor-pointer hover:underline decoration-ink-40 underline-offset-2 ${done ? 'text-ink-40 line-through decoration-ink-40' : waiting ? 'text-ink-60' : 'text-ink'}`}
                   >
                     {c.text}
                   </span>
+                  {c.body && (
+                    <button
+                      onClick={() => onOpen(i)}
+                      className="mt-0.5 flex items-start gap-1.5 text-left text-xs text-ink-40 hover:text-ink-60 w-full"
+                    >
+                      <AlignLeft size={11} strokeWidth={1.5} className="mt-[3px] shrink-0" />
+                      <span className="line-clamp-1">{c.body.split('\n').find((l) => l.trim()) ?? ''}</span>
+                    </button>
+                  )}
 
                   {/* Fecha de reunión/entrega de la nota */}
                   {whenEditing === i ? (

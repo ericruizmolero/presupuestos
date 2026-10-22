@@ -29,6 +29,9 @@ export interface BoardChip {
   stateDate?: string  // YYYY-MM-DD desde cuándo espera
   due?: string        // YYYY-MM-DD: fecha de la reunión o entrega de esta nota
   time?: string       // HH:MM opcional
+  body?: string       // texto libre de la tarea (aclaraciones, contexto), tipo página de Notion
+  bodyBy?: string     // quién lo editó por última vez
+  bodyDate?: string   // YYYY-MM-DD de esa edición
 }
 
 /** Fecha local de Madrid, YYYY-MM-DD */
