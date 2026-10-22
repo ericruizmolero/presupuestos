@@ -5,6 +5,7 @@ import { X, Archive, Check } from 'lucide-react'
 import { madridToday, type BoardChip, type BoardGroup } from '@/lib/firestore/planning'
 import { Faces, ProjectMark } from './StudioMarks'
 import { countdown, effectiveWho, fmtDay, type Person } from './boardUtils'
+import { TaskBodyEditor } from './TaskBodyEditor'
 
 type NoteState = 'pendiente' | 'esperando' | 'hecha'
 
@@ -32,6 +33,7 @@ interface Props {
   groups: BoardGroup[]
   owner: Person
   me: string
+  companyId: string | null
   onPatch: (patch: Partial<BoardChip>, remove?: Array<keyof BoardChip>) => void
   onState: (state: NoteState) => void
   onArchive: () => void
@@ -39,12 +41,13 @@ interface Props {
 }
 
 /** Una tarea abierta como página (tipo Notion): título, propiedades y texto libre. */
-export function TaskSheet({ chip: c, groups, owner, me, onPatch, onState, onArchive, onClose }: Props) {
+export function TaskSheet({ chip: c, groups, owner, me, companyId, onPatch, onState, onArchive, onClose }: Props) {
   const today = madridToday()
   const [title, setTitle] = useState(c.text)
   const [body, setBody] = useState(c.body || '')
   const titleRef = useRef<HTMLTextAreaElement>(null)
-  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  // el cuerpo vivo se lee desde una ref para guardar siempre lo último escrito al cerrar
+  const bodyLatest = useRef(c.body || '')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -52,14 +55,13 @@ export function TaskSheet({ chip: c, groups, owner, me, onPatch, onState, onArch
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  // Autoajuste de altura de los textareas
+  // Autoajuste de altura del título
   useEffect(() => {
-    for (const el of [titleRef.current, bodyRef.current]) {
-      if (!el) continue
-      el.style.height = 'auto'
-      el.style.height = `${el.scrollHeight}px`
-    }
-  }, [title, body])
+    const el = titleRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [title])
 
   function commitTitle() {
     const t = title.replace(/\s+/g, ' ').trim()
@@ -68,7 +70,7 @@ export function TaskSheet({ chip: c, groups, owner, me, onPatch, onState, onArch
   }
 
   function commitBody() {
-    const b = body.replace(/\s+$/, '')
+    const b = bodyLatest.current
     if (b === (c.body || '')) return
     if (!b) onPatch({}, ['body', 'bodyBy', 'bodyDate'])
     else onPatch({ body: b, bodyBy: me, bodyDate: today })
@@ -192,20 +194,16 @@ export function TaskSheet({ chip: c, groups, owner, me, onPatch, onState, onArch
             </div>
           </div>
 
-          {/* Cuerpo libre */}
-          <div className="border-t border-line pt-6">
-            <textarea
-              ref={bodyRef}
-              rows={6}
+          {/* Cuerpo enriquecido: títulos, listas, citas e imágenes */}
+          <div className="border-t border-line pt-4">
+            <TaskBodyEditor
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              companyId={companyId}
+              onChange={(html) => { bodyLatest.current = html; setBody(html) }}
               onBlur={commitBody}
-              placeholder="Escribe aquí aclaraciones, contexto, enlaces, lo que falte… Se guarda solo."
-              className="w-full min-h-[10rem] resize-none overflow-hidden bg-transparent outline-none text-[15px] leading-relaxed text-ink placeholder-ink-40"
-              aria-label="Notas de la tarea"
             />
             {c.body && c.bodyBy && (
-              <p className="mt-2 text-xs text-ink-40">Editado por {c.bodyBy}{c.bodyDate ? ` el ${fmtDay(c.bodyDate)}` : ''}</p>
+              <p className="mt-4 text-xs text-ink-40">Editado por {c.bodyBy}{c.bodyDate ? ` el ${fmtDay(c.bodyDate)}` : ''}</p>
             )}
           </div>
         </div>

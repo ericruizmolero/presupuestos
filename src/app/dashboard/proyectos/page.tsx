@@ -506,6 +506,7 @@ function ProyectosContent() {
             groups={board.groups}
             owner={ownerOf(g?.owner)}
             me={me}
+            companyId={companyId}
             onPatch={(patch, remove) => patchChip(openTask, patch, remove)}
             onState={(st) => setChipState(openTask, st)}
             onArchive={() => { doneChip(openTask); setOpenTask(null) }}

@@ -5,7 +5,7 @@ import { Plus, Check, CalendarClock, Archive, AlignLeft } from 'lucide-react'
 import { madridToday, type BoardChip } from '@/lib/firestore/planning'
 import { Faces } from './StudioMarks'
 import {
-  countdown, effectiveWho, fmtDay, fmtShort, fmtWhen, includesMe, parseMention, parseWhen, type Person,
+  countdown, effectiveWho, fmtDay, fmtShort, fmtWhen, htmlToText, includesMe, parseMention, parseWhen, type Person,
 } from './boardUtils'
 
 export interface IndexedNote { c: BoardChip; i: number }
@@ -175,7 +175,7 @@ export function NoteList({
                       className="mt-0.5 flex items-start gap-1.5 text-left text-xs text-ink-40 hover:text-ink-60 w-full"
                     >
                       <AlignLeft size={11} strokeWidth={1.5} className="mt-[3px] shrink-0" />
-                      <span className="line-clamp-1">{c.body.split('\n').find((l) => l.trim()) ?? ''}</span>
+                      <span className="line-clamp-1">{htmlToText(c.body).split('\n').find((l) => l.trim()) ?? ''}</span>
                     </button>
                   )}
 

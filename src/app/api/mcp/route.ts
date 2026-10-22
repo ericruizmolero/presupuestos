@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { billingSummary, holdedConfigured, recentInvoices, invoicedContacts } from '@/lib/holded'
 import { PROFILES, proposeAll, createDraft, formatProposal, type TimeData } from '@/lib/invoicing'
-import { parseWhen } from '@/components/studio/boardUtils'
+import { parseWhen, htmlToText, plainToHtml, isHtml } from '@/components/studio/boardUtils'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -201,7 +201,8 @@ function renderBoard(board: Board): string {
         const meta = [c.date, c.by ? `de ${c.by}` : ''].filter(Boolean).join(' ')
         const st = c.state === 'esperando' ? ` [esperando feedback${c.stateDate ? ' desde ' + c.stateDate : ''}]` : c.state === 'hecha' ? ' [hecha]' : ''
         const when = c.due ? ` 📅 ${c.due}${c.time ? ' ' + c.time : ''}` : ''
-        const bodyHint = c.body ? ` 📝 ${c.body.replace(/\s+/g, ' ').slice(0, 80)}${c.body.length > 80 ? '…' : ''}` : ''
+        const bodyText = c.body ? htmlToText(c.body).replace(/\s+/g, ' ') : ''
+        const bodyHint = bodyText ? ` 📝 ${bodyText.slice(0, 80)}${bodyText.length > 80 ? '…' : ''}` : ''
         lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}${when}${st}${meta ? ` (${meta})` : ''}${bodyHint}`)
       }
     }
@@ -780,7 +781,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           ...(who ? { who } : {}), ...(by ? { by } : {}),
           ...(due ? { due } : {}), ...(due && time ? { time } : {}),
           ...(waiting ? { state: n.estado, stateDate: todayISO() } : {}),
-          ...(n.detalle?.trim() ? { body: n.detalle.trim(), ...(by ? { bodyBy: by } : {}), bodyDate: todayISO() } : {}),
+          ...(n.detalle?.trim() ? { body: plainToHtml(n.detalle.trim()), ...(by ? { bodyBy: by } : {}), bodyDate: todayISO() } : {}),
         })
         added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}${due ? ` 📅 ${due}${time ? ' ' + time : ''}` : ''}${waiting ? ' [esperando feedback]' : ''}`)
       }
@@ -861,7 +862,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           c.due ? `Fecha: ${c.due}${c.time ? ' ' + c.time : ''}` : '',
           `Creada: ${c.date ?? '—'}${c.by ? ' por ' + c.by : ''}`,
           '',
-          c.body ? `${c.body}${c.bodyBy ? `\n\n(editado por ${c.bodyBy}${c.bodyDate ? ' el ' + c.bodyDate : ''})` : ''}` : '(sin texto interno)',
+          c.body ? `${htmlToText(c.body)}${c.bodyBy ? `\n\n(editado por ${c.bodyBy}${c.bodyDate ? ' el ' + c.bodyDate : ''})` : ''}` : '(sin texto interno)',
         ].filter((l) => l !== '').join('\n').replace('\n(sin', '\n\n(sin'),
       }
     }
@@ -893,8 +894,11 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         else if (fecha) next = { ...next, due: fecha }
         if (hora !== undefined && next.due) next = hora ? { ...next, time: hora.padStart(5, '0') } : (({ time: _t, ...rest }) => rest)(next)
         if (detalle === '') { const { body: _b, bodyBy: _bb, bodyDate: _bd, ...rest } = next; next = rest }
-        else if (detalle) next = { ...next, body: detalle, bodyDate: todayISO() }
-        if (masDetalle) next = { ...next, body: next.body ? `${next.body}\n\n${masDetalle}` : masDetalle, bodyDate: todayISO() }
+        else if (detalle) next = { ...next, body: plainToHtml(detalle), bodyDate: todayISO() }
+        if (masDetalle) {
+          const prev = next.body ? (isHtml(next.body) ? next.body : plainToHtml(next.body)) : ''
+          next = { ...next, body: prev + plainToHtml(masDetalle), bodyDate: todayISO() }
+        }
         return next
       })
       await writeBoard(cid, board)

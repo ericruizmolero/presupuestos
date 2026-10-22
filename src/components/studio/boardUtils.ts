@@ -156,3 +156,36 @@ export function fmtWhen(due: string, time?: string): string {
   const d = new Date(due + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
   return time ? `${d} · ${time}` : d
 }
+
+/** ¿El cuerpo de una tarea ya es HTML (editor enriquecido) o texto plano antiguo? */
+export function isHtml(s: string): boolean {
+  return /^\s*<(p|h[1-6]|ul|ol|blockquote|img|div|figure)[\s>]/i.test(s)
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/** Texto plano → párrafos HTML (para cuerpos antiguos o texto que llega por el MCP) */
+export function plainToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((para) => para.trim())
+    .filter(Boolean)
+    .map((para) => `<p>${escapeHtml(para).replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
+/** HTML del cuerpo → texto legible (previsualización en la lista y respuestas del MCP) */
+export function htmlToText(html: string): string {
+  if (!isHtml(html)) return html
+  return html
+    .replace(/<img[^>]*>/gi, '[imagen]\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/(p|h[1-6]|li|blockquote|div)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}

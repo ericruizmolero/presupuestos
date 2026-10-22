@@ -1,0 +1,20 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Solo el estudio: Eric y Andoni
+    function isTeam() {
+      return request.auth != null
+        && request.auth.token.email in ['ericruizmolero@treseiscero.app', 'andoni@treseiscero.app'];
+    }
+
+    match /{allPaths=**} {
+      // Logos y tipografías se cargan en los presupuestos públicos; las imágenes de
+      // tareas solo se ven con su enlace (que lleva token). Listar, solo el estudio.
+      allow get: if true;
+      allow list: if isTeam();
+      // Subir, cambiar o borrar archivos: solo el estudio
+      allow write: if isTeam();
+    }
+  }
+}
