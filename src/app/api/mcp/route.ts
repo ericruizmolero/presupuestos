@@ -199,7 +199,7 @@ function renderBoard(board: Board): string {
       for (const c of chips) {
         const exception = c.who && c.who !== (g.owner ?? 'Eric y Andoni')
         const meta = [c.date, c.by ? `de ${c.by}` : ''].filter(Boolean).join(' ')
-        const st = c.state === 'esperando' ? ` [esperando feedback${c.stateDate ? ' desde ' + c.stateDate : ''}]` : ''
+        const st = c.state === 'esperando' ? ` [esperando feedback${c.stateDate ? ' desde ' + c.stateDate : ''}]` : c.state === 'hecha' ? ' [hecha]' : ''
         const when = c.due ? ` 📅 ${c.due}${c.time ? ' ' + c.time : ''}` : ''
         lines.push(`    · ${c.text}${exception ? ` — ${c.who}` : ''}${when}${st}${meta ? ` (${meta})` : ''}`)
       }
@@ -257,7 +257,7 @@ const TOOLS = [
               quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Solo si difiere del responsable del proyecto' },
               fecha: { type: 'string', description: 'YYYY-MM-DD si es una reunión o entrega con fecha' },
               hora: { type: 'string', description: 'HH:MM opcional' },
-              estado: { type: 'string', enum: ['pendiente', 'esperando'], description: '"esperando" = hecha, esperando feedback' },
+              estado: { type: 'string', enum: ['pendiente', 'esperando', 'hecha'], description: 'esperando = esperando feedback; hecha = terminada (se queda tachada hasta archivarla)' },
             },
             required: ['texto'],
             additionalProperties: false,
@@ -312,7 +312,7 @@ const TOOLS = [
         texto: { type: 'string', description: 'Texto actual (o parte) de la nota' },
         nuevo_texto: { type: 'string', description: 'Texto nuevo' },
         quien: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Nueva persona' },
-        estado: { type: 'string', enum: ['pendiente', 'esperando'], description: '"esperando" = hecha, esperando feedback; para cerrarla del todo usa quitar_nota' },
+        estado: { type: 'string', enum: ['pendiente', 'esperando', 'hecha'], description: 'esperando = esperando feedback; hecha = terminada (tachada); para quitarla del tablón usa quitar_nota' },
         fecha: { type: 'string', description: 'YYYY-MM-DD de la reunión/entrega; cadena vacía para quitarla' },
         hora: { type: 'string', description: 'HH:MM' },
       },
@@ -423,7 +423,7 @@ const TOOLS = [
   {
     name: 'quitar_nota',
     annotations: { destructiveHint: true },
-    description: 'Quita una nota del tablero (p. ej. al terminarla). El texto se busca por coincidencia parcial dentro del proyecto.',
+    description: 'Archiva una nota: la quita del tablero. Para marcarla terminada sin quitarla usa editar_nota con estado=hecha. El texto se busca por coincidencia parcial dentro del proyecto.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -675,7 +675,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         .filter((g) => g.deadline && daysTo(g.deadline) <= 30)
         .map((g) => ({ k: g.deadline!, t: `- ${g.name}: ${g.deadlineLabel || 'Entrega'} el ${g.deadline} (${whenTxt(daysTo(g.deadline!))})` })),
       ...board.chips
-        .filter((c) => c.due && c.state !== 'esperando' && daysTo(c.due) >= -1 && daysTo(c.due) <= 14)
+        .filter((c) => c.due && !c.state && daysTo(c.due) >= -1 && daysTo(c.due) <= 14)
         .map((c) => ({ k: c.due! + (c.time ?? ''), t: `- ${c.group}: ${c.text} — ${c.due}${c.time ? ' ' + c.time : ''} (${whenTxt(daysTo(c.due!))})` })),
     ].sort((a, b) => a.k.localeCompare(b.k)).map((x) => x.t)
 
@@ -756,12 +756,12 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         const parsed = parseWhen(n.texto, todayISO())
         const due = n.fecha && /^\d{4}-\d{2}-\d{2}$/.test(n.fecha) ? n.fecha : parsed.due
         const time = n.hora && /^\d{1,2}:\d{2}$/.test(n.hora) ? n.hora.padStart(5, '0') : parsed.time
-        const waiting = n.estado === 'esperando'
+        const waiting = n.estado === 'esperando' || n.estado === 'hecha'
         board.chips.push({
           group: g.name, text: n.texto, date: todayISO(),
           ...(who ? { who } : {}), ...(by ? { by } : {}),
           ...(due ? { due } : {}), ...(due && time ? { time } : {}),
-          ...(waiting ? { state: 'esperando', stateDate: todayISO() } : {}),
+          ...(waiting ? { state: n.estado, stateDate: todayISO() } : {}),
         })
         added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}${due ? ` 📅 ${due}${time ? ' ' + time : ''}` : ''}${waiting ? ' [esperando feedback]' : ''}`)
       }
@@ -831,7 +831,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       }
       const nuevo = args.nuevo_texto !== undefined ? String(args.nuevo_texto).trim() : undefined
       const quien = BOARD_PEOPLE.includes(String(args.quien)) ? String(args.quien) : undefined
-      const estado = args.estado === 'pendiente' || args.estado === 'esperando' ? String(args.estado) : undefined
+      const estado = args.estado === 'pendiente' || args.estado === 'esperando' || args.estado === 'hecha' ? String(args.estado) : undefined
       const fecha = args.fecha !== undefined ? String(args.fecha).trim() : undefined
       const hora = args.hora !== undefined ? String(args.hora).trim() : undefined
       if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { text: `Fecha inválida (YYYY-MM-DD): ${fecha}`, isError: true }
@@ -841,7 +841,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       board.chips = board.chips.map((c) => {
         if (c !== matches[0]) return c
         let next: BoardChip = { ...c, ...(nuevo ? { text: nuevo } : {}), ...(quien ? { who: quien } : {}) }
-        if (estado === 'esperando') next = { ...next, state: 'esperando', stateDate: todayISO() }
+        if (estado === 'esperando' || estado === 'hecha') next = { ...next, state: estado, stateDate: todayISO() }
         if (estado === 'pendiente') { const { state: _s, stateDate: _d, ...rest } = next; next = rest }
         if (fecha === '') { const { due: _d, time: _t, ...rest } = next; next = rest }
         else if (fecha) next = { ...next, due: fecha }
@@ -852,7 +852,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       const after = board.chips.find((c) => c.group === found.name && c.text === (nuevo ?? matches[0].text))
       const extra = [
         quien ? quien : '',
-        after?.state === 'esperando' ? 'esperando feedback' : estado === 'pendiente' ? 'pendiente' : '',
+        after?.state === 'esperando' ? 'esperando feedback' : after?.state === 'hecha' ? 'hecha' : estado === 'pendiente' ? 'pendiente' : '',
         after?.due ? `📅 ${after.due}${after.time ? ' ' + after.time : ''}` : fecha === '' ? 'sin fecha' : '',
       ].filter(Boolean).join(' · ')
       return { text: `✓ Nota actualizada en "${found.name}": ${nuevo ?? matches[0].text}${extra ? ` — ${extra}` : ''}` }

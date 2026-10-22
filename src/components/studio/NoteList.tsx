@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Check, CalendarClock } from 'lucide-react'
+import { Plus, Check, CalendarClock, Archive } from 'lucide-react'
 import { madridToday, type BoardChip } from '@/lib/firestore/planning'
 import { Faces } from './StudioMarks'
 import {
@@ -9,6 +9,14 @@ import {
 } from './boardUtils'
 
 export interface IndexedNote { c: BoardChip; i: number }
+
+export type NoteState = 'pendiente' | 'esperando' | 'hecha'
+
+const STATES: Array<{ id: NoteState; label: string; dot: string }> = [
+  { id: 'pendiente', label: 'Pendiente', dot: 'border border-input' },
+  { id: 'esperando', label: 'Esperando feedback', dot: 'bg-[#D97706]' },
+  { id: 'hecha', label: 'Hecha', dot: 'bg-[#16A34A]' },
+]
 
 interface Props {
   notes: IndexedNote[]
@@ -19,9 +27,10 @@ interface Props {
   compact?: boolean
   onAdd: (text: string, who?: Person, due?: string, time?: string) => void
   onEdit: (i: number, text: string) => void
-  /** Avanza el estado: pendiente → esperando feedback → cerrada */
-  onAdvance: (i: number) => void
-  onDone: (i: number) => void
+  onSetState: (i: number, state: NoteState) => void
+  /** Quita la nota del tablón (con deshacer) */
+  onArchive: (i: number) => void
+  onArchiveDone: () => void
   onAssign: (i: number, who: Person | undefined) => void
   onSetWhen: (i: number, due?: string, time?: string) => void
   dragChip: number | null
@@ -41,13 +50,14 @@ const whoName = (w: string) => (w === 'Eric y Andoni' ? 'Los dos' : w)
 /** Notas de un proyecto: clic en el texto edita, el círculo avanza el estado, el nombre reasigna. */
 export function NoteList({
   notes, owner, me, onlyMine, compact = false,
-  onAdd, onEdit, onAdvance, onDone, onAssign, onSetWhen, dragChip, onDragStart, onDragEnd,
+  onAdd, onEdit, onSetState, onArchive, onArchiveDone, onAssign, onSetWhen, dragChip, onDragStart, onDragEnd,
 }: Props) {
   const today = madridToday()
   const [editing, setEditing] = useState<number | null>(null)
   const [editText, setEditText] = useState('')
   const [draft, setDraft] = useState('')
   const [assignMenu, setAssignMenu] = useState<number | null>(null)
+  const [stateMenu, setStateMenu] = useState<number | null>(null)
   const [whenEditing, setWhenEditing] = useState<number | null>(null)
   const [whenDate, setWhenDate] = useState('')
   const [whenTime, setWhenTime] = useState('')
@@ -56,7 +66,7 @@ export function NoteList({
     if (editing === null) return
     const t = editText.trim()
     if (t) onEdit(editing, t)
-    else onDone(editing)
+    else onArchive(editing)
     setEditing(null)
   }
 
@@ -88,6 +98,7 @@ export function NoteList({
             const eff = effectiveWho(c.who, owner)
             const dim = onlyMine && !includesMe(eff, me)
             const waiting = c.state === 'esperando'
+            const done = c.state === 'hecha'
             const cd = c.due ? countdown(c.due, today) : null
 
             if (editing === i) {
@@ -118,21 +129,30 @@ export function NoteList({
                   dragChip === i ? 'opacity-40' : dim ? 'opacity-35' : ''
                 }`}
               >
-                {/* Estado: ○ pendiente → ◐ esperando feedback → cerrada */}
-                {waiting ? (
+                {/* Círculo: marca hecha (se tacha, no desaparece); otro clic la devuelve a pendiente */}
+                {done ? (
                   <button
-                    onClick={() => onAdvance(i)}
-                    title="Hecha, esperando feedback — clic para cerrarla"
-                    aria-label="Cerrar tarea"
+                    onClick={() => onSetState(i, 'pendiente')}
+                    title="Hecha — clic para devolverla a pendiente"
+                    aria-label="Desmarcar"
+                    className="mt-[3px] shrink-0 w-3.5 h-3.5 rounded-full bg-[#16A34A] text-white flex items-center justify-center transition-transform hover:scale-110"
+                  >
+                    <Check size={9} strokeWidth={3} />
+                  </button>
+                ) : waiting ? (
+                  <button
+                    onClick={() => onSetState(i, 'hecha')}
+                    title="Esperando feedback — clic para marcarla hecha"
+                    aria-label="Marcar hecha"
                     className="mt-[3px] shrink-0 w-3.5 h-3.5 rounded-full border border-[#D97706] overflow-hidden flex transition-transform hover:scale-110"
                   >
                     <span className="w-1/2 h-full bg-[#D97706]" />
                   </button>
                 ) : (
                   <button
-                    onClick={() => onAdvance(i)}
-                    title="Pendiente — clic para marcarla hecha (esperando feedback)"
-                    aria-label="Marcar hecha, esperando feedback"
+                    onClick={() => onSetState(i, 'hecha')}
+                    title="Pendiente — clic para marcarla hecha"
+                    aria-label="Marcar hecha"
                     className="mt-[3px] shrink-0 w-3.5 h-3.5 rounded-full border border-input text-transparent hover:text-ink-60 hover:border-ink-40 flex items-center justify-center transition-colors"
                   >
                     <Check size={9} strokeWidth={3} />
@@ -143,7 +163,7 @@ export function NoteList({
                   <span
                     onClick={() => { setEditing(i); setEditText(c.text) }}
                     title={`Clic para editar${c.by ? ` · apuntada por ${c.by}` : ''}${c.date ? ` el ${fmtDay(c.date)}` : ''}`}
-                    className={`text-sm leading-snug cursor-text ${waiting ? 'text-ink-60' : 'text-ink'}`}
+                    className={`text-sm leading-snug cursor-text ${done ? 'text-ink-40 line-through decoration-ink-40' : waiting ? 'text-ink-60' : 'text-ink'}`}
                   >
                     {c.text}
                   </span>
@@ -178,7 +198,7 @@ export function NoteList({
                     >
                       <CalendarClock size={11} strokeWidth={1.5} className={cd.tone} />
                       <span className="text-ink-60">{fmtWhen(c.due, c.time)}</span>
-                      {!waiting && (
+                      {!waiting && !done && (
                         <span className={`px-1.5 py-px rounded text-[10px] font-medium ${cd.pill}`}>{cd.text}</span>
                       )}
                     </button>
@@ -199,13 +219,18 @@ export function NoteList({
 
                 {/* Estado o fecha de alta + a quién le toca (clic para reasignar) */}
                 <span className="shrink-0 mt-px flex items-center gap-1.5 text-[11px] whitespace-nowrap">
-                  {waiting ? (
-                    <span className="text-[#B45309]" title={c.stateDate ? `Esperando feedback desde el ${fmtDay(c.stateDate)}` : 'Esperando feedback'}>
-                      esperando{c.stateDate && !compact ? ` · ${fmtShort(c.stateDate)}` : ''}
-                    </span>
-                  ) : c.date && !compact ? (
+                  <button
+                    onClick={() => setStateMenu(stateMenu === i ? null : i)}
+                    title={`Estado${c.stateDate && c.state ? ` desde el ${fmtDay(c.stateDate)}` : ''} — clic para cambiar`}
+                    className={`rounded px-1 -mx-1 hover:bg-surface-hover transition-colors ${
+                      waiting ? 'text-[#B45309]' : done ? 'text-[#15803D]' : 'text-ink-40 opacity-0 group-hover/note:opacity-100'
+                    }`}
+                  >
+                    {waiting ? `esperando${c.stateDate && !compact ? ` · ${fmtShort(c.stateDate)}` : ''}` : done ? 'hecha' : 'estado'}
+                  </button>
+                  {!waiting && !done && c.date && !compact && (
                     <span className="text-ink-40 tabular-nums">{fmtShort(c.date)}</span>
-                  ) : null}
+                  )}
                   <button
                     onClick={() => setAssignMenu(assignMenu === i ? null : i)}
                     title="A quién le toca — clic para cambiar"
@@ -214,6 +239,36 @@ export function NoteList({
                     {whoName(eff)}
                   </button>
                 </span>
+
+                {stateMenu === i && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setStateMenu(null)} aria-hidden="true" />
+                    <div className="absolute right-0 top-full mt-1 z-30 w-52 bg-paper border border-line rounded-md shadow-[0_4px_16px_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.04)] py-1">
+                      {STATES.map((st) => {
+                        const active = (c.state ?? 'pendiente') === st.id
+                        return (
+                          <button
+                            key={st.id}
+                            onClick={() => { onSetState(i, st.id); setStateMenu(null) }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-left hover:bg-surface-hover ${active ? 'text-ink font-medium' : 'text-ink-60'}`}
+                          >
+                            <span className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />
+                            {st.label}
+                            {active && <Check size={12} strokeWidth={2} className="ml-auto" />}
+                          </button>
+                        )
+                      })}
+                      <div className="my-1 border-t border-line" />
+                      <button
+                        onClick={() => { onArchive(i); setStateMenu(null) }}
+                        className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-left text-ink-60 hover:bg-surface-hover hover:text-[#B91C1C]"
+                      >
+                        <Archive size={12} strokeWidth={1.5} />
+                        Archivar (quitar del tablón)
+                      </button>
+                    </div>
+                  </>
+                )}
 
                 {assignMenu === i && (
                   <>
@@ -240,6 +295,16 @@ export function NoteList({
             )
           })}
         </ul>
+      )}
+
+      {notes.some(({ c }) => c.state === 'hecha') && (
+        <button
+          onClick={onArchiveDone}
+          className="mt-1 flex items-center gap-1.5 text-xs text-ink-40 hover:text-ink transition-colors px-1.5 -mx-1.5"
+        >
+          <Archive size={12} strokeWidth={1.5} />
+          Archivar hechas ({notes.filter(({ c }) => c.state === 'hecha').length})
+        </button>
       )}
 
       {/* Añadir: siempre visible; Enter añade y deja el foco para encadenar */}

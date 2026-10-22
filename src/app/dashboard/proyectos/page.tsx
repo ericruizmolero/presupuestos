@@ -17,7 +17,7 @@ import { Check, Plus, Trash2 } from 'lucide-react'
 import { Faces } from '@/components/studio/StudioMarks'
 import { ProjectSummary } from '@/components/studio/ProjectSummary'
 import { ProjectSheet } from '@/components/studio/ProjectSheet'
-import { NoteList, type IndexedNote } from '@/components/studio/NoteList'
+import { NoteList, type IndexedNote, type NoteState } from '@/components/studio/NoteList'
 import { StudioSidebar } from '@/components/studio/StudioSidebar'
 import { effectiveWho, includesMe, myName, ownerOf, type Person } from '@/components/studio/boardUtils'
 
@@ -204,7 +204,7 @@ function ProyectosContent() {
     if (!removed) return
     setBoard((b) => ({ ...b, chips: b.chips.filter((_, idx) => idx !== i) }))
     showToast({
-      message: `Cerrada: ${removed.text}`,
+      message: `Archivada: ${removed.text}`,
       undo: () => setBoard((b) => {
         const chips = [...b.chips]
         chips.splice(Math.min(i, chips.length), 0, removed)
@@ -213,26 +213,25 @@ function ProyectosContent() {
     })
   }
 
-  /** ○ pendiente → ◐ hecha, esperando feedback → cerrada (se quita, con deshacer) */
-  function advanceChip(i: number) {
-    const chip = board.chips[i]
-    if (!chip) return
-    if (chip.state === 'esperando') { doneChip(i); return }
+  /** Cambia el estado de una nota; marcar hecha no la quita (se tacha) */
+  function setChipState(i: number, state: NoteState) {
     setBoard((b) => ({
       ...b,
-      chips: b.chips.map((c, idx) => (idx === i ? { ...c, state: 'esperando', stateDate: madridToday() } : c)),
+      chips: b.chips.map((c, idx) => {
+        if (idx !== i) return c
+        const { state: _s, stateDate: _d, ...rest } = c
+        return state === 'pendiente' ? rest : { ...rest, state, stateDate: madridToday() }
+      }),
     }))
-    showToast({
-      message: `Esperando feedback: ${chip.text}`,
-      undo: () => setBoard((b) => ({
-        ...b,
-        chips: b.chips.map((c, idx) => {
-          if (idx !== i) return c
-          const { state: _s, stateDate: _d, ...rest } = c
-          return rest
-        }),
-      })),
-    })
+  }
+
+  /** Quita del tablón todas las notas hechas de un proyecto (con deshacer) */
+  function archiveDone(group: string) {
+    const snapshot = board
+    const n = board.chips.filter((c) => c.group === group && c.state === 'hecha').length
+    if (!n) return
+    setBoard((b) => ({ ...b, chips: b.chips.filter((c) => !(c.group === group && c.state === 'hecha')) }))
+    showToast({ message: `${n} nota${n === 1 ? '' : 's'} hecha${n === 1 ? '' : 's'} archivada${n === 1 ? '' : 's'}`, undo: () => setBoard(snapshot) })
   }
 
   function setChipWhen(i: number, due?: string, time?: string) {
@@ -283,8 +282,9 @@ function ProyectosContent() {
       .filter(({ c }) => c.group === name)
       // pendientes antes que las que esperan feedback; dentro, recientes arriba y sin fecha al final
       .sort((a, b) => {
-        const wa = a.c.state === 'esperando' ? 1 : 0
-        const wb = b.c.state === 'esperando' ? 1 : 0
+        const rank = (st?: string) => (st === 'hecha' ? 2 : st === 'esperando' ? 1 : 0)
+        const wa = rank(a.c.state)
+        const wb = rank(b.c.state)
         if (wa !== wb) return wa - wb
         // con fecha (reunión/entrega) primero, la más cercana arriba
         if (a.c.due || b.c.due) {
@@ -317,8 +317,9 @@ function ProyectosContent() {
         onAdd={(text, who, due, time) => addChip(g.name, text, who, due, time)}
         onSetWhen={setChipWhen}
         onEdit={editChip}
-        onAdvance={advanceChip}
-        onDone={doneChip}
+        onSetState={setChipState}
+        onArchive={doneChip}
+        onArchiveDone={() => archiveDone(g.name)}
         onAssign={assignChip}
         dragChip={dragChip}
         onDragStart={setDragChip}

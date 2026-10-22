@@ -25,7 +25,7 @@ export interface BoardChip {
   who?: string  // 'Eric' | 'Andoni' | 'Eric y Andoni' | undefined (sin asignar)
   date?: string // YYYY-MM-DD en que se apuntó (para "novedades")
   by?: string   // quién la apuntó (puede diferir de who)
-  state?: 'esperando' // hecha, esperando feedback (sin campo = pendiente; cerrada = se quita)
+  state?: 'esperando' | 'hecha' // sin campo = pendiente; archivar = quitarla del tablón
   stateDate?: string  // YYYY-MM-DD desde cuándo espera
   due?: string        // YYYY-MM-DD: fecha de la reunión o entrega de esta nota
   time?: string       // HH:MM opcional

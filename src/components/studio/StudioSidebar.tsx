@@ -112,7 +112,7 @@ export function StudioSidebar({ board, timeProjects, timeEntries, quotes, lastSe
       .map((g): Upcoming => ({ key: `p${g.name}`, date: g.deadline!, label: g.deadlineLabel || 'Entrega', project: g.name, color: g.color, showLogo: g.showLogo })),
     ...board.chips
       .map((c, i) => ({ c, i }))
-      .filter(({ c }) => c.due && c.state !== 'esperando' && daysUntil(c.due, today) >= -1 && daysUntil(c.due, today) <= 14)
+      .filter(({ c }) => c.due && !c.state && daysUntil(c.due, today) >= -1 && daysUntil(c.due, today) <= 14)
       .map(({ c, i }): Upcoming => {
         const g = board.groups.find((x) => x.name === c.group)
         return { key: `n${i}`, date: c.due!, time: c.time, label: c.text, project: c.group, color: g?.color ?? '#E5E5E5', showLogo: g?.showLogo }
