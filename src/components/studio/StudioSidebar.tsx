@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Clock, FileText, StickyNote } from 'lucide-react'
 import { madridToday, type Board } from '@/lib/firestore/planning'
 import type { TimeProject, TimeEntry } from '@/types/time'
@@ -12,6 +12,80 @@ import {
 } from './boardUtils'
 
 const EYEBROW = 'text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40'
+
+interface Billing {
+  year: number; base: number; pending: number; invoices: number; byMonth: number[]
+}
+
+const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
+
+/** Facturación anual desde Holded (vía /api/holded/summary; la clave nunca llega al navegador) */
+function BillingSection({ today }: { today: string }) {
+  const [state, setState] = useState<'loading' | 'ok' | 'off' | 'error'>('loading')
+  const [data, setData] = useState<Billing | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { auth } = await import('@/lib/firebase')
+        const token = await auth.currentUser?.getIdToken()
+        if (!token) { if (!cancelled) setState('off'); return }
+        const res = await fetch(`/api/holded/summary?year=${today.slice(0, 4)}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.status === 503) { if (!cancelled) setState('off'); return }
+        if (!res.ok) throw new Error(String(res.status))
+        const json = (await res.json()) as Billing
+        if (!cancelled) { setData(json); setState('ok') }
+      } catch (err) {
+        console.error('[holded] No se pudo leer la facturación:', err)
+        if (!cancelled) setState('error')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [today])
+
+  if (state === 'off') return null
+  const monthIdx = Number(today.slice(5, 7)) - 1
+  const monthName = new Date(today + 'T00:00:00').toLocaleDateString('es-ES', { month: 'long' })
+  const max = data ? Math.max(...data.byMonth, 1) : 1
+
+  return (
+    <section className="pt-5 border-t border-line">
+      <div className="flex items-baseline justify-between mb-2">
+        <p className={EYEBROW}>Facturación {today.slice(0, 4)}</p>
+        <span className="text-[10px] text-ink-40">Holded</span>
+      </div>
+      {state === 'loading' && <div className="h-14 rounded bg-surface animate-pulse" />}
+      {state === 'error' && <p className="text-sm text-ink-40">No se pudo leer Holded ahora mismo.</p>}
+      {state === 'ok' && data && (
+        <>
+          <p className="text-xl font-medium tracking-tight text-ink tabular-nums">{eur(data.base)}</p>
+          <p className="text-xs text-ink-40 mb-3">base imponible · {data.invoices} factura{data.invoices === 1 ? '' : 's'}</p>
+          <div className="flex items-end gap-[3px] h-10 mb-2" aria-label="Facturación por mes">
+            {data.byMonth.map((v, i) => (
+              <div
+                key={i}
+                title={`${new Date(Number(today.slice(0, 4)), i, 1).toLocaleDateString('es-ES', { month: 'long' })}: ${eur(v)}`}
+                className={`flex-1 rounded-sm ${i === monthIdx ? 'bg-accent' : i < monthIdx ? 'bg-ink' : 'bg-line'}`}
+                style={{ height: `${Math.max(v > 0 ? 8 : 4, (Math.max(v, 0) / max) * 100)}%`, opacity: i === monthIdx ? 1 : i < monthIdx ? 0.35 : 1 }}
+              />
+            ))}
+          </div>
+          <dl className="space-y-1 text-sm">
+            <div className="flex justify-between gap-2">
+              <dt className="text-ink-60 capitalize">{monthName}</dt>
+              <dd className="tabular-nums text-ink">{eur(data.byMonth[monthIdx] || 0)}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-ink-60">Pendiente de cobro</dt>
+              <dd className={`tabular-nums ${data.pending > 0 ? 'text-[#B45309]' : 'text-ink'}`}>{eur(data.pending)}</dd>
+            </div>
+          </dl>
+        </>
+      )}
+    </section>
+  )
+}
 
 interface Props {
   board: Board
@@ -156,6 +230,8 @@ export function StudioSidebar({ board, timeProjects, timeEntries, quotes, lastSe
           <p className="text-sm text-ink-40">Aún no hay horas este mes.</p>
         )}
       </section>
+
+      <BillingSection today={today} />
 
       <section className="pt-5 border-t border-line">
         <p className={`${EYEBROW} mb-2.5`}>{newsHeader}</p>

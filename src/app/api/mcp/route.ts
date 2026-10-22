@@ -8,6 +8,7 @@
  * cuenta de servicio). Las escrituras usan Firebase Admin (bypassa rules).
  */
 import { NextRequest, NextResponse } from 'next/server'
+import { billingSummary, holdedConfigured } from '@/lib/holded'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -308,6 +309,16 @@ const TOOLS = [
     },
   },
   {
+    name: 'facturacion',
+    annotations: { readOnlyHint: true },
+    description: 'Facturación del estudio desde Holded: base imponible facturada en el año (facturas menos rectificativas), total con IVA, pendiente de cobro, desglose por mes y por cliente, y última factura. Responde a "¿cuánto llevamos facturado?", "¿qué nos deben?", "¿cómo va el año?".',
+    inputSchema: {
+      type: 'object',
+      properties: { anio: { type: 'number', description: 'Año (por defecto el actual)' } },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'resumen_semana',
     description: 'El digest del estudio: horas de los últimos 7 días por proyecto (comparadas con la semana anterior), novedades del tablón y proyectos sin actividad en 14+ días. Responde a "ponme al día", "¿cómo va la semana?", "resumen del lunes". Solo muestra lo que ha cambiado.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -483,6 +494,27 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const rows = entries.map((e) => `[${e.id}] ${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
     const amount = found.hourlyRate ? ` · ${(total * found.hourlyRate).toFixed(2)} € (a ${found.hourlyRate} €/h)` : ''
     return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
+  }
+
+  if (name === 'facturacion') {
+    if (!holdedConfigured()) return { text: 'Holded no está conectado (falta HOLDED_API_KEY en Vercel).', isError: true }
+    const year = typeof args.anio === 'number' ? args.anio : Number(todayISO().slice(0, 4))
+    const s = await billingSummary(year)
+    const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+    const monthLines = s.byMonth.map((v, i) => (v ? `  ${meses[i]}: ${eur(v)}` : '')).filter(Boolean).join('\n')
+    const clientLines = s.byClient.slice(0, 10).map((c) => `  ${c.name}: ${eur(c.base)}`).join('\n')
+    return {
+      text: [
+        `Facturación ${year} (Holded)`,
+        `Base imponible: ${eur(s.base)} · Total con IVA: ${eur(s.total)}`,
+        `Pendiente de cobro: ${eur(s.pending)}`,
+        `${s.invoices} facturas${s.creditNotes ? ` · ${s.creditNotes} rectificativas` : ''}`,
+        s.lastInvoice ? `Última: ${s.lastInvoice.number ?? ''} ${s.lastInvoice.client ?? ''} ${s.lastInvoice.date} (${eur(s.lastInvoice.base)})`.replace(/\s+/g, ' ') : '',
+        monthLines ? `\nPor mes (base)\n${monthLines}` : '',
+        clientLines ? `\nPor cliente (base)\n${clientLines}` : '',
+      ].filter(Boolean).join('\n'),
+    }
   }
 
   if (name === 'resumen_semana') {
