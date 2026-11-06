@@ -174,9 +174,9 @@ function ProspeccionContent() {
                 </li>
               ))}
             </ul>
-          ) : <span className="text-ink-40">Sin motivos todavía</span>}
+          ) : null}
           {p.response && (
-            <span className="mt-2 block rounded-md bg-surface border border-line px-2.5 py-1.5 text-[13px] text-ink">
+            <span className={`${p.reasons.length ? 'mt-2 ' : ''}block rounded-md bg-surface border border-line px-2.5 py-1.5 text-[13px] text-ink`}>
               <span className="text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mr-1.5">Respuesta</span>
               {p.response}
             </span>
