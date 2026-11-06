@@ -7,7 +7,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { madridToday } from '@/lib/firestore/planning'
 import {
-  getProspects, saveProspects, STAGES, PRIORITIES, type Prospect, type ProspectStage, type ProspectPriority,
+  subscribeProspects, saveProspects, STAGES, PRIORITIES, type Prospect, type ProspectStage, type ProspectPriority,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import { Check, Plus, X, ExternalLink, Trash2, GripVertical } from 'lucide-react'
@@ -46,27 +46,33 @@ function ProspeccionContent() {
   const [showClosed, setShowClosed] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
-  const first = useRef(true)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // true cuando el estado cambia por una edición hecha aquí (y hay que guardarla)
+  const dirty = useRef(false)
 
   useEffect(() => {
     if (!user) return
-    getUserCompanyId(user.uid).then(async (cid) => {
+    let unsub: (() => void) | undefined
+    getUserCompanyId(user.uid).then((cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-      setItems(await getProspects(cid))
-      setLoading(false)
+      unsub = subscribeProspects(cid, (remote, local) => {
+        // Cambios de Andoni o del conector de Claude: se aplican salvo que haya una edición local sin guardar
+        if (!local && !dirty.current) setItems(remote)
+        setLoading(false)
+      })
     })
+    return () => unsub?.()
   }, [user])
 
   useEffect(() => {
-    if (loading || !companyId) return
-    if (first.current) { first.current = false; return }
+    if (loading || !companyId || !dirty.current) return
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(async () => {
       setSaved('saving')
       try {
         await saveProspects(companyId, items)
+        dirty.current = false
         setSaved('saved')
         setTimeout(() => setSaved('idle'), 1800)
       } catch (err) {
@@ -79,12 +85,14 @@ function ProspeccionContent() {
   }, [items])
 
   function patch(id: string, p: Partial<Prospect>) {
+    dirty.current = true
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, ...p } : x)))
   }
 
   /** Suelta una fila sobre otra (o al final de una etapa): adopta su etapa y queda justo antes */
   function dropOn(targetId: string | null, stage: ProspectStage) {
     if (!dragId || dragId === targetId) { setDragId(null); setOverId(null); return }
+    dirty.current = true
     setItems((xs) => {
       const moving = xs.find((x) => x.id === dragId)
       if (!moving) return xs
@@ -115,6 +123,7 @@ function ProspeccionContent() {
     const name = newName.trim()
     if (!name) return
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    dirty.current = true
     setItems((xs) => [{ id, name, reasons: [], stage: 'detectado', priority: 'media', date: madridToday(), by: me }, ...xs])
     setNewName('')
     setOpenId(id)
@@ -166,6 +175,12 @@ function ProspeccionContent() {
               ))}
             </ul>
           ) : <span className="text-ink-40">Sin motivos todavía</span>}
+          {p.response && (
+            <span className="mt-2 block rounded-md bg-surface border border-line px-2.5 py-1.5 text-[13px] text-ink">
+              <span className="text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mr-1.5">Respuesta</span>
+              {p.response}
+            </span>
+          )}
         </button>
         <span className="col-start-2 md:col-start-auto flex items-center gap-2 justify-end">
           <button
@@ -262,7 +277,7 @@ function ProspeccionContent() {
           key={open.id}
           p={open}
           onPatch={(x) => patch(open.id, x)}
-          onDelete={() => { setItems((xs) => xs.filter((y) => y.id !== open.id)); setOpenId(null) }}
+          onDelete={() => { dirty.current = true; setItems((xs) => xs.filter((y) => y.id !== open.id)); setOpenId(null) }}
           onClose={() => setOpenId(null)}
         />
       )}
@@ -282,6 +297,7 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
   const [reasons, setReasons] = useState(p.reasons.join('\n'))
   const [links, setLinks] = useState((p.links || []).join('\n'))
   const [notes, setNotes] = useState(p.notes || '')
+  const [response, setResponse] = useState(p.response || '')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
@@ -355,13 +371,24 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
           </section>
 
           <section>
-            <span className={LABEL}>Por qué puede picar</span>
+            <span className={LABEL}>Por qué los elegimos</span>
             <textarea
               className={`${INPUT} min-h-[8rem] leading-relaxed`}
               value={reasons}
               placeholder={'Un motivo por línea:\nAcaban de levantar 14,7 M€\nLa web es muy floja\nConocemos a alguien dentro'}
               onChange={(e) => setReasons(e.target.value)}
               onBlur={() => onPatch({ reasons: lines(reasons) })}
+            />
+          </section>
+
+          <section>
+            <span className={LABEL}>Qué respondieron</span>
+            <textarea
+              className={`${INPUT} min-h-[4.5rem] leading-relaxed`}
+              value={response}
+              placeholder="Cuando contesten: «están contentos con su proveedor», «les encanta, hablamos el martes»…"
+              onChange={(e) => setResponse(e.target.value)}
+              onBlur={() => onPatch({ response: response.trim() || undefined })}
             />
           </section>
 

@@ -6,7 +6,7 @@ import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import {
-  getBoard, saveBoard, getBoardLastSeen, setBoardLastSeen, madridToday,
+  getBoard, saveBoard, subscribeBoard, getBoardLastSeen, setBoardLastSeen, madridToday,
   BOARD_COLORS, DEFAULT_LANES, type Board, type BoardGroup, type BoardChip,
 } from '@/lib/firestore/planning'
 import { getTimeProjects, getTimeEntriesByCompany } from '@/lib/firestore/time'
@@ -41,7 +41,11 @@ function ProyectosContent() {
 
   // ── Datos ──────────────────────────────────────────────────────────────────
   const [companyId, setCompanyId] = useState<string | null>(null)
-  const [board, setBoard] = useState<Board>({ lanes: [...DEFAULT_LANES], groups: [], chips: [] })
+  const [board, setBoardState] = useState<Board>({ lanes: [...DEFAULT_LANES], groups: [], chips: [] })
+  // true mientras haya una edición hecha aquí pendiente de guardar
+  const dirty = useRef(false)
+  /** Edición local: se marca para guardar (los cambios remotos usan setBoardState) */
+  const setBoard: typeof setBoardState = (u) => { dirty.current = true; setBoardState(u) }
   const [loading, setLoading] = useState(true)
   const [lastSeen, setLastSeen] = useState<string | null>(null)
   const [timeProjects, setTimeProjects] = useState<TimeProject[]>([])
@@ -61,19 +65,23 @@ function ProyectosContent() {
   const [toast, setToast] = useState<Toast>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const isFirstRender = useRef(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (!user) return
+    let unsub: (() => void) | undefined
     getUserCompanyId(user.uid).then(async (cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
       const [b, seen, tps, tes, qs] = await Promise.all([
         getBoard(cid), getBoardLastSeen(user.uid), getTimeProjects(cid), getTimeEntriesByCompany(cid), getQuotes(cid),
       ])
-      setBoard(b)
+      setBoardState(b)
+      // En directo: cambios de Andoni o del conector de Claude, salvo si hay una edición local sin guardar
+      unsub = subscribeBoard(cid, (remote, local) => {
+        if (!local && !dirty.current) setBoardState(remote)
+      })
       setLastSeen(seen)
       setTimeProjects(tps)
       setTimeEntries(tes)
@@ -82,19 +90,19 @@ function ProyectosContent() {
       // marcar la visita (el feed de esta sesión usa el valor anterior)
       setBoardLastSeen(user.uid, madridToday())
     })
+    return () => unsub?.()
   }, [user])
 
   // Autoguardado con debounce
   useEffect(() => {
-    if (loading) return
-    if (isFirstRender.current) { isFirstRender.current = false; return }
-    if (!companyId) return
+    if (loading || !companyId || !dirty.current) return
     if (saveTimer.current) clearTimeout(saveTimer.current)
     if (clearTimer.current) clearTimeout(clearTimer.current)
     saveTimer.current = setTimeout(async () => {
       setSaveStatus('saving')
       try {
         await saveBoard(companyId, board)
+        dirty.current = false
         setSaveStatus('saved')
         clearTimer.current = setTimeout(() => setSaveStatus('idle'), 2000)
       } catch (err) {

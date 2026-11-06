@@ -382,7 +382,7 @@ const TOOLS = [
   {
     name: 'anadir_prospecto',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos por los que puede picar, enlaces (noticias, perfiles), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Detectado.',
+    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos = por qué los elegimos (NO lo que respondieron), respuesta = qué contestaron, enlaces (noticias, perfiles, rediseño enviado), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Detectado.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -393,6 +393,7 @@ const TOOLS = [
         enlaces: { type: 'array', items: { type: 'string' } },
         etapa: { type: 'string', enum: ['detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'] },
         prioridad: { type: 'string', enum: ['alta', 'media', 'baja'] },
+        respuesta: { type: 'string', description: 'Qué respondieron (va aparte de los motivos, que son el porqué los elegimos); cadena vacía la borra' },
         primero: { type: 'boolean', description: 'Subirlo al primer puesto de su etapa' },
         quitar_motivos: { type: 'array', items: { type: 'string' }, description: 'Motivos a eliminar (coincidencia parcial)' },
         notas: { type: 'string' },
@@ -654,7 +655,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
     const ref = db().collection('prospects').doc(cid)
     const snap = await ref.get()
-    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; notes?: string; date: string; by?: string; stageDate?: string }
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; date: string; by?: string; stageDate?: string }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
     const STG: Record<string, string> = { detectado: 'Detectado', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
@@ -667,6 +668,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         for (const x of list) {
           out.push(`${list.indexOf(x) + 1}. ${x.name} [${x.priority ?? 'media'}]${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
           for (const r of x.reasons) out.push(`    · ${r}`)
+          if (x.response) out.push(`    respuesta: ${x.response}`)
           if (x.notes) out.push(`    notas: ${x.notes}`)
           for (const l of x.links || []) out.push(`    ↗ ${l}`)
         }
@@ -707,6 +709,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       items.splice(0, items.length, ...rest)
     }
     if (args.notas !== undefined) p.notes = String(args.notas).trim()
+    if (args.respuesta !== undefined) p.response = String(args.respuesta).trim() || undefined
     await ref.set({ items: JSON.parse(JSON.stringify(items)), updatedAt: FieldValue.serverTimestamp() })
     const pos = items.filter((x) => x.stage === p!.stage).indexOf(p) + 1
     return { text: `✓ ${created ? 'Añadido' : 'Actualizado'} "${p.name}" — ${STG[p.stage]} #${pos} · prioridad ${p.priority ?? 'media'} · ${p.reasons.length} motivo${p.reasons.length === 1 ? '' : 's'}` }

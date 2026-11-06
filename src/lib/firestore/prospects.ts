@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
 
@@ -31,6 +31,7 @@ export interface Prospect {
   links?: string[]      // noticias, perfiles…
   stage: ProspectStage
   priority?: ProspectPriority // por defecto media
+  response?: string     // qué respondieron (aparte del porqué)
   notes?: string
   date: string          // YYYY-MM-DD de alta
   by?: string
@@ -46,5 +47,12 @@ export async function saveProspects(companyId: string, items: Prospect[]) {
   await setDoc(doc(db, 'prospects', companyId), {
     items: stripUndefinedDeep(items),
     updatedAt: serverTimestamp(),
+  })
+}
+
+/** Escucha la prospección en directo; local = el cambio viene de este navegador aún sin confirmar */
+export function subscribeProspects(companyId: string, onChange: (items: Prospect[], local: boolean) => void): () => void {
+  return onSnapshot(doc(db, 'prospects', companyId), (snap) => {
+    onChange(snap.exists() ? ((snap.data().items as Prospect[]) ?? []) : [], snap.metadata.hasPendingWrites)
   })
 }

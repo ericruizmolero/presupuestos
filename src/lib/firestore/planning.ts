@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
 
@@ -69,10 +69,10 @@ const LEGACY_STATUS: Record<string, string> = {
   espera: 'En espera',
 }
 
-export async function getBoard(companyId: string): Promise<Board> {
-  const snap = await getDoc(doc(db, 'planning', companyId))
-  if (!snap.exists()) return { lanes: [...DEFAULT_LANES], groups: [], chips: [] }
-  const data = snap.data()
+/** Normaliza el documento del tablón (y migra formatos antiguos) */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeBoard(data: Record<string, any> | undefined): Board {
+  if (!data) return { lanes: [...DEFAULT_LANES], groups: [], chips: [] }
 
   if (data.groups || data.chips) {
     const lanes: string[] = data.lanes?.length ? data.lanes : [...DEFAULT_LANES]
@@ -94,6 +94,21 @@ export async function getBoard(companyId: string): Promise<Board> {
       .filter((e) => (e.phase || '').trim())
       .map((e) => ({ group: e.group || '', text: (e.phase || '').trim() })),
   }
+}
+
+export async function getBoard(companyId: string): Promise<Board> {
+  const snap = await getDoc(doc(db, 'planning', companyId))
+  return normalizeBoard(snap.exists() ? snap.data() : undefined)
+}
+
+/**
+ * Escucha el tablón en directo (cambios de Andoni, del conector de Claude…).
+ * onChange recibe el tablón y si el cambio viene de este navegador aún sin confirmar.
+ */
+export function subscribeBoard(companyId: string, onChange: (board: Board, local: boolean) => void): () => void {
+  return onSnapshot(doc(db, 'planning', companyId), (snap) => {
+    onChange(normalizeBoard(snap.exists() ? snap.data() : undefined), snap.metadata.hasPendingWrites)
+  })
 }
 
 /** Última visita al tablón por usuario (para "novedades desde tu última visita") */
