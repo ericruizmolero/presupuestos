@@ -43,3 +43,6 @@ next-env.d.ts
 # Firebase Admin service account (nunca commitear)
 scripts/serviceAccount.json
 scripts/.mcp-secret
+
+# Handoffs de trabajo (no son entregables)
+HANDOFF-*.md
