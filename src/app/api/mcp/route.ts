@@ -374,6 +374,35 @@ const TOOLS = [
     },
   },
   {
+    name: 'ver_prospectos',
+    annotations: { readOnlyHint: true },
+    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, contacto, motivos, notas y enlaces. Responde a "¿a quién atacamos?", "¿por cuál empezamos?".',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'anadir_prospecto',
+    annotations: { destructiveHint: false, idempotentHint: true },
+    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos por los que puede picar, enlaces (noticias, perfiles), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Detectado.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'string' },
+        web: { type: 'string' },
+        contacto: { type: 'string', description: 'Persona y cargo' },
+        motivos: { type: 'array', items: { type: 'string' } },
+        enlaces: { type: 'array', items: { type: 'string' } },
+        etapa: { type: 'string', enum: ['detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'] },
+        prioridad: { type: 'string', enum: ['alta', 'media', 'baja'] },
+        primero: { type: 'boolean', description: 'Subirlo al primer puesto de su etapa' },
+        quitar_motivos: { type: 'array', items: { type: 'string' }, description: 'Motivos a eliminar (coincidencia parcial)' },
+        notas: { type: 'string' },
+        de: { type: 'string', enum: ['Eric', 'Andoni'] },
+      },
+      required: ['nombre'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'resumen_semana',
     description: 'El digest del estudio: horas de los últimos 7 días por proyecto (comparadas con la semana anterior), novedades del tablón y proyectos sin actividad en 14+ días. Responde a "ponme al día", "¿cómo va la semana?", "resumen del lunes". Solo muestra lo que ha cambiado.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -618,6 +647,69 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         clientLines ? `\nPor cliente (base)\n${clientLines}` : '',
       ].filter(Boolean).join('\n'),
     }
+  }
+
+  if (name === 'ver_prospectos' || name === 'anadir_prospecto') {
+    const cid = await boardCompanyId()
+    if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
+    const ref = db().collection('prospects').doc(cid)
+    const snap = await ref.get()
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; notes?: string; date: string; by?: string; stageDate?: string }
+    const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
+    const STG: Record<string, string> = { detectado: 'Detectado', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
+    if (name === 'ver_prospectos') {
+      if (!items.length) return { text: 'No hay prospectos todavía.' }
+      const out: string[] = []
+      for (const k of Object.keys(STG)) {
+        const list = items.filter((x) => x.stage === k)
+        if (!list.length) continue
+        out.push(`## ${STG[k]}`)
+        for (const x of list) {
+          out.push(`${list.indexOf(x) + 1}. ${x.name} [${x.priority ?? 'media'}]${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
+          for (const r of x.reasons) out.push(`    · ${r}`)
+          if (x.notes) out.push(`    notas: ${x.notes}`)
+          for (const l of x.links || []) out.push(`    ↗ ${l}`)
+        }
+      }
+      return { text: out.join('\n') }
+    }
+    const nombre = String(args.nombre || '').trim()
+    if (!nombre) return { text: 'Falta "nombre".', isError: true }
+    let p = items.find((x) => x.name.toLowerCase() === nombre.toLowerCase())
+    const created = !p
+    if (!p) {
+      p = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: nombre, reasons: [], stage: 'detectado', priority: 'media', date: todayISO(), ...(args.de ? { by: String(args.de) } : {}) }
+      items.unshift(p)
+    }
+    const add = (cur: string[] | undefined, extra: unknown) => {
+      const base = [...(cur ?? [])]
+      for (const e of Array.isArray(extra) ? extra.map(String) : []) {
+        const t = e.trim()
+        if (t && !base.some((b) => b.toLowerCase() === t.toLowerCase())) base.push(t)
+      }
+      return base
+    }
+    if (args.web) p.url = String(args.web).trim()
+    if (args.contacto) p.contact = String(args.contacto).trim()
+    p.reasons = add(p.reasons, args.motivos)
+    if (args.enlaces) p.links = add(p.links, args.enlaces)
+    if (args.etapa && STG[String(args.etapa)] && args.etapa !== p.stage) { p.stage = String(args.etapa); p.stageDate = todayISO() }
+    if (args.prioridad === 'alta' || args.prioridad === 'media' || args.prioridad === 'baja') p.priority = String(args.prioridad)
+    if (Array.isArray(args.quitar_motivos)) {
+      const quitar = (args.quitar_motivos as unknown[]).map((q) => String(q).toLowerCase().trim()).filter(Boolean)
+      p.reasons = p.reasons.filter((r) => !quitar.some((q) => r.toLowerCase().includes(q)))
+    }
+    if (args.primero === true) {
+      const cur = p
+      const rest = items.filter((x) => x !== cur)
+      const at = rest.findIndex((x) => x.stage === cur.stage)
+      rest.splice(at < 0 ? 0 : at, 0, cur)
+      items.splice(0, items.length, ...rest)
+    }
+    if (args.notas !== undefined) p.notes = String(args.notas).trim()
+    await ref.set({ items: JSON.parse(JSON.stringify(items)), updatedAt: FieldValue.serverTimestamp() })
+    const pos = items.filter((x) => x.stage === p!.stage).indexOf(p) + 1
+    return { text: `✓ ${created ? 'Añadido' : 'Actualizado'} "${p.name}" — ${STG[p.stage]} #${pos} · prioridad ${p.priority ?? 'media'} · ${p.reasons.length} motivo${p.reasons.length === 1 ? '' : 's'}` }
   }
 
   if (name === 'resumen_semana') {
