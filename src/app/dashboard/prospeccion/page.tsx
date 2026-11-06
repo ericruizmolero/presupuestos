@@ -156,10 +156,16 @@ function ProspeccionContent() {
           </span>
         </button>
         <button onClick={() => setOpenId(p.id)} className="col-start-2 md:col-start-auto min-w-0 text-left text-sm text-ink-60 leading-snug">
-          {p.reasons.length
-            ? p.reasons.slice(0, 3).map((r, i) => <span key={i} className="block truncate">· {r}</span>)
-            : <span className="text-ink-40">Sin motivos todavía</span>}
-          {p.reasons.length > 3 && <span className="block text-xs text-ink-40">+{p.reasons.length - 3} más</span>}
+          {p.reasons.length ? (
+            <ul className="space-y-1">
+              {p.reasons.map((r, i) => (
+                <li key={i} className="grid grid-cols-[0.75rem_minmax(0,1fr)]">
+                  <span className="text-ink-40">·</span>
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <span className="text-ink-40">Sin motivos todavía</span>}
         </button>
         <span className="col-start-2 md:col-start-auto flex items-center gap-2 justify-end">
           <button
