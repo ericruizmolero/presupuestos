@@ -8,9 +8,6 @@ import { signOut } from '@/lib/auth'
 import { FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair } from 'lucide-react'
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
-import { getTimeProjects } from '@/lib/firestore/time'
-import { getBoard } from '@/lib/firestore/planning'
-import { getProspects } from '@/lib/firestore/prospects'
 
 const navLinks = [
   { href: '/dashboard', label: 'Presupuestos', icon: FileText },
@@ -25,21 +22,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, company } = useAuth()
-  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [quoteCount, setQuoteCount] = useState<number | null>(null)
 
   function refreshCount() {
     if (!user) return
     getUserCompanyId(user.uid).then((cid) => {
       if (!cid) return
-      const set = (href: string) => (n: number) => setCounts((c) => ({ ...c, [href]: n }))
-      const ignore = () => {}
-      getQuotes(cid).then((qs) => set('/dashboard')(qs.length)).catch(ignore)
-      getTimeProjects(cid).then((ps) => set('/dashboard/horas')(ps.length)).catch(ignore)
-      getBoard(cid).then((b) => set('/dashboard/proyectos')(b.groups.length)).catch(ignore)
-      // Prospección: en curso (sin los propuestos por el agente ni los cerrados)
-      getProspects(cid)
-        .then((ps) => set('/dashboard/prospeccion')(ps.filter((x) => !['agente', 'ganado', 'descartado'].includes(x.stage)).length))
-        .catch(ignore)
+      getQuotes(cid).then((qs) => setQuoteCount(qs.length))
     })
   }
 
@@ -90,8 +79,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={15} strokeWidth={1.5} />
                 {label}
-                {counts[href] ? (
-                  <span className="ml-auto text-xs opacity-50 tabular-nums">{counts[href]}</span>
+                {href === '/dashboard' && quoteCount ? (
+                  <span className="ml-auto text-xs opacity-50">{quoteCount}</span>
                 ) : null}
               </Link>
             )
