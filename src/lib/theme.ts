@@ -8,6 +8,20 @@ export interface Palette {
 
 export const PALETTES: Palette[] = [
   {
+    id: 'savvia',
+    name: 'Savvia',
+    bg: '#FFFFFF',
+    accent: '#302018',
+    vars: {
+      '--color-accent':    '#302018',
+      '--color-on-accent': '#F5F5F7',
+      '--color-paper':     '#FFFFFF',
+      '--color-surface':   '#F5F5F7',
+      '--color-ink':       '#302018',
+      '--color-line':      '#E2DEDC',
+    },
+  },
+  {
     id: 'noir',
     name: 'Noir',
     bg: '#ffffff',

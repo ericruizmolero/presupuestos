@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { signInWithEmail, signInWithGoogle, signOut } from '@/lib/auth'
 import { isAllowedEmail } from '@/lib/access'
 
-const DENIED = 'Esta cuenta no tiene acceso. La app es solo para el equipo de treseiscero.'
+const DENIED = 'Esta cuenta no tiene acceso. La app es solo para el equipo de Savvia.'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -60,7 +60,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-surface px-4">
       <div className="w-full max-w-sm">
         <div className="mb-10 text-center">
-          <h1 className="text-2xl font-medium tracking-tight text-ink">Presupuestos</h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-10 w-auto mb-6" />
+          <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Estudio</h1>
           <p className="mt-2 text-sm text-ink-60">Inicia sesión para continuar</p>
         </div>
 

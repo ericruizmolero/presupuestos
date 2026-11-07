@@ -215,7 +215,7 @@ const TOOLS = [
   {
     name: 'listar_proyectos',
     annotations: { readOnlyHint: true },
-    description: 'Lista los proyectos de horas de treseiscero con horas acumuladas, tarifa, idioma y enlace público.',
+    description: 'Lista los proyectos de horas de Savvia (antes treseiscero) con horas acumuladas, tarifa, idioma y enlace público.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -547,7 +547,7 @@ const TOOLS = [
   {
     name: 'anadir_horas',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Añade una o varias entradas de horas a un proyecto de treseiscero. Si no se indica fecha se usa hoy (Madrid); si no se indica persona se usa "Eric y Andoni". El concepto va en el idioma del proyecto.',
+    description: 'Añade una o varias entradas de horas a un proyecto de Savvia. Si no se indica fecha se usa hoy (Madrid); si no se indica persona se usa "Eric y Andoni". El concepto va en el idioma del proyecto.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1282,7 +1282,7 @@ export async function POST(req: NextRequest) {
         return reply({
           protocolVersion: (rpc.params?.protocolVersion as string) || '2025-06-18',
           capabilities: { tools: {} },
-          serverInfo: { name: 'treseiscero-horas', version: '1.0.0' },
+          serverInfo: { name: 'savvia', version: '1.0.0' },
         })
       case 'ping':
         return reply({})

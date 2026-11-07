@@ -150,7 +150,7 @@ function SettingsContent() {
   return (
     <div className="max-w-2xl mx-auto px-8 py-12">
       <div className="flex items-center justify-between mb-12">
-        <h1 className="text-2xl font-medium tracking-tight text-ink">Configuración</h1>
+        <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Configuración</h1>
         <span className={`flex items-center gap-1.5 text-xs text-ink-40 h-8 transition-opacity duration-300 ${statusVisible ? 'opacity-100' : 'opacity-0'}`}>
           {saveStatus === 'saving' || saveStatus === 'pending' ? (
             <><Loader2 size={12} className="animate-spin" /> Guardando…</>

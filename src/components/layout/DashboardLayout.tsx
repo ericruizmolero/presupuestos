@@ -48,11 +48,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex">
       <aside className="w-56 shrink-0 fixed top-0 left-0 h-screen border-r border-line bg-surface flex flex-col z-30">
         <div className="px-6 h-16 flex items-center gap-[6px] border-b border-line shrink-0">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="18" viewBox="4 2 16 20" aria-hidden="true">
-            <path d="M5 3 L19 3 L19 20 L5 16 Z"
-              fill="none" stroke="currentColor" strokeWidth="2.5"
-              strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-6 w-auto" />
         </div>
 
         <nav className="flex-1 px-3 py-6 space-y-1">

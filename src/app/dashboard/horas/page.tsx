@@ -158,7 +158,7 @@ function HorasContent() {
   return (
     <div className="px-8 py-12 max-w-4xl">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-medium tracking-tight text-ink">Horas</h1>
+        <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Horas</h1>
         <button
           onClick={() => setCreating((c) => !c)}
           className={creating
@@ -335,7 +335,7 @@ function ClaudeConnectorHelp() {
               Entra en <span className="text-ink">claude.ai → Ajustes → Conectores → Añadir conector personalizado</span>.
             </li>
             <li>
-              Ponle de nombre <span className="text-ink">Horas treseiscero</span>, pega el enlace en el campo URL y guarda.
+              Ponle de nombre <span className="text-ink">Savvia</span>, pega el enlace en el campo URL y guarda.
             </li>
             <li>
               Abre un chat nuevo, comprueba que el conector está activado en el menú de herramientas, y pídele lo que necesites.

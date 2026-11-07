@@ -10,8 +10,8 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'treseiscero',
-  description: 'Crea y gestiona presupuestos profesionales',
+  title: 'Savvia',
+  description: 'Presupuestos, horas y proyectos de Savvia Studio',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

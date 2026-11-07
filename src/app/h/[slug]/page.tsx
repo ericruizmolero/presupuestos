@@ -121,7 +121,7 @@ export default function PublicHoursPage() {
           <p className="text-[10px] font-medium tracking-[0.18em] uppercase mb-4 text-ink-40">
             {t.eyebrow}
           </p>
-          <h1 className="text-[1.625rem] font-medium tracking-tight text-ink leading-snug">
+          <h1 className="text-[1.625rem] font-display font-normal tracking-[-0.01em] text-ink leading-snug">
             {project.name}
           </h1>
           {project.clientName && project.clientName !== project.name && (
@@ -198,7 +198,7 @@ export default function PublicHoursPage() {
 
         <footer className="mt-16 pt-6 border-t border-line">
           <p className="text-xs text-ink-40">
-            {project.companyName || 'treseiscero'} · {t.updated} {new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}
+            {project.companyName || 'Savvia Studio'} · {t.updated} {new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </footer>
       </article>
