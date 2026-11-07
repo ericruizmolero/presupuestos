@@ -240,8 +240,9 @@ function HorasContent() {
                 <th className="px-4 py-3 font-medium">Idioma</th>
                 <th className="px-4 py-3 font-medium text-right">Tarifa</th>
                 <th className="px-4 py-3 font-medium text-right">Este mes</th>
+                <th className="px-4 py-3 font-medium text-right">Importe mes</th>
                 <th className="px-4 py-3 font-medium text-right">Total</th>
-                <th className="px-4 py-3 font-medium text-right">Importe</th>
+                <th className="px-4 py-3 font-medium text-right">Importe total</th>
                 <th className="px-2 py-3 w-8" />
               </tr>
             </thead>
@@ -259,6 +260,9 @@ function HorasContent() {
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
                     {month > 0 ? formatHours(month) : <span className="text-ink-40 font-normal">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
+                    {month > 0 && p.hourlyRate ? formatMoney(month * p.hourlyRate) : <span className="text-ink-40 font-normal">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">{formatHours(total)}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">
