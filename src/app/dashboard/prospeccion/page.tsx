@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { useAuth } from '@/context/AuthContext'
 import { AuthGuard } from '@/components/layout/AuthGuard'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -341,6 +343,8 @@ function ProspeccionContent() {
         )}
       </div>
 
+      {companyId && <ContactsSection companyId={companyId} />}
+
       {open && (
         <ProspectSheet
           key={open.id}
@@ -527,5 +531,45 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
         </div>
       </aside>
     </>
+  )
+}
+
+interface Contact { name: string; email: string; source?: string; since?: string; lastSeen?: string; quotes?: string[] }
+
+/** Gente con la que ya hemos tenido contacto (p. ej. quienes probaron la app en beta): solo consulta */
+function ContactsSection({ companyId }: { companyId: string }) {
+  const [contacts, setContacts] = useState<Contact[] | null>(null)
+  const [show, setShow] = useState(false)
+
+  useEffect(() => {
+    getDoc(doc(db, 'contacts', companyId))
+      .then((snap) => setContacts(snap.exists() ? ((snap.data().items as Contact[]) ?? []) : []))
+      .catch(() => setContacts([]))
+  }, [companyId])
+
+  if (!contacts?.length) return null
+  return (
+    <section className="mt-12 pt-6 border-t border-line">
+      <button onClick={() => setShow((v) => !v)} aria-expanded={show} className="flex items-baseline gap-2 text-left">
+        <ChevronRight size={12} strokeWidth={2} className={`self-center text-ink-40 transition-transform ${show ? 'rotate-90' : ''}`} />
+        <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">Contactos</h2>
+        <span className="text-[10px] text-ink-40 tabular-nums">{contacts.length}</span>
+        <span className="text-xs text-ink-40">· Gente que ya nos conoce (probaron la app de presupuestos)</span>
+      </button>
+      {show && (
+        <div className="mt-3 border border-line rounded-md bg-paper divide-y divide-line">
+          {contacts.map((c) => (
+            <div key={c.email} className="grid grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)_auto] gap-x-4 gap-y-0.5 px-4 py-2.5 text-sm">
+              <span className="font-medium text-ink truncate">{c.name || '—'}</span>
+              <a href={`mailto:${c.email}`} className="text-ink-60 underline decoration-line underline-offset-2 hover:text-ink truncate">{c.email}</a>
+              <span className="text-xs text-ink-40 md:text-right">
+                {c.quotes?.length ? `${c.quotes.length} presupuesto${c.quotes.length === 1 ? '' : 's'} · ` : ''}
+                {c.since ? `desde ${fmtDay(c.since)}` : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
