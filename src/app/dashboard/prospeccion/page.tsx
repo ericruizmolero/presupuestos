@@ -223,7 +223,7 @@ function ProspeccionContent() {
               </button>
               <button
                 onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
-                title="Descartar (queda en cerrados y el agente no lo vuelve a proponer)"
+                title="Descartar (queda en descartados y el agente no lo vuelve a proponer)"
                 className="p-1 rounded-md text-ink-40 hover:text-ink hover:bg-surface-hover"
                 aria-label="Descartar"
               >
@@ -327,7 +327,12 @@ function ProspeccionContent() {
         {items.some((x) => x.stage === 'ganado' || x.stage === 'descartado') && (
           <section>
             <button onClick={() => setShowClosed((v) => !v)} className="text-xs text-ink-40 hover:text-ink">
-              {showClosed ? 'Ocultar' : 'Ver'} cerrados ({items.filter((x) => x.stage === 'ganado' || x.stage === 'descartado').length})
+              {(() => {
+                const won = items.filter((x) => x.stage === 'ganado').length
+                const lost = items.filter((x) => x.stage === 'descartado').length
+                const what = won && lost ? 'ganados y descartados' : won ? 'ganados' : 'descartados'
+                return `${showClosed ? 'Ocultar' : 'Ver'} ${what} (${won + lost})`
+              })()}
             </button>
             {showClosed && closed.map((st) => {
               const list = items.filter((x) => x.stage === st.id)
