@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { signOut } from '@/lib/auth'
-import { FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair } from 'lucide-react'
+import { FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug } from 'lucide-react'
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 
@@ -14,6 +14,7 @@ const navLinks = [
   { href: '/dashboard/horas', label: 'Horas', icon: Clock },
   { href: '/dashboard/proyectos', label: 'Proyectos', icon: StickyNote },
   { href: '/dashboard/prospeccion', label: 'Prospección', icon: Crosshair },
+  { href: '/dashboard/mcp', label: 'MCP', icon: Plug },
   { href: '/settings', label: 'Configuración', icon: Settings },
   { href: '/tematica', label: 'Temática', icon: Palette },
 ]
