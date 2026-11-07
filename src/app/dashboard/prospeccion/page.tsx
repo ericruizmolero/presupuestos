@@ -181,7 +181,7 @@ function ProspeccionContent() {
               </a>
             )}
             {(p.contact || !p.url) && (
-              <button onClick={() => setOpenId(p.id)} className="block max-w-full text-left text-xs text-ink-40 truncate">{p.contact || 'Sin web'}</button>
+              <button onClick={() => setOpenId(p.id)} className="block max-w-full mt-0.5 text-left text-xs text-ink-40 leading-snug">{p.contact || 'Sin web'}</button>
             )}
           </span>
         </div>
