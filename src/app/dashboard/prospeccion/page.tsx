@@ -214,14 +214,14 @@ function ProspeccionContent() {
             <>
               <button
                 onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday() })}
-                title="Aceptar: pasa a Detectado"
+                title="Elegir: pasa a Elegidos"
                 className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-accent text-on-accent hover:bg-accent-hover"
               >
-                <Check size={12} strokeWidth={2.5} />Aceptar
+                <Check size={12} strokeWidth={2.5} />Elegir
               </button>
               <button
                 onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
-                title="Descartar"
+                title="Descartar (queda en cerrados y el agente no lo vuelve a proponer)"
                 className="p-1 rounded-md text-ink-40 hover:text-ink hover:bg-surface-hover"
                 aria-label="Descartar"
               >
@@ -290,7 +290,7 @@ function ProspeccionContent() {
               <Sparkles size={12} strokeWidth={1.75} className="self-center text-ink-60" />
               <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">Prospect agent</h2>
               <span className="text-[10px] text-ink-40 tabular-nums">{agentList.length}</span>
-              <span className="text-xs text-ink-40">· Propuestos por Claude. Acepta los que te convenzan; pasan a Detectado.</span>
+              <span className="text-xs text-ink-40">· Propuestos por Claude. Elige los que te convenzan; pasan a Elegidos. ✕ los descarta.</span>
             </button>
             {showAgent && <div
               onDragOver={(e) => { if (dragId) e.preventDefault() }}

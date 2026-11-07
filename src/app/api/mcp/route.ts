@@ -382,7 +382,7 @@ const TOOLS = [
   {
     name: 'anadir_prospecto',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos = por qué los elegimos (NO lo que respondieron), respuesta = qué contestaron, enlaces (noticias, perfiles, rediseño enviado), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Detectado. IMPORTANTE: cuando Claude proponga candidatos por su cuenta (búsqueda de rondas, webs flojas…), usa etapa="agente" (sección Prospect agent) para que Eric o Andoni los acepten; solo usa "detectado" si te lo piden explícitamente. Aceptar = etapa "detectado"; descartar = "descartado".',
+    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos = por qué los elegimos (NO lo que respondieron), respuesta = qué contestaron, enlaces (noticias, perfiles, rediseño enviado), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Elegidos (etapa detectado). IMPORTANTE: cuando Claude proponga candidatos por su cuenta (búsqueda de rondas, webs flojas…), usa etapa="agente" (sección Prospect agent) para que Eric o Andoni los acepten; solo usa "detectado" si te lo piden explícitamente. Elegir = etapa "detectado" (sección Elegidos); descartar = "descartado" (no volver a proponer los descartados).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -659,7 +659,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const snap = await ref.get()
     type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
-    const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Detectado', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
+    const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
       if (!items.length) return { text: 'No hay prospectos todavía.' }
       const out: string[] = []

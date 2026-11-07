@@ -7,7 +7,7 @@ export type ProspectStage = 'agente' | 'detectado' | 'rediseno' | 'enviado' | 'c
 
 export const STAGES: Array<{ id: ProspectStage; label: string; hint: string }> = [
   { id: 'agente', label: 'Prospect agent', hint: 'Propuestos por Claude: acéptalos o descártalos' },
-  { id: 'detectado', label: 'Detectado', hint: 'Candidato a rediseño' },
+  { id: 'detectado', label: 'Elegidos', hint: 'Los que vamos a rediseñar' },
   { id: 'rediseno', label: 'Rediseñando', hint: 'Haciendo la home' },
   { id: 'enviado', label: 'Enviado', hint: 'Les hemos tocado la puerta' },
   { id: 'conversacion', label: 'En conversación', hint: 'Han respondido' },
