@@ -42,25 +42,29 @@ export default function McpPage() {
 }
 
 function McpContent() {
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [copied, setCopied] = useState<'url' | 'header' | 'error' | null>(null)
 
-  async function copyConnectorUrl() {
+  async function copy(what: 'url' | 'header') {
     try {
       const { auth } = await import('@/lib/firebase')
       const token = await auth.currentUser?.getIdToken()
       if (!token) throw new Error('sin sesión')
       const res = await fetch('/api/mcp-url', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) throw new Error(String(res.status))
-      const { url } = await res.json()
-      await navigator.clipboard.writeText(url)
-      setCopyState('copied')
+      const data = await res.json()
+      await navigator.clipboard.writeText(what === 'url' ? data.url : data.header)
+      setCopied(what)
     } catch (err) {
-      console.error('[conector] Error obteniendo la URL:', err)
-      setCopyState('error')
+      console.error('[conector] Error obteniendo la conexión:', err)
+      setCopied('error')
     } finally {
-      setTimeout(() => setCopyState('idle'), 2500)
+      setTimeout(() => setCopied(null), 2500)
     }
   }
+
+  const btn = 'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors'
+  const label = (what: 'url' | 'header', text: string) =>
+    copied === what ? <><Check size={14} strokeWidth={2} />Copiado</> : copied === 'error' ? 'Error, reintenta' : <><Copy size={14} strokeWidth={1.75} />{text}</>
 
   return (
     <div className="px-6 lg:px-8 py-8 max-w-3xl">
@@ -75,27 +79,26 @@ function McpContent() {
         <ol className="space-y-4 text-sm text-ink-60 leading-relaxed">
           <li className="grid grid-cols-[1.5rem_minmax(0,1fr)]">
             <span className="text-ink-40 tabular-nums">1</span>
-            <span>
-              <button
-                onClick={copyConnectorUrl}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors"
-              >
-                {copyState === 'copied' ? <><Check size={14} strokeWidth={2} />Enlace copiado</> : copyState === 'error' ? 'Error, reintenta' : <><Copy size={14} strokeWidth={1.75} />Copiar enlace de conexión</>}
-              </button>
-              <span className="block mt-1.5 text-xs text-ink-40">Funciona como una llave: no lo compartas fuera del equipo.</span>
-            </span>
+            <span>En <span className="text-ink">claude.ai → Ajustes → Conectores</span>, quita el conector antiguo si lo tienes y pulsa <span className="text-ink">Añadir conector personalizado</span>. Nombre: <span className="text-ink">Savvia</span>.</span>
           </li>
           <li className="grid grid-cols-[1.5rem_minmax(0,1fr)]">
             <span className="text-ink-40 tabular-nums">2</span>
-            <span>En <span className="text-ink">claude.ai → Ajustes → Conectores</span>, quita el conector antiguo si lo tienes y pulsa <span className="text-ink">Añadir conector personalizado</span>.</span>
+            <span>
+              <span className="block mb-2">Pega la URL del servidor:</span>
+              <button onClick={() => copy('url')} className={`${btn} border border-line text-ink hover:bg-surface-hover`}>{label('url', 'Copiar URL')}</button>
+            </span>
           </li>
           <li className="grid grid-cols-[1.5rem_minmax(0,1fr)]">
             <span className="text-ink-40 tabular-nums">3</span>
-            <span>Nombre <span className="text-ink">Savvia</span>, pega el enlace en URL y guarda.</span>
+            <span>
+              <span className="block mb-2">Autenticación: <span className="text-ink">Sin inicio de sesión</span>. En <span className="text-ink">Encabezados de solicitud → Añadir encabezado</span>, nombre <code className="px-1 py-px rounded bg-surface border border-line text-[13px] text-ink">Authorization</code> y como valor la clave:</span>
+              <button onClick={() => copy('header')} className={`${btn} bg-accent text-on-accent hover:bg-accent-hover`}>{label('header', 'Copiar clave')}</button>
+              <span className="block mt-1.5 text-xs text-ink-40">La clave es la llave de vuestros datos: pégala solo ahí. claude.ai la guarda cifrada y no la vuelve a mostrar.</span>
+            </span>
           </li>
           <li className="grid grid-cols-[1.5rem_minmax(0,1fr)]">
             <span className="text-ink-40 tabular-nums">4</span>
-            <span>En un chat nuevo, activa el conector en el menú de herramientas. Si añadimos funciones nuevas, quítalo y vuelve a añadirlo para que Claude las vea.</span>
+            <span>Guarda y, en un chat nuevo, activa el conector en el menú de herramientas. Si añadimos funciones nuevas, quítalo y vuelve a añadirlo para que Claude las vea.</span>
           </li>
         </ol>
       </section>
