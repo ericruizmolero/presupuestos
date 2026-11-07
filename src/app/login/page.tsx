@@ -65,9 +65,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-10 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-7 w-auto mx-auto mb-6" />
-          <h1 className="text-2xl font-medium tracking-tight text-ink">Savvia Client</h1>
-          <p className="mt-2 text-sm text-ink-60">Inicia sesión para continuar</p>
+          <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-8 w-auto mx-auto mb-4" />
+          <h1 className="sr-only">Savvia</h1>
+          <p className="text-sm text-ink-60">Inicia sesión para continuar</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
