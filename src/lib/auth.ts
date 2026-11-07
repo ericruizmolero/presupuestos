@@ -1,6 +1,6 @@
 'use client'
 
-import { isAllowedEmail } from './access'
+import { isAllowedEmail, STUDIO_COMPANY_ID } from './access'
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -45,12 +45,16 @@ export function onAuthChange(callback: (user: User | null) => void) {
 async function ensureUserDoc(user: User, displayName: string) {
   const ref = doc(db, 'users', user.uid)
   const snap = await getDoc(ref)
+  const team = isAllowedEmail(user.email)
   if (!snap.exists()) {
+    // Cuentas nuevas del equipo (p. ej. al pasar de @treseiscero.app a @savvia.studio) → empresa del estudio
     await setDoc(ref, {
       email: user.email,
       displayName,
-      companyId: null,
+      companyId: team ? STUDIO_COMPANY_ID : null,
       createdAt: serverTimestamp(),
     })
+  } else if (team && !snap.data().companyId) {
+    await setDoc(ref, { companyId: STUDIO_COMPANY_ID }, { merge: true })
   }
 }

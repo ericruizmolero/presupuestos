@@ -5,7 +5,7 @@ service cloud.firestore {
     // Solo el estudio: Eric y Andoni
     function isTeam() {
       return request.auth != null
-        && request.auth.token.email in ['ericruizmolero@treseiscero.app', 'andoni@treseiscero.app'];
+        && request.auth.token.email in ['ericruizmolero@savvia.studio', 'andoni@savvia.studio', 'ericruizmolero@treseiscero.app', 'andoni@treseiscero.app'];
     }
 
     // Presupuestos: lectura pública (enlace del cliente /client/…); escritura solo el estudio
