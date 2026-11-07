@@ -34,7 +34,27 @@ export async function signInWithGoogle() {
   return credential
 }
 
+/** Último método de acceso en este navegador, para marcarlo en el login ("Último usado") */
+export type LoginMethod = 'google' | 'email'
+const LAST_METHOD_KEY = 'savvia:lastLogin'
+
+export function rememberLoginMethod(user: User | null | undefined) {
+  if (!user) return
+  const method: LoginMethod = user.providerData.some((p) => p.providerId === 'google.com') ? 'google' : 'email'
+  try { localStorage.setItem(LAST_METHOD_KEY, method) } catch {}
+}
+
+export function lastLoginMethod(): LoginMethod | null {
+  try {
+    const v = localStorage.getItem(LAST_METHOD_KEY)
+    return v === 'google' || v === 'email' ? v : null
+  } catch {
+    return null
+  }
+}
+
 export async function signOut() {
+  rememberLoginMethod(auth.currentUser)
   return firebaseSignOut(auth)
 }
 
