@@ -18,22 +18,15 @@
   --color-line:      #E2DEDC;
   --color-coral:     #FF616B; /* acento de marca: piezas puntuales, nunca texto pequeño sobre claro */
 
-  --font-display: 'Family', Georgia, serif;
 }
 
-/* Tipografía de Savvia (mismos archivos que savvia.studio) */
-@font-face { font-family: 'Family'; src: url('/fonts/savvia/family-regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
-@font-face { font-family: 'Timeless Sans'; src: url('/fonts/savvia/TimelessSans-Regular.woff2') format('woff2'); font-weight: 400; font-display: swap; }
-@font-face { font-family: 'Timeless Sans'; src: url('/fonts/savvia/TimelessSans-Medium.woff2') format('woff2'); font-weight: 500; font-display: swap; }
-@font-face { font-family: 'Timeless Sans'; src: url('/fonts/savvia/TimelessSans-W537.woff2') format('woff2'); font-weight: 600 700; font-display: swap; }
-@font-face { font-family: 'Timeless Grotesk'; src: url('/fonts/savvia/TimelessGrotesk-Light.woff2') format('woff2'); font-weight: 300; font-display: swap; }
 
 /*
   Derived tokens — auto-computed from the 6 base tokens via color-mix().
   These update automatically when any base token changes.
 */
 :root {
-  --font-body: 'Timeless Sans', Inter, system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
   --color-accent-hover:  color-mix(in srgb, var(--color-accent) 82%, black);
   --color-surface-hover: color-mix(in srgb, var(--color-surface) 88%, var(--color-ink));
   --ink-opacity-secondary: 60%;

@@ -158,7 +158,7 @@ function HorasContent() {
   return (
     <div className="px-8 py-12 max-w-4xl">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Horas</h1>
+        <h1 className="text-2xl font-medium tracking-tight text-ink">Horas</h1>
         <button
           onClick={() => setCreating((c) => !c)}
           className={creating

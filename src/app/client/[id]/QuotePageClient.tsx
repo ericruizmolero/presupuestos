@@ -121,7 +121,7 @@ function PasswordGate({ quote, onUnlock }: { quote: Quote; onUnlock: () => void 
               {isEn ? 'Proposal for' : 'Presupuesto para'}
             </p>
           )}
-          <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink mb-8 leading-snug">
+          <h1 className="text-2xl font-medium tracking-tight text-ink mb-8 leading-snug">
             {quote.client.company || quote.client.name || (isEn ? 'Proposal' : 'Presupuesto')}
           </h1>
 

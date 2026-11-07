@@ -253,7 +253,7 @@ function ProspeccionContent() {
     <div className="px-6 lg:px-8 py-8 max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Prospección</h1>
+          <h1 className="text-2xl font-medium tracking-tight text-ink">Prospección</h1>
           <span className="h-4 flex items-center">
             {saved === 'saving' && <span className="w-2.5 h-2.5 inline-block border border-ink-40 border-t-transparent rounded-full animate-spin" />}
             {saved === 'saved' && <span className="flex items-center gap-1 text-[10px] text-ink-40"><Check size={10} strokeWidth={2.5} />Guardado</span>}

@@ -243,7 +243,7 @@ function HorasProjectContent() {
       </Link>
 
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">{project.name}</h1>
+        <h1 className="text-2xl font-medium tracking-tight text-ink">{project.name}</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={copyPublicLink}

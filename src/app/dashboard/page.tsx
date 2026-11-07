@@ -253,7 +253,7 @@ function DashboardContent() {
     <>
     <div className="px-8 py-10">
       <div className="mb-8">
-        <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Presupuestos</h1>
+        <h1 className="text-2xl font-medium tracking-tight text-ink">Presupuestos</h1>
         <p className="text-sm text-ink-60 mt-1">{quotes.length} presupuesto{quotes.length !== 1 ? 's' : ''}</p>
       </div>
 

@@ -413,7 +413,7 @@ function ProyectosContent() {
       {/* Cabecera compacta: el estado de los proyectos tiene que verse sin bajar */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Proyectos</h1>
+          <h1 className="text-2xl font-medium tracking-tight text-ink">Proyectos</h1>
           <Faces who="Eric y Andoni" size={24} />
           <span className="h-4 flex items-center">
             {saveStatus === 'saving' && <span className="w-2.5 h-2.5 inline-block border border-ink-40 border-t-transparent rounded-full animate-spin" />}

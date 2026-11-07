@@ -61,8 +61,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-10 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-10 w-auto mb-6" />
-          <h1 className="text-2xl font-display font-normal tracking-[-0.01em] text-ink">Estudio</h1>
+          <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-7 w-auto mb-6" />
+          <h1 className="text-2xl font-medium tracking-tight text-ink">Estudio</h1>
           <p className="mt-2 text-sm text-ink-60">Inicia sesión para continuar</p>
         </div>
 
