@@ -388,7 +388,7 @@ const TOOLS = [
       properties: {
         nombre: { type: 'string' },
         web: { type: 'string' },
-        contacto: { type: 'string', description: 'Persona y cargo' },
+        contacto: { type: 'string', description: 'Punto de contacto: persona y cargo. Prioriza responsable de marketing o growth (CMO, Head of Marketing, Growth); solo si no tienen, el CEO/cofundador.' },
         motivos: { type: 'array', items: { type: 'string' } },
         enlaces: { type: 'array', items: { type: 'string' } },
         etapa: { type: 'string', enum: ['agente', 'detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'], description: 'agente = Prospect agent (propuesto por Claude, pendiente de aceptar)' },
