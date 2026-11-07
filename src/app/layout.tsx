@@ -10,7 +10,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Savvia',
+  title: 'Savvia Client',
   description: 'Presupuestos, horas y proyectos de Savvia Studio',
 }
 
