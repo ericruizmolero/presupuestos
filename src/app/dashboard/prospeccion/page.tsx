@@ -153,21 +153,37 @@ function ProspeccionContent() {
         <span className="mt-0.5 text-ink-40 opacity-0 group-hover/row:opacity-100 cursor-grab" title="Arrastra para ordenar o cambiar de etapa">
           <GripVertical size={14} strokeWidth={1.5} />
         </span>
-        <button onClick={() => setOpenId(p.id)} className="min-w-0 flex items-center gap-2.5 text-left">
-          {p.url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={`https://www.google.com/s2/favicons?domain=${hostOf(p.url)}&sz=64`} alt="" className="w-5 h-5 rounded shrink-0" />
-          ) : (
-            <span className="w-5 h-5 rounded bg-surface border border-line shrink-0" />
-          )}
+        <div className="min-w-0 flex items-start gap-2.5">
+          <button onClick={() => setOpenId(p.id)} className="shrink-0 mt-px" tabIndex={-1} aria-hidden="true">
+            {p.url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`https://www.google.com/s2/favicons?domain=${hostOf(p.url)}&sz=64`} alt="" className="w-5 h-5 rounded" />
+            ) : (
+              <span className="block w-5 h-5 rounded bg-surface border border-line" />
+            )}
+          </button>
           <span className="min-w-0">
-            <span className="flex items-center gap-1.5 text-sm font-medium text-ink min-w-0">
+            <button onClick={() => setOpenId(p.id)} className="flex items-center gap-1.5 text-sm font-medium text-ink min-w-0 max-w-full text-left">
               <span className="truncate">{p.name}</span>
               {p.region && <span className="shrink-0 px-1 py-px rounded border border-line text-[10px] font-normal text-ink-40">{p.region === 'us' ? 'EE. UU.' : 'ES'}</span>}
-            </span>
-            <span className="block text-xs text-ink-40 truncate">{p.contact || hostOf(p.url) || 'Sin web'}</span>
+            </button>
+            {p.url && (
+              <a
+                href={hrefOf(p.url)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 max-w-full text-xs text-ink-60 underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink-40"
+                title={`Abrir ${hostOf(p.url)}`}
+              >
+                <span className="truncate">{hostOf(p.url)}</span>
+                <ExternalLink size={10} strokeWidth={1.75} className="shrink-0" />
+              </a>
+            )}
+            {(p.contact || !p.url) && (
+              <button onClick={() => setOpenId(p.id)} className="block max-w-full text-left text-xs text-ink-40 truncate">{p.contact || 'Sin web'}</button>
+            )}
           </span>
-        </button>
+        </div>
         <button onClick={() => setOpenId(p.id)} className="col-start-2 md:col-start-auto min-w-0 text-left text-sm text-ink-60 leading-snug">
           {p.reasons.length ? (
             <ul className="space-y-1">
