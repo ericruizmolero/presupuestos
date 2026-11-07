@@ -238,4 +238,4 @@ for (const e of clean) {
   total += e.hours
   console.log(`✓ ${e.date}  ${e.hours} h  ${e.person}  ${e.description}`)
 }
-console.log(`Añadidas ${clean.length} entrada(s) (${total} h) a "${project.name}" → https://client.treseiscero.app/h/${project.slug}`)
+console.log(`Añadidas ${clean.length} entrada(s) (${total} h) a "${project.name}" → https://client.savvia.studio/h/${project.slug}`)

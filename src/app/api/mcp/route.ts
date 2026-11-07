@@ -2,7 +2,7 @@
  * Servidor MCP (Streamable HTTP, sin estado) para el trackeo de horas.
  *
  * Se añade en claude.ai → Ajustes → Conectores con la URL:
- *   https://client.treseiscero.app/api/mcp?key=<MCP_SECRET>
+ *   https://client.savvia.studio/api/mcp?key=<MCP_SECRET>  (también responde en client.treseiscero.app)
  *
  * Env vars (Vercel): MCP_SECRET, FIREBASE_SERVICE_ACCOUNT (JSON de la
  * cuenta de servicio). Las escrituras usan Firebase Admin (bypassa rules).
@@ -17,7 +17,7 @@ import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firesto
 export const runtime = 'nodejs'
 
 const DEFAULT_PERSON = 'Eric y Andoni'
-const PUBLIC_BASE = 'https://client.treseiscero.app'
+const PUBLIC_BASE = 'https://client.savvia.studio'
 
 // ── Firebase Admin (singleton) ────────────────────────────────────────────────
 function db(): Firestore {

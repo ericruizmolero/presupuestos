@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
       { source: '/p/:slug', destination: '/client/:slug', permanent: true },
       // Legacy /horas/[slug] → /h/[slug] (URL neutra para ES/EN)
       { source: '/horas/:slug', destination: '/h/:slug', permanent: true },
+      // Migración a Savvia: todo lo del dominio antiguo (presupuestos, horas, panel) va al nuevo
+      // conservando la ruta. /api queda fuera: el conector MCP de Claude no sigue redirecciones.
+      {
+        source: '/:path((?!api/).*)',
+        has: [{ type: 'host', value: 'client.treseiscero.app' }],
+        destination: 'https://client.savvia.studio/:path',
+        permanent: true,
+      },
     ]
   },
 };
