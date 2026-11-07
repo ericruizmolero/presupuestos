@@ -376,13 +376,13 @@ const TOOLS = [
   {
     name: 'ver_prospectos',
     annotations: { readOnlyHint: true },
-    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, contacto, motivos, notas y enlaces. Responde a "¿a quién atacamos?", "¿por cuál empezamos?".',
+    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'anadir_prospecto',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos = por qué los elegimos (NO lo que respondieron), respuesta = qué contestaron, enlaces (noticias, perfiles, rediseño enviado), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Detectado.',
+    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos = por qué los elegimos (NO lo que respondieron), respuesta = qué contestaron, enlaces (noticias, perfiles, rediseño enviado), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Detectado. IMPORTANTE: cuando Claude proponga candidatos por su cuenta (búsqueda de rondas, webs flojas…), usa etapa="agente" (sección Prospect agent) para que Eric o Andoni los acepten; solo usa "detectado" si te lo piden explícitamente. Aceptar = etapa "detectado"; descartar = "descartado".',
     inputSchema: {
       type: 'object',
       properties: {
@@ -391,7 +391,9 @@ const TOOLS = [
         contacto: { type: 'string', description: 'Persona y cargo' },
         motivos: { type: 'array', items: { type: 'string' } },
         enlaces: { type: 'array', items: { type: 'string' } },
-        etapa: { type: 'string', enum: ['detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'] },
+        etapa: { type: 'string', enum: ['agente', 'detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'], description: 'agente = Prospect agent (propuesto por Claude, pendiente de aceptar)' },
+        mercado: { type: 'string', enum: ['es', 'us'], description: 'es = España (tono cálido); us = EE. UU. (tono directo)' },
+        angulo: { type: 'string', description: 'Ángulo del rediseño de 15h: qué contaría visualmente la home nueva' },
         prioridad: { type: 'string', enum: ['alta', 'media', 'baja'] },
         respuesta: { type: 'string', description: 'Qué respondieron (va aparte de los motivos, que son el porqué los elegimos); cadena vacía la borra' },
         primero: { type: 'boolean', description: 'Subirlo al primer puesto de su etapa' },
@@ -655,9 +657,9 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
     const ref = db().collection('prospects').doc(cid)
     const snap = await ref.get()
-    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; date: string; by?: string; stageDate?: string }
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
-    const STG: Record<string, string> = { detectado: 'Detectado', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
+    const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Detectado', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
       if (!items.length) return { text: 'No hay prospectos todavía.' }
       const out: string[] = []
@@ -666,8 +668,9 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         if (!list.length) continue
         out.push(`## ${STG[k]}`)
         for (const x of list) {
-          out.push(`${list.indexOf(x) + 1}. ${x.name} [${x.priority ?? 'media'}]${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
+          out.push(`${list.indexOf(x) + 1}. ${x.name} [${x.priority ?? 'media'}]${x.region ? ` {${x.region === 'us' ? 'EE. UU.' : 'España'}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
           for (const r of x.reasons) out.push(`    · ${r}`)
+          if (x.angle) out.push(`    ángulo: ${x.angle}`)
           if (x.response) out.push(`    respuesta: ${x.response}`)
           if (x.notes) out.push(`    notas: ${x.notes}`)
           for (const l of x.links || []) out.push(`    ↗ ${l}`)
@@ -709,6 +712,8 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       items.splice(0, items.length, ...rest)
     }
     if (args.notas !== undefined) p.notes = String(args.notas).trim()
+    if (args.angulo !== undefined) p.angle = String(args.angulo).trim() || undefined
+    if (args.mercado === 'es' || args.mercado === 'us') p.region = String(args.mercado)
     if (args.respuesta !== undefined) p.response = String(args.respuesta).trim() || undefined
     await ref.set({ items: JSON.parse(JSON.stringify(items)), updatedAt: FieldValue.serverTimestamp() })
     const pos = items.filter((x) => x.stage === p!.stage).indexOf(p) + 1

@@ -3,15 +3,23 @@ import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
 
 /** Prospección en frío: webs que rediseñamos a ciegas para tocarles la puerta. El orden del array es el orden manual. */
-export type ProspectStage = 'detectado' | 'rediseno' | 'enviado' | 'conversacion' | 'ganado' | 'descartado'
+export type ProspectStage = 'agente' | 'detectado' | 'rediseno' | 'enviado' | 'conversacion' | 'ganado' | 'descartado'
 
 export const STAGES: Array<{ id: ProspectStage; label: string; hint: string }> = [
+  { id: 'agente', label: 'Prospect agent', hint: 'Propuestos por Claude: acéptalos o descártalos' },
   { id: 'detectado', label: 'Detectado', hint: 'Candidato a rediseño' },
   { id: 'rediseno', label: 'Rediseñando', hint: 'Haciendo la home' },
   { id: 'enviado', label: 'Enviado', hint: 'Les hemos tocado la puerta' },
   { id: 'conversacion', label: 'En conversación', hint: 'Han respondido' },
   { id: 'ganado', label: 'Ganado', hint: 'Cliente' },
   { id: 'descartado', label: 'Descartado', hint: 'No sigue' },
+]
+
+export type ProspectRegion = 'es' | 'us'
+
+export const REGIONS: Array<{ id: ProspectRegion; label: string }> = [
+  { id: 'es', label: 'España' },
+  { id: 'us', label: 'EE. UU.' },
 ]
 
 export type ProspectPriority = 'alta' | 'media' | 'baja'
@@ -33,6 +41,8 @@ export interface Prospect {
   priority?: ProspectPriority // por defecto media
   response?: string     // qué respondieron (aparte del porqué)
   notes?: string
+  angle?: string        // ángulo del rediseño de 15h
+  region?: ProspectRegion // España (tono cálido) o EE. UU. (tono directo)
   date: string          // YYYY-MM-DD de alta
   by?: string
   stageDate?: string

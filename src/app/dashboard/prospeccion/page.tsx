@@ -7,10 +7,10 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { madridToday } from '@/lib/firestore/planning'
 import {
-  subscribeProspects, saveProspects, STAGES, PRIORITIES, type Prospect, type ProspectStage, type ProspectPriority,
+  subscribeProspects, saveProspects, STAGES, PRIORITIES, REGIONS, type Prospect, type ProspectStage, type ProspectPriority,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
-import { Check, Plus, X, ExternalLink, Trash2, GripVertical } from 'lucide-react'
+import { Check, Plus, X, ExternalLink, Trash2, GripVertical, Sparkles } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -131,7 +131,8 @@ function ProspeccionContent() {
 
   if (loading) return <div className="px-8 py-12 text-sm text-ink-40">Cargando…</div>
 
-  const active = STAGES.filter((s) => s.id !== 'ganado' && s.id !== 'descartado')
+  const active = STAGES.filter((s) => s.id !== 'agente' && s.id !== 'ganado' && s.id !== 'descartado')
+  const agentList = items.filter((x) => x.stage === 'agente')
   const closed = STAGES.filter((s) => s.id === 'ganado' || s.id === 'descartado')
   const open = openId ? items.find((x) => x.id === openId) : null
 
@@ -160,7 +161,10 @@ function ProspeccionContent() {
             <span className="w-5 h-5 rounded bg-surface border border-line shrink-0" />
           )}
           <span className="min-w-0">
-            <span className="block text-sm font-medium text-ink truncate">{p.name}</span>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-ink min-w-0">
+              <span className="truncate">{p.name}</span>
+              {p.region && <span className="shrink-0 px-1 py-px rounded border border-line text-[10px] font-normal text-ink-40">{p.region === 'us' ? 'EE. UU.' : 'ES'}</span>}
+            </span>
             <span className="block text-xs text-ink-40 truncate">{p.contact || hostOf(p.url) || 'Sin web'}</span>
           </span>
         </button>
@@ -175,6 +179,12 @@ function ProspeccionContent() {
               ))}
             </ul>
           ) : null}
+          {p.angle && (
+            <span className={`${p.reasons.length ? 'mt-2 ' : ''}block text-[13px] text-ink`}>
+              <span className="text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mr-1.5">Ángulo</span>
+              {p.angle}
+            </span>
+          )}
           {p.response && (
             <span className={`${p.reasons.length ? 'mt-2 ' : ''}block rounded-md bg-surface border border-line px-2.5 py-1.5 text-[13px] text-ink`}>
               <span className="text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mr-1.5">Respuesta</span>
@@ -183,6 +193,25 @@ function ProspeccionContent() {
           )}
         </button>
         <span className="col-start-2 md:col-start-auto flex items-center gap-2 justify-end">
+          {p.stage === 'agente' && (
+            <>
+              <button
+                onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday() })}
+                title="Aceptar: pasa a Detectado"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-accent text-on-accent hover:bg-accent-hover"
+              >
+                <Check size={12} strokeWidth={2.5} />Aceptar
+              </button>
+              <button
+                onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
+                title="Descartar"
+                className="p-1 rounded-md text-ink-40 hover:text-ink hover:bg-surface-hover"
+                aria-label="Descartar"
+              >
+                <X size={14} strokeWidth={1.75} />
+              </button>
+            </>
+          )}
           <button
             onClick={() => cyclePriority(p)}
             title="Prioridad — clic para cambiar"
@@ -233,6 +262,24 @@ function ProspeccionContent() {
       </div>
 
       <div className="space-y-8">
+        {agentList.length > 0 && (
+          <section className="rounded-lg border border-line bg-surface p-3">
+            <div className="flex items-baseline gap-2 mb-2.5 px-1">
+              <Sparkles size={12} strokeWidth={1.75} className="self-center text-ink-60" />
+              <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">Prospect agent</h2>
+              <span className="text-[10px] text-ink-40 tabular-nums">{agentList.length}</span>
+              <span className="text-xs text-ink-40">· Propuestos por Claude. Acepta los que te convenzan; pasan a Detectado.</span>
+            </div>
+            <div
+              onDragOver={(e) => { if (dragId) e.preventDefault() }}
+              onDrop={() => dropOn(null, 'agente')}
+              className="border border-line rounded-md bg-paper divide-y divide-line"
+            >
+              {agentList.map(row)}
+            </div>
+          </section>
+        )}
+
         {active.map((st) => {
           const list = items.filter((x) => x.stage === st.id)
           return (
@@ -297,6 +344,7 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
   const [reasons, setReasons] = useState(p.reasons.join('\n'))
   const [links, setLinks] = useState((p.links || []).join('\n'))
   const [notes, setNotes] = useState(p.notes || '')
+  const [angle, setAngle] = useState(p.angle || '')
   const [response, setResponse] = useState(p.response || '')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -359,6 +407,21 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
             </div>
           </section>
 
+          <section>
+            <span className={LABEL}>Mercado</span>
+            <div className="flex gap-1.5">
+              {REGIONS.map((x) => (
+                <button
+                  key={x.id}
+                  onClick={() => onPatch({ region: p.region === x.id ? undefined : x.id })}
+                  className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${p.region === x.id ? 'border-accent bg-surface text-ink font-medium' : 'border-line text-ink-60 hover:border-input hover:text-ink'}`}
+                >
+                  {x.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label>
               <span className={LABEL}>Web</span>
@@ -378,6 +441,17 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
               placeholder={'Un motivo por línea:\nAcaban de levantar 14,7 M€\nLa web es muy floja\nConocemos a alguien dentro'}
               onChange={(e) => setReasons(e.target.value)}
               onBlur={() => onPatch({ reasons: lines(reasons) })}
+            />
+          </section>
+
+          <section>
+            <span className={LABEL}>Ángulo del rediseño</span>
+            <textarea
+              className={`${INPUT} min-h-[4.5rem] leading-relaxed`}
+              value={angle}
+              placeholder="Qué contaría la home nueva: «la vía por capas que se encienden», «el robot que obedece a una frase»…"
+              onChange={(e) => setAngle(e.target.value)}
+              onBlur={() => onPatch({ angle: angle.trim() || undefined })}
             />
           </section>
 
@@ -412,7 +486,7 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
 
           <section>
             <span className={LABEL}>Notas</span>
-            <textarea className={`${INPUT} min-h-[6rem] leading-relaxed`} value={notes} placeholder="Ángulo del rediseño, ideas, cómo entrar…" onChange={(e) => setNotes(e.target.value)} onBlur={() => onPatch({ notes: notes.trim() || undefined })} />
+            <textarea className={`${INPUT} min-h-[6rem] leading-relaxed`} value={notes} placeholder="Ideas, cómo entrar, vínculos…" onChange={(e) => setNotes(e.target.value)} onBlur={() => onPatch({ notes: notes.trim() || undefined })} />
           </section>
 
           <p className="text-xs text-ink-40">Añadido el {fmtDay(p.date)}{p.by ? ` por ${p.by}` : ''}</p>
