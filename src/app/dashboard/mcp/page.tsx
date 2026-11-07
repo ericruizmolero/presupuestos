@@ -91,7 +91,7 @@ function McpContent() {
           <li className="grid grid-cols-[1.5rem_minmax(0,1fr)]">
             <span className="text-ink-40 tabular-nums">3</span>
             <span>
-              <span className="block mb-2">Autenticación: <span className="text-ink">Sin inicio de sesión</span>. En <span className="text-ink">Encabezados de solicitud → Añadir encabezado</span>, nombre <code className="px-1 py-px rounded bg-surface border border-line text-[13px] text-ink">Authorization</code> y como valor la clave:</span>
+              <span className="block mb-2">Autenticación: <span className="text-ink">Sin inicio de sesión</span>. En <span className="text-ink">Encabezados de solicitud → Añadir encabezado</span>, nombre <code className="px-1 py-px rounded bg-surface border border-line text-[13px] text-ink">x-api-key</code> y como valor la clave:</span>
               <button onClick={() => copy('header')} className={`${btn} bg-accent text-on-accent hover:bg-accent-hover`}>{label('header', 'Copiar clave')}</button>
               <span className="block mt-1.5 text-xs text-ink-40">La clave es la llave de vuestros datos: pégala solo ahí. claude.ai la guarda cifrada y no la vuelve a mostrar.</span>
             </span>

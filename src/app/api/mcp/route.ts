@@ -2,7 +2,7 @@
  * Servidor MCP (Streamable HTTP, sin estado) para el trackeo de horas.
  *
  * Se añade en claude.ai → Ajustes → Conectores con la URL:
- *   https://client.savvia.studio/api/mcp  con encabezado  Authorization: Bearer <MCP_SECRET>
+ *   https://client.savvia.studio/api/mcp  con encabezado  x-api-key: <MCP_SECRET>
  *
  * Env vars (Vercel): MCP_SECRET, FIREBASE_SERVICE_ACCOUNT (JSON de la
  * cuenta de servicio). Las escrituras usan Firebase Admin (bypassa rules).
@@ -1247,9 +1247,11 @@ interface RpcRequest { jsonrpc: string; id?: number | string | null; method: str
 function authorized(req: NextRequest): boolean {
   const secret = process.env.MCP_SECRET
   if (!secret) return false
-  // Solo por encabezado (Authorization: Bearer <MCP_SECRET>): la clave no viaja en la URL ni queda en logs
-  const bearer = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-  return bearer.length > 0 && bearer === secret
+  // Solo por encabezado: x-api-key (claude.ai reserva Authorization para OAuth) o Authorization: Bearer.
+  // La clave no viaja en la URL ni queda en logs.
+  const apiKey = (req.headers.get('x-api-key') || '').trim()
+  const bearer = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+  return (apiKey.length > 0 && apiKey === secret) || (bearer.length > 0 && bearer === secret)
 }
 
 export async function POST(req: NextRequest) {
