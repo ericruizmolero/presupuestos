@@ -10,7 +10,7 @@ import {
   subscribeProspects, saveProspects, STAGES, PRIORITIES, REGIONS, type Prospect, type ProspectStage, type ProspectPriority,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
-import { Check, Plus, X, ExternalLink, Trash2, GripVertical, Sparkles } from 'lucide-react'
+import { Check, Plus, X, ExternalLink, Trash2, GripVertical, Sparkles, ChevronRight } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -44,6 +44,7 @@ function ProspeccionContent() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [showClosed, setShowClosed] = useState(false)
+  const [showAgent, setShowAgent] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -280,19 +281,24 @@ function ProspeccionContent() {
       <div className="space-y-8">
         {agentList.length > 0 && (
           <section className="rounded-lg border border-line bg-surface p-3">
-            <div className="flex items-baseline gap-2 mb-2.5 px-1">
+            <button
+              onClick={() => setShowAgent((v) => !v)}
+              aria-expanded={showAgent}
+              className={`w-full flex items-baseline gap-2 px-1 text-left ${showAgent ? 'mb-2.5' : ''}`}
+            >
+              <ChevronRight size={12} strokeWidth={2} className={`self-center text-ink-40 transition-transform ${showAgent ? 'rotate-90' : ''}`} />
               <Sparkles size={12} strokeWidth={1.75} className="self-center text-ink-60" />
               <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">Prospect agent</h2>
               <span className="text-[10px] text-ink-40 tabular-nums">{agentList.length}</span>
               <span className="text-xs text-ink-40">· Propuestos por Claude. Acepta los que te convenzan; pasan a Detectado.</span>
-            </div>
-            <div
+            </button>
+            {showAgent && <div
               onDragOver={(e) => { if (dragId) e.preventDefault() }}
               onDrop={() => dropOn(null, 'agente')}
               className="border border-line rounded-md bg-paper divide-y divide-line"
             >
               {agentList.map(row)}
-            </div>
+            </div>}
           </section>
         )}
 
