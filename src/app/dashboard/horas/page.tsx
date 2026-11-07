@@ -234,16 +234,21 @@ function HorasContent() {
       ) : (
         <div className="border border-line rounded-md overflow-hidden overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs font-medium tracking-widest uppercase text-ink-60 border-b border-line">
-                <th className="px-4 py-3 font-medium">Cliente</th>
-                <th className="px-4 py-3 font-medium">Idioma</th>
-                <th className="px-4 py-3 font-medium text-right">Tarifa</th>
-                <th className="px-4 py-3 font-medium text-right">Este mes</th>
-                <th className="px-4 py-3 font-medium text-right">Importe mes</th>
-                <th className="pl-10 pr-4 py-3 font-medium text-right border-l border-line">Total</th>
-                <th className="px-4 py-3 font-medium text-right">Importe total</th>
-                <th className="px-2 py-3 w-8" />
+            <thead className="text-xs font-medium tracking-widest uppercase text-ink-60 whitespace-nowrap">
+              {/* Dos grupos: lo del mes y lo acumulado; el hueco entre ambos los separa sin líneas */}
+              <tr>
+                <th rowSpan={2} className="px-4 py-3 font-medium text-left align-bottom border-b border-line">Cliente</th>
+                <th rowSpan={2} className="px-4 py-3 font-medium text-left align-bottom border-b border-line">Idioma</th>
+                <th rowSpan={2} className="px-4 py-3 font-medium text-right align-bottom border-b border-line">Tarifa</th>
+                <th colSpan={2} className="pl-8 pr-4 pt-3 pb-1.5 font-medium text-right text-ink">Este mes</th>
+                <th colSpan={2} className="pl-12 pr-4 pt-3 pb-1.5 font-medium text-right">Acumulado</th>
+                <th rowSpan={2} className="px-2 py-3 w-8 border-b border-line" />
+              </tr>
+              <tr className="text-[10px] tracking-[0.14em] text-ink-40">
+                <th className="pl-8 pr-4 pb-3 font-medium text-right border-b border-line">Horas</th>
+                <th className="px-4 pb-3 font-medium text-right border-b border-line">Importe</th>
+                <th className="pl-12 pr-4 pb-3 font-medium text-right border-b border-line">Horas</th>
+                <th className="px-4 pb-3 font-medium text-right border-b border-line">Importe</th>
               </tr>
             </thead>
             <tbody>
@@ -258,13 +263,13 @@ function HorasContent() {
                   <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">
                     {p.hourlyRate ? `${formatMoney(p.hourlyRate)}/h` : '—'}
                   </td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
+                  <td className="pl-8 pr-4 py-3 text-right whitespace-nowrap font-medium">
                     {month > 0 ? formatHours(month) : <span className="text-ink-40 font-normal">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
                     {month > 0 && p.hourlyRate ? formatMoney(month * p.hourlyRate) : <span className="text-ink-40 font-normal">—</span>}
                   </td>
-                  <td className="pl-10 pr-4 py-3 text-right whitespace-nowrap text-ink-60 border-l border-line">{formatHours(total)}</td>
+                  <td className="pl-12 pr-4 py-3 text-right whitespace-nowrap text-ink-60">{formatHours(total)}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">
                     {p.hourlyRate ? formatMoney(total * p.hourlyRate) : '—'}
                   </td>
