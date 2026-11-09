@@ -9,7 +9,9 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { QuoteEditor } from '@/components/quote/QuoteEditor'
 import { getQuoteById, updateQuote, regenerateQuoteSlug, checkSlugAvailable, setQuoteSlug } from '@/lib/firestore/quotes'
 import type { Quote, QuoteFormData } from '@/types/quote'
-import { ExternalLink, Printer, Check, Loader, X } from 'lucide-react'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { ExternalLink, Printer, Check, Loader, X, Sparkles } from 'lucide-react'
 
 export default function EditQuotePage() {
   return (
@@ -54,6 +56,10 @@ function EditQuoteContent() {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
+  // Cambios hechos por Claude (conector MCP) mientras el editor está abierto
+  const [remote, setRemote] = useState<Quote | null>(null)
+  const [editorKey, setEditorKey] = useState(0)
+  const loadedClaudeAt = useRef<string | undefined>(undefined)
 
   // Slug editing state
   const [slugInput, setSlugInput] = useState('')
@@ -67,9 +73,27 @@ function EditQuoteContent() {
   useEffect(() => {
     getQuoteById(id).then((q) => {
       if (!q) { router.replace('/dashboard'); return }
+      loadedClaudeAt.current = q.claudeEditAt
       setQuoteRaw(q)
     })
   }, [id, router])
+
+  // Escucha el documento: si Claude lo cambia desde el conector, avisamos para recargar
+  useEffect(() => {
+    return onSnapshot(doc(db, 'quotes', id), (snap) => {
+      if (!snap.exists() || snap.metadata.hasPendingWrites) return
+      const data = { id: snap.id, ...snap.data() } as Quote
+      if (data.claudeEditAt && data.claudeEditAt !== loadedClaudeAt.current) setRemote(data)
+    })
+  }, [id])
+
+  function loadRemote() {
+    if (!remote) return
+    loadedClaudeAt.current = remote.claudeEditAt
+    setQuoteRaw(remote)
+    setEditorKey((k) => k + 1)
+    setRemote(null)
+  }
 
   // Step 2: once both quote and company are resolved, merge and render
   useEffect(() => {
@@ -249,7 +273,21 @@ function EditQuoteContent() {
         </div>
       </div>
 
-      <QuoteEditor initialData={formData as QuoteFormData} onSave={handleSave} autoOpenAI={isNew} />
+      {remote && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-surface px-4 py-3 text-sm">
+          <span className="flex items-center gap-2 text-ink"><Sparkles size={14} strokeWidth={1.75} />Claude ha actualizado este presupuesto.</span>
+          <button onClick={loadRemote} className="px-3 py-1.5 text-sm font-medium rounded-md bg-accent text-on-accent hover:bg-accent-hover">Cargar cambios</button>
+        </div>
+      )}
+
+      {quote.internalNotes && (
+        <details className="mb-6 rounded-md border border-line bg-paper px-4 py-3 text-sm">
+          <summary className="cursor-pointer text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40">Notas de la reunión (solo el estudio)</summary>
+          <p className="mt-2 whitespace-pre-wrap text-ink-60 leading-relaxed">{quote.internalNotes}</p>
+        </details>
+      )}
+
+      <QuoteEditor key={editorKey} initialData={formData as QuoteFormData} onSave={handleSave} autoOpenAI={isNew && editorKey === 0} />
     </div>
   )
 }

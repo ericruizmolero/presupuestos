@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { billingSummary, holdedConfigured, recentInvoices, invoicedContacts } from '@/lib/holded'
 import { PROFILES, proposeAll, createDraft, formatProposal, type TimeData } from '@/lib/invoicing'
 import { parseWhen, htmlToText, plainToHtml, isHtml } from '@/components/studio/boardUtils'
+import { QUOTE_TOOLS, QUOTE_TOOL_NAMES, handleQuoteTool } from '@/lib/mcpQuotes'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -577,6 +578,8 @@ const TOOLS = [
 type ToolArgs = Record<string, unknown>
 
 async function callTool(name: string, args: ToolArgs): Promise<{ text: string; isError?: boolean }> {
+  if (QUOTE_TOOL_NAMES.has(name)) return handleQuoteTool(db(), name, args as Record<string, unknown>)
+
   if (name === 'listar_proyectos') {
     const projects = await getProjects()
     if (projects.length === 0) return { text: 'No hay proyectos de horas.' }
@@ -1289,7 +1292,7 @@ export async function POST(req: NextRequest) {
       case 'ping':
         return reply({})
       case 'tools/list':
-        return reply({ tools: TOOLS })
+        return reply({ tools: [...TOOLS, ...QUOTE_TOOLS] })
       case 'tools/call': {
         const name = String(rpc.params?.name || '')
         const args = (rpc.params?.arguments as ToolArgs) || {}

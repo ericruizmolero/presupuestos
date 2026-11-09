@@ -173,6 +173,8 @@ export interface Quote {
   sectionSpacing?: Record<string, { top: number; bottom: number }>
   sectionHtmlOverrides?: Record<string, string>
   sectionsMerged?: string[]
+  internalNotes?: string   // contexto de la reunión (solo estudio; lo rellena Claude vía MCP)
+  claudeEditAt?: string    // ISO de la última escritura hecha por Claude (el editor ofrece recargar)
 }
 
 export type QuoteFormData = Omit<Quote, 'id' | 'createdAt' | 'updatedAt' | 'createdBy' | 'companyId'>
