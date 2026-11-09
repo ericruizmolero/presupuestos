@@ -10,6 +10,11 @@ const LABEL = 'text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40'
 /** Qué puede hacer Claude con el conector, agrupado por sección de la app */
 const TOOLS: Array<{ area: string; items: string[]; example: string }> = [
   {
+    area: 'Presupuestos',
+    items: ['Crear uno nuevo a partir de la reunión (siempre en borrador)', 'Leer y editar los existentes', 'Usar otro como plantilla', 'El editor abierto avisa para cargar los cambios'],
+    example: '“Reunión con Acme: quieren rediseño de la home, 6 semanas, 9.000 €. Prepárame el presupuesto”',
+  },
+  {
     area: 'Horas',
     items: ['Listar proyectos y ver registros', 'Apuntar, editar y borrar horas', 'Crear bolsas de horas', 'Resumen de la semana'],
     example: '“Apúntame 2 h de hoy en Vidflare”',
