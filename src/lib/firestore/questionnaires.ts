@@ -5,7 +5,7 @@ import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
 
 /**
- * Cuestionarios que compartimos con el cliente por enlace (/q/<slug>), como los presupuestos.
+ * Cuestionarios que compartimos con el cliente por enlace (/cuestionario/<slug>), como los presupuestos.
  * El id del documento ES el slug: la página pública lo lee con get (las reglas no permiten listar).
  * El cliente solo puede escribir en `answers`, `status`, `submittedAt` y `answeredAt` (ver firestore.rules).
  */

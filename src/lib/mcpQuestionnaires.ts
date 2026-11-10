@@ -58,7 +58,7 @@ export async function handleQuestionnaireTool(db: Firestore, name: string, a: Ar
   if (name === 'ver_cuestionarios') {
     const qs = await all(db)
     if (!qs.length) return { text: 'No hay cuestionarios.' }
-    return { text: qs.map((q) => `- ${q.title} · ${q.clientCompany || ''} · ${q.status} · ${progress(q)} respondidas\n  cliente: ${BASE}/q/${q.slug} · panel: ${BASE}/dashboard/cuestionarios/${q.id}`).join('\n') }
+    return { text: qs.map((q) => `- ${q.title} · ${q.clientCompany || ''} · ${q.status} · ${progress(q)} respondidas\n  cliente: ${BASE}/cuestionario/${q.slug} · panel: ${BASE}/dashboard/cuestionarios/${q.id}`).join('\n') }
   }
 
   if (name === 'ver_cuestionario') {
@@ -67,7 +67,7 @@ export async function handleQuestionnaireTool(db: Firestore, name: string, a: Ar
     if (!qs.length) return { text: `No encuentro ningún cuestionario que case con "${a.cuestionario}".`, isError: true }
     if (qs.length > 1) return { text: 'Casa con varios:\n' + qs.map((q) => `- ${q.title} (${q.slug})`).join('\n'), isError: true }
     const q = qs[0]
-    const out = [`# ${q.title} · ${q.clientCompany || ''}${q.clientName ? ` (${q.clientName})` : ''}`, `estado: ${q.status}${q.submittedAt ? ` (enviado ${q.submittedAt.slice(0, 10)})` : ''} · ${progress(q)} respondidas · ${BASE}/q/${q.slug}`]
+    const out = [`# ${q.title} · ${q.clientCompany || ''}${q.clientName ? ` (${q.clientName})` : ''}`, `estado: ${q.status}${q.submittedAt ? ` (enviado ${q.submittedAt.slice(0, 10)})` : ''} · ${progress(q)} respondidas · ${BASE}/cuestionario/${q.slug}`]
     q.questions.forEach((qq, i) => {
       out.push(`\n## ${i + 1}. ${qq.title}`)
       for (const f of fieldsOf(qq)) {
@@ -106,7 +106,7 @@ export async function handleQuestionnaireTool(db: Firestore, name: string, a: Ar
     }
     await db.doc(`questionnaires/${slug}`).set(JSON.parse(JSON.stringify({ ...doc, createdAt: null, updatedAt: null })))
     await db.doc(`questionnaires/${slug}`).update({ createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() })
-    return { text: `✓ Cuestionario creado para ${empresa} (${questions.length} preguntas).\nEnlace para el cliente: ${BASE}/q/${slug}\nPanel: ${BASE}/dashboard/cuestionarios/${slug}` }
+    return { text: `✓ Cuestionario creado para ${empresa} (${questions.length} preguntas).\nEnlace para el cliente: ${BASE}/cuestionario/${slug}\nPanel: ${BASE}/dashboard/cuestionarios/${slug}` }
   }
 
   return { text: `Herramienta desconocida: ${name}`, isError: true }

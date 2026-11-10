@@ -87,7 +87,7 @@ function Content() {
   if (missing) return <div className="px-8 py-12 text-sm text-ink-40">Este cuestionario no existe.</div>
   if (!q) return <div className="px-8 py-12 text-sm text-ink-40">Cargando…</div>
 
-  const link = `${BASE}/q/${q.slug}`
+  const link = `${BASE}/cuestionario/${q.slug}`
 
   return (
     <div className="px-6 lg:px-8 py-8 max-w-4xl">

@@ -31,7 +31,7 @@ service cloud.firestore {
       allow list, write: if isTeam();
     }
 
-    // Cuestionarios: el cliente abre su enlace (/q/<id>) y solo puede guardar sus respuestas;
+    // Cuestionarios: el cliente abre su enlace (/cuestionario/<id>) y solo puede guardar sus respuestas;
     // nadie de fuera puede listarlos ni cambiar las preguntas
     match /questionnaires/{qid} {
       allow get: if true;
