@@ -31,6 +31,18 @@ service cloud.firestore {
       allow list, write: if isTeam();
     }
 
+    // Cuestionarios: el cliente abre su enlace (/q/<id>) y solo puede guardar sus respuestas;
+    // nadie de fuera puede listarlos ni cambiar las preguntas
+    match /questionnaires/{qid} {
+      allow get: if true;
+      allow list, create, delete: if isTeam();
+      allow update: if isTeam() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['answers', 'status', 'submittedAt', 'answeredAt'])
+        && request.resource.data.answers is map
+        && request.resource.data.status in ['pendiente', 'respondido']
+      );
+    }
+
     // Todo lo demás (tablón de proyectos, usuarios…): solo el estudio
     match /{document=**} {
       allow read, write: if isTeam();

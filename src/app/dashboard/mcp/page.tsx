@@ -15,6 +15,11 @@ const TOOLS: Array<{ area: string; items: string[]; example: string }> = [
     example: '“Reunión con Acme: quieren rediseño de la home, 6 semanas, 9.000 €. Prepárame el presupuesto”',
   },
   {
+    area: 'Cuestionarios',
+    items: ['Crear uno para un cliente (plantilla de auditoría web)', 'Ver qué ha respondido', 'Usar las respuestas para la auditoría o el presupuesto'],
+    example: '“¿Qué ha respondido Nacho en el cuestionario?”',
+  },
+  {
     area: 'Horas',
     items: ['Listar proyectos y ver registros', 'Apuntar, editar y borrar horas', 'Crear bolsas de horas', 'Resumen de la semana'],
     example: '“Apúntame 2 h de hoy en Vidflare”',
