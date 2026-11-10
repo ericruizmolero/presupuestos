@@ -26,6 +26,30 @@ export default function CuestionarioPage() {
 
 function rid() { return Math.random().toString(36).slice(2, 8) }
 
+const URL_RE = /((?:https?:\/\/|www\.)[^\s<>"]+)/g
+
+/** Convierte las URLs de una respuesta en enlaces que abren en otra pestaña */
+function Linkified({ text }: { text: string }) {
+  const parts = text.split(URL_RE)
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return part
+        const m = part.match(/^(.*?)([.,;:!?)\]]*)$/)
+        const url = m ? m[1] : part
+        const tail = m ? m[2] : ''
+        const href = url.startsWith('http') ? url : `https://${url}`
+        return (
+          <span key={i}>
+            <a href={href} target="_blank" rel="noreferrer" className="underline decoration-line underline-offset-2 hover:decoration-ink break-all">{url}</a>
+            {tail}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
 function fmtWhen(iso?: string) {
   if (!iso) return ''
   return new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -162,7 +186,7 @@ function Content() {
                       <div key={f.id}>
                         {f.label && <span className="block text-xs font-medium text-ink-60 mb-1">{f.label}</span>}
                         <div className={`rounded-md px-3 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${a ? 'bg-surface text-ink' : 'border border-dashed border-line text-ink-40'}`}>
-                          {a || 'Sin respuesta todavía'}
+                          {a ? <Linkified text={a} /> : 'Sin respuesta todavía'}
                         </div>
                       </div>
                     )
