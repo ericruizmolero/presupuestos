@@ -55,11 +55,11 @@ export function webAuditTemplate(): Question[] {
   return [
     {
       id: 'referencias',
-      title: '¿Qué webs os gustan y cuáles no?',
+      title: '¿Qué webs te gustan y cuáles no?',
       help: 'Pega enlaces y cuéntanos en una línea qué te gusta o qué no de cada una: cómo explican el producto, el tono, el diseño, la estructura…',
       fields: [
-        { id: 'referencias_si', label: 'Webs que nos gustan', placeholder: 'https://… — nos gusta cómo…' },
-        { id: 'referencias_no', label: 'Webs que no nos gustan', placeholder: 'https://… — no nos convence…' },
+        { id: 'referencias_si', label: 'Webs que me gustan', placeholder: 'https://… y qué te gusta de ella' },
+        { id: 'referencias_no', label: 'Webs que no me gustan', placeholder: 'https://… y qué no te convence' },
       ],
     },
     {
@@ -74,7 +74,7 @@ export function webAuditTemplate(): Question[] {
     },
     {
       id: 'publico',
-      title: '¿A quién va dirigida la web principalmente?',
+      title: '¿A quién va dirigida tu web principalmente?',
       help: 'Perfil, cargo, tipo y tamaño de empresa, sector… Si hay varios públicos, dinos cuál es el prioritario.',
     },
     {

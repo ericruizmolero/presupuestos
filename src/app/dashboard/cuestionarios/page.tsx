@@ -51,7 +51,7 @@ function Content() {
         title: `Antes de la auditoría de ${company.trim()}`,
         clientCompany: company.trim(),
         clientName: person.trim() || undefined,
-        intro: 'Antes de la auditoría nos ayuda mucho entender cómo veis la web. Son 5 preguntas y te llevará unos 10 minutos. No hace falta que sea perfecto: con un par de líneas por pregunta nos vale.',
+        intro: 'Antes de la auditoría nos ayuda mucho entender cómo ves tu web. Son 5 preguntas y te llevará unos 10 minutos. No hace falta que sea perfecto: con un par de líneas por pregunta nos vale.',
         language: 'es',
         questions: webAuditTemplate(),
       })
