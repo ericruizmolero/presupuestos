@@ -33,7 +33,9 @@ export function subscribeQuestionnaire(id: string, onChange: (q: Questionnaire |
 }
 
 export async function createQuestionnaire(data: Omit<Questionnaire, 'id' | 'slug' | 'status'>): Promise<string> {
-  const slug = questionnaireSlug(data.clientCompany || data.title)
+  let n = 1
+  let slug = questionnaireSlug(data.clientCompany || data.title)
+  while ((await getDoc(doc(db, 'questionnaires', slug))).exists()) slug = questionnaireSlug(data.clientCompany || data.title, ++n)
   await setDoc(doc(db, 'questionnaires', slug), {
     ...(stripUndefinedDeep(data) as Record<string, unknown>),
     slug,

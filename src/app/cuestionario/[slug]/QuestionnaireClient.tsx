@@ -6,7 +6,7 @@ import { getQuestionnaireBySlug, saveAnswers, fieldsOf, type Questionnaire } fro
 
 const I18N = {
   es: {
-    eyebrow: 'Cuestionario',
+    eyebrow: (c: string) => (c ? `Cuestionario para ${c}` : 'Cuestionario'),
     hello: (n: string) => `Hola, ${n}`,
     saving: 'Guardando…',
     saved: 'Guardado',
@@ -19,10 +19,10 @@ const I18N = {
     autosave: 'Tus respuestas se guardan solas mientras escribes: puedes cerrar y volver cuando quieras con este mismo enlace. Cuando acabes, pulsa «He terminado» y nos llega el aviso.',
     notFound: 'Este cuestionario no existe o ya no está disponible.',
     placeholder: 'Escribe aquí…',
-    answered: (a: number, t: number) => `${a} de ${t} respondidas · se guarda solo`,
+    answered: (a: number, t: number) => `${a} de ${t} respondidas. Se guarda solo.`,
   },
   en: {
-    eyebrow: 'Questionnaire',
+    eyebrow: (c: string) => (c ? `Questionnaire for ${c}` : 'Questionnaire'),
     hello: (n: string) => `Hi ${n},`,
     saving: 'Saving…',
     saved: 'Saved',
@@ -35,7 +35,7 @@ const I18N = {
     autosave: "Your answers save automatically as you type: close this page and come back any time with the same link. When you're finished, click «I'm done» and we'll get notified.",
     notFound: 'This questionnaire does not exist or is no longer available.',
     placeholder: 'Type here…',
-    answered: (a: number, t: number) => `${a} of ${t} answered · saves automatically`,
+    answered: (a: number, t: number) => `${a} of ${t} answered. Saves automatically.`,
   },
 } as const
 
@@ -145,7 +145,7 @@ export function QuestionnaireClient() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-6 w-auto mb-12" />
           <p className="text-[10px] font-medium tracking-[0.18em] uppercase mb-4 text-ink-40">
-            {t.eyebrow}{q.clientCompany ? ` · ${q.clientCompany}` : ''}
+            {t.eyebrow(q.clientCompany || '')}
           </p>
           <h1 className="text-[1.75rem] sm:text-[2rem] font-medium tracking-tight text-ink leading-tight">{q.title}</h1>
 
@@ -188,7 +188,7 @@ export function QuestionnaireClient() {
 
         <footer className="mt-16 pt-8 border-t border-line flex flex-wrap items-center justify-between gap-4">
           <span className="text-sm text-ink-40">
-            {save === 'saving' ? t.saving : save === 'error' ? <span className="text-[#DC2626]">{t.error}</span> : save === 'saved' ? `${t.saved} · ${t.answered(answered, q.questions.length)}` : t.answered(answered, q.questions.length)}
+            {save === 'saving' ? t.saving : save === 'error' ? <span className="text-[#DC2626]">{t.error}</span> : t.answered(answered, q.questions.length)}
           </span>
           <button
             onClick={submit}
@@ -199,7 +199,7 @@ export function QuestionnaireClient() {
           </button>
         </footer>
 
-        <p className="mt-16 text-xs text-ink-40">Savvia Studio · savvia.studio</p>
+        <p className="mt-16 text-xs text-ink-40">savvia.studio</p>
       </article>
     </main>
   )

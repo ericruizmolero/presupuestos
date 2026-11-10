@@ -89,7 +89,9 @@ export async function handleQuestionnaireTool(db: Firestore, name: string, a: Ar
           return { id, title: String(p.titulo || ''), help: p.ayuda ? String(p.ayuda) : '', ...(cajas.length > 1 ? { fields: cajas.map((label) => ({ id: `${id}_${rid()}`, label })) } : {}) }
         })
       : webAuditTemplate()
-    const slug = questionnaireSlug(empresa)
+    let n = 1
+    let slug = questionnaireSlug(empresa)
+    while ((await db.doc(`questionnaires/${slug}`).get()).exists) slug = questionnaireSlug(empresa, ++n)
     const doc = {
       companyId: STUDIO_COMPANY_ID,
       slug,

@@ -44,9 +44,10 @@ function slugBase(s: string) {
   return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
 }
 
-/** Slug con sufijo aleatorio: el enlace no se adivina por el nombre del cliente */
-export function questionnaireSlug(name: string) {
-  return `${slugBase(name) || 'cuestionario'}-${rid(5)}`
+/** Slug legible ("5050-growth"); si ya existe, "5050-growth-2", "-3"… */
+export function questionnaireSlug(name: string, n = 1) {
+  const base = slugBase(name) || 'cuestionario'
+  return n > 1 ? `${base}-${n}` : base
 }
 
 /** Plantilla: preguntas para auditar una web */
