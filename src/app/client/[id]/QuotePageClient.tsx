@@ -198,8 +198,8 @@ export function QuotePageClient() {
         const client = q.client?.company || q.client?.name || ''
         const emitter = q.emitter?.companyName || ''
         const date = q.date ? new Date(q.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
-        const parts = [client, emitter, date].filter(Boolean)
-        document.title = parts.length ? `${parts.join(' · ')} — Savvia` : 'Presupuesto — Savvia'
+        void emitter; void date
+        document.title = client ? `${client}, Savvia` : 'Presupuesto, Savvia'
         // Load company via REST API so it works for unauthenticated visitors too
         try {
           if (q.companyId) {

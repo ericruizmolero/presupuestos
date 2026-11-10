@@ -72,8 +72,8 @@ export async function generateMetadata(
 
   const title = clientName && emitterName
     ? (lang === 'en'
-        ? `${clientName} — Proposal by ${emitterName}`
-        : `${clientName} — Presupuesto de ${emitterName}`)
+        ? `${clientName}, proposal by Savvia`
+        : `${clientName}, presupuesto de Savvia`)
     : (emitterName || 'Proposal')
 
   const images = logoUrl ? [{ url: logoUrl }] : []

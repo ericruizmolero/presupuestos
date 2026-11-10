@@ -29,10 +29,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const company = f.clientCompany?.stringValue || ''
   const en = f.language?.stringValue === 'en'
   const n = f.questions?.arrayValue?.values?.length || 0
-  const title = company ? `${company} · Savvia` : 'Savvia'
+  const title = company ? `${company}, Savvia` : 'Savvia'
   const description = en
-    ? `${f.title?.stringValue || 'Questionnaire'} — ${n} questions, about 10 minutes.`
-    : `${f.title?.stringValue || 'Cuestionario'} — ${n} preguntas, unos 10 minutos.`
+    ? `${f.title?.stringValue || 'Questionnaire'}: ${n} questions, about 10 minutes.`
+    : `${f.title?.stringValue || 'Cuestionario'}: ${n} preguntas, unos 10 minutos.`
 
   return {
     title,

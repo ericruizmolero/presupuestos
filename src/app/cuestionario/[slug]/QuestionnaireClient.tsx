@@ -79,7 +79,7 @@ export function QuestionnaireClient() {
         setQ(data)
         setAnswers(data.answers || {})
         setSubmitted(data.status === 'respondido')
-        document.title = `${data.clientCompany || data.title} · Savvia`
+        document.title = `${data.clientCompany || data.title}, Savvia`
         setState('ready')
       })
       .catch(() => setState('notfound'))
