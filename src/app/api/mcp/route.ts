@@ -895,7 +895,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           ...(waiting ? { state: n.estado, stateDate: todayISO() } : {}),
           ...(n.detalle?.trim() ? { body: plainToHtml(n.detalle.trim()), ...(by ? { bodyBy: by } : {}), bodyDate: todayISO() } : {}),
         })
-        added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}${due ? ` 📅 ${due}${time ? ' ' + time : ''}` : ''}${waiting ? ' [esperando feedback]' : ''}`)
+        added.push(`  · ${n.texto}${who ? ` — ${who}` : ''}${due ? ` 📅 ${due}${time ? ' ' + time : ''}` : ''}${n.estado === 'hecha' ? ' [hecha]' : n.estado === 'esperando' ? ' [esperando feedback]' : ''}`)
       }
       if (added.length) await writeBoard(cid, board)
       const head = `✓ ${added.length} nota${added.length === 1 ? '' : 's'} en "${g.name}"${created ? ' (proyecto nuevo en ' + board.lanes[0] + ')' : ''}`
