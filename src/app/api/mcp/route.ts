@@ -12,7 +12,7 @@ import { billingSummary, holdedConfigured, recentInvoices, invoicedContacts } fr
 import { PROFILES, proposeAll, createDraft, formatProposal, type TimeData } from '@/lib/invoicing'
 import { parseWhen, htmlToText, plainToHtml, isHtml } from '@/components/studio/boardUtils'
 import { QUOTE_TOOLS, QUOTE_TOOL_NAMES, handleQuoteTool } from '@/lib/mcpQuotes'
-import { QUESTIONNAIRE_TOOLS, QUESTIONNAIRE_TOOL_NAMES, handleQuestionnaireTool } from '@/lib/mcpQuestionnaires'
+import { QUESTIONNAIRE_TOOLS, QUESTIONNAIRE_TOOL_NAMES, handleQuestionnaireTool, questionnaireNews } from '@/lib/mcpQuestionnaires'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -434,7 +434,7 @@ const TOOLS = [
   {
     name: 'novedades',
     annotations: { readOnlyHint: true },
-    description: 'Qué hay nuevo en el tablón del estudio: notas recientes por fecha, con proyecto y a quién le toca. Responde a "¿qué ha pasado?", "¿qué tengo que hacer yo?", "ponme al día".',
+    description: 'Qué hay nuevo en el estudio: cuestionarios que han respondido los clientes (con enlace para leerlos) y notas recientes del tablón por fecha, con proyecto y a quién le toca. Responde a "¿qué ha pasado?", "¿ha respondido alguien?", "¿qué tengo que hacer yo?", "ponme al día".',
     inputSchema: {
       type: 'object',
       properties: {
@@ -843,14 +843,21 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           return eff === quien || eff === 'Eric y Andoni'
         })
         .sort((a, b) => (b.date! > a.date! ? 1 : -1))
-      if (recent.length === 0) {
+      // Cuestionarios de clientes con respuestas en la ventana (lo que contestan desde su enlace)
+      const qnews = await questionnaireNews(db(), cutoffISO)
+      if (recent.length === 0 && qnews.length === 0) {
         return { text: `Sin novedades en los últimos ${dias} días${quien ? ` para ${quien}` : ''}.` }
       }
       const lines = recent.map((c) => {
         const eff = c.who ?? ownerOf(c.group)
         return `${c.date} · [${c.group}] ${c.text} — ${eff === 'Eric y Andoni' ? 'los dos' : `para ${eff}`}${c.by && c.by !== eff ? ` (de ${c.by})` : ''}`
       })
-      return { text: lines.join('\n') }
+      const out = [
+        ...(qnews.length ? ['Cuestionarios de clientes:', ...qnews] : []),
+        ...(qnews.length && lines.length ? ['', 'Tablón:'] : []),
+        ...lines,
+      ]
+      return { text: out.join('\n') }
     }
 
     if (name === 'anadir_nota') {

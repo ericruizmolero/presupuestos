@@ -54,6 +54,13 @@ function progress(q: Questionnaire) {
   return `${done}/${q.questions.length}`
 }
 
+/** Para "novedades": cuestionarios con respuestas desde cutoff (YYYY-MM-DD), lo más reciente primero */
+export async function questionnaireNews(db: Firestore, cutoffISO: string): Promise<string[]> {
+  const qs = (await all(db)).filter((q) => (q.answeredAt || '').slice(0, 10) >= cutoffISO)
+  qs.sort((a, b) => String(b.answeredAt).localeCompare(String(a.answeredAt)))
+  return qs.map((q) => `${String(q.answeredAt).slice(0, 10)} · ${q.clientCompany || q.title}${q.clientName ? ` (${q.clientName})` : ''}: ${q.status === 'respondido' ? 'ha terminado el cuestionario' : 'está respondiendo'} (${progress(q)}). Léelo con ver_cuestionario "${q.slug}".`)
+}
+
 export async function handleQuestionnaireTool(db: Firestore, name: string, a: Args): Promise<{ text: string; isError?: boolean }> {
   if (name === 'ver_cuestionarios') {
     const qs = await all(db)
