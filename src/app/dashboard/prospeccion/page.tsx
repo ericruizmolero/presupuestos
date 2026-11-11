@@ -600,7 +600,12 @@ function EmailComposer({ p, templates, onPatch }: { p: Prospect; templates: Emai
               <dt className="text-ink-60">De</dt>
               <dd className="text-ink truncate">{sender.name} &lt;{sender.email}&gt;</dd>
               <dt className="text-ink-60">Para</dt>
-              <dd className="text-ink truncate">{[firstName(p.contact) && p.contact?.split(/[,·(]/)[0].trim(), email || p.email].filter(Boolean).join(' ') || <span className="text-ink-40">Sin destinatario</span>}</dd>
+              <dd className="text-ink truncate">{(() => {
+                const who = firstName(p.contact) ? p.contact?.split(/[,·(]/)[0].trim() : ''
+                const to = email || p.email
+                if (!who && !to) return <span className="text-ink-40">Sin destinatario</span>
+                return who && to ? `${who} <${to}>` : who || to
+              })()}</dd>
               <dt className="text-ink-60">Asunto</dt>
               <dd className="text-ink font-bold">{filled.subject}</dd>
             </dl>
