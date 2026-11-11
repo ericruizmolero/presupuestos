@@ -13,7 +13,7 @@ import {
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import {
-  subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
+  subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, firstName, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
 } from '@/lib/firestore/emailTemplates'
 import { Check, Plus, X, ExternalLink, Trash2, GripVertical, Sparkles, ChevronRight, Copy, Mail } from 'lucide-react'
 
@@ -552,6 +552,10 @@ function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
 
 /** El email a este prospecto: datos que rellenan la plantilla y el texto listo para copiar */
 function EmailComposer({ p, templates, onPatch }: { p: Prospect; templates: EmailTemplate[]; onPatch: (x: Partial<Prospect>) => void }) {
+  const { user } = useAuth()
+  const sender = myName(user?.displayName, user?.email) === 'Andoni'
+    ? { name: 'Andoni Martínez', email: 'andoni@savvia.studio' }
+    : { name: 'Eric Ruiz Molero', email: 'ericruizmolero@savvia.studio' }
   const [email, setEmail] = useState(p.email || '')
   const [link, setLink] = useState(p.proposalUrl || '')
   const [hook, setHook] = useState(p.hook || '')
@@ -587,21 +591,39 @@ function EmailComposer({ p, templates, onPatch }: { p: Prospect; templates: Emai
         </select>
       )}
       {filled ? (
-        <div className="rounded-md bg-surface px-3.5 py-3 text-sm text-ink">
-          <div className="flex items-start justify-between gap-3 pb-2 mb-2 border-b border-line">
-            <span className="font-medium">{filled.subject}</span>
-            <button onClick={() => copy('subject', filled.subject)} className="shrink-0 flex items-center gap-1 text-xs text-ink-60 hover:text-ink">
-              {copied === 'subject' ? <Check size={12} strokeWidth={2} /> : <Copy size={12} strokeWidth={1.75} />}Asunto
-            </button>
+        <>
+          <div className="rounded-xl border border-line bg-paper overflow-hidden shadow-[0_12px_32px_rgba(0,0,0,0.08)]" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div className="flex gap-1.5 px-3.5 py-2.5 bg-surface border-b border-line" aria-hidden="true">
+              {[0, 1, 2].map((i) => <span key={i} className="w-2.5 h-2.5 rounded-full bg-line" />)}
+            </div>
+            <dl className="grid grid-cols-[4rem_minmax(0,1fr)] gap-y-1.5 px-5 py-4 border-b border-line text-[13px]">
+              <dt className="text-ink-60">De</dt>
+              <dd className="text-ink truncate">{sender.name} &lt;{sender.email}&gt;</dd>
+              <dt className="text-ink-60">Para</dt>
+              <dd className="text-ink truncate">{[firstName(p.contact) && p.contact?.split(/[,·(]/)[0].trim(), email || p.email].filter(Boolean).join(' ') || <span className="text-ink-40">Sin destinatario</span>}</dd>
+              <dt className="text-ink-60">Asunto</dt>
+              <dd className="text-ink font-bold">{filled.subject}</dd>
+            </dl>
+            <div className="px-5 py-5 text-[13px] leading-relaxed text-ink">
+              <p className="whitespace-pre-wrap">{filled.body}</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/firma-trazos.png" alt="" className="mt-4 h-11 w-auto" />
+              <p className="mt-1">{sender.name}</p>
+              <a href="https://savvia.studio" target="_blank" rel="noreferrer" className="underline underline-offset-2">savvia.studio</a>
+            </div>
           </div>
-          <p className="whitespace-pre-wrap leading-relaxed">{filled.body}</p>
-          <div className="flex items-center justify-between gap-3 pt-3">
-            <span className="text-xs text-ink-40">{filled.missing.length ? `Falta: ${filled.missing.join(', ')}` : p.email || email ? `Para ${email || p.email}` : ''}</span>
-            <button onClick={() => copy('body', filled.body)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover">
-              {copied === 'body' ? <><Check size={12} strokeWidth={2} />Copiado</> : <><Copy size={12} strokeWidth={1.75} />Copiar texto</>}
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-ink-40">{filled.missing.length ? `Falta: ${filled.missing.join(', ')}` : 'La firma la pone Gmail; copia solo asunto y texto.'}</span>
+            <span className="flex gap-2">
+              <button onClick={() => copy('subject', filled.subject)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-line rounded-md text-ink-60 hover:text-ink hover:border-input">
+                {copied === 'subject' ? <Check size={12} strokeWidth={2} /> : <Copy size={12} strokeWidth={1.75} />}Asunto
+              </button>
+              <button onClick={() => copy('body', filled.body)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover">
+                {copied === 'body' ? <><Check size={12} strokeWidth={2} />Copiado</> : <><Copy size={12} strokeWidth={1.75} />Copiar texto</>}
+              </button>
+            </span>
           </div>
-        </div>
+        </>
       ) : (
         <p className="text-xs text-ink-40">No hay plantillas. Crea una abajo, en Plantillas de email.</p>
       )}
