@@ -120,7 +120,7 @@ function addDays(dateStr: string, days: number): string {
 
 /**
  * Escala del timeline según lo que dura el proyecto, para que las barras ocupen todo el ancho:
- * hasta 10 días, una columna por día; hasta 6 semanas, una por semana; si es más largo, una cada 2 semanas.
+ * hasta 10 días, una columna por día (Día 1, Día 2…: el inicio real aún no se sabe); hasta 6 semanas, una por semana; si es más largo, una cada 2 semanas.
  */
 function ganttScale(minDate: Date, maxDate: Date, lang?: string, short = false) {
   const days = daysBetween(minDate, maxDate) + 1
@@ -129,11 +129,7 @@ function ganttScale(minDate: Date, maxDate: Date, lang?: string, short = false) 
   const totalDays = numCols * unit
   const en = lang === 'en'
   const labels = Array.from({ length: numCols }, (_, i) => {
-    if (unit === 1) {
-      const d = new Date(minDate)
-      d.setDate(d.getDate() + i)
-      return d.toLocaleDateString(en ? 'en-GB' : 'es-ES', { weekday: 'short', day: 'numeric' })
-    }
+    if (unit === 1) return en ? `Day ${i + 1}` : `Día ${i + 1}`
     if (unit === 7) return short ? (en ? `Wk. ${i + 1}` : `Sem. ${i + 1}`) : (en ? `Week ${i + 1}` : `Semana ${i + 1}`)
     const a = i * 2 + 1
     const trimLast = i === numCols - 1 && days - i * 14 <= 7
