@@ -119,29 +119,36 @@ function addDays(dateStr: string, days: number): string {
 
 
 /**
- * Escala del timeline según lo que dura el proyecto, para que las barras ocupen todo el ancho:
- * hasta 10 días, una columna por día (Día 1, Día 2…: el inicio real aún no se sabe); hasta 6 semanas, una por semana; si es más largo, una cada 2 semanas.
+ * Escala del timeline. Proyectos de hasta 10 días: una columna por día (Día 1, Día 2…; el inicio real aún no se sabe)
+ * y barras que cuentan el día de fin. Más largos: exactamente como siempre (columnas de 2 semanas), para no cambiar
+ * cómo se ven los presupuestos ya enviados.
  */
 function ganttScale(minDate: Date, maxDate: Date, lang?: string, short = false) {
-  const days = daysBetween(minDate, maxDate) + 1
-  const unit = days <= 10 ? 1 : days <= 42 ? 7 : 14
-  const numCols = Math.max(1, Math.ceil(days / unit))
-  const totalDays = numCols * unit
   const en = lang === 'en'
+  const daysIncl = daysBetween(minDate, maxDate) + 1
+  if (daysIncl <= 10) {
+    return {
+      numCols: daysIncl,
+      totalDays: daysIncl,
+      inclusive: true,
+      labels: Array.from({ length: daysIncl }, (_, i) => (en ? `Day ${i + 1}` : `Día ${i + 1}`)),
+    }
+  }
+  const span = daysBetween(minDate, maxDate) || 14
+  const numCols = Math.max(1, Math.ceil((span + 1) / 14))
+  const lastColOffset = span - (numCols - 1) * 14
+  const w = short ? (en ? 'Wk.' : 'Sem.') : (en ? 'Week' : 'Semana')
   const labels = Array.from({ length: numCols }, (_, i) => {
-    if (unit === 1) return en ? `Day ${i + 1}` : `Día ${i + 1}`
-    if (unit === 7) return short ? (en ? `Wk. ${i + 1}` : `Sem. ${i + 1}`) : (en ? `Week ${i + 1}` : `Semana ${i + 1}`)
     const a = i * 2 + 1
-    const trimLast = i === numCols - 1 && days - i * 14 <= 7
-    const w = short ? (en ? 'Wk.' : 'Sem.') : (en ? 'Week' : 'Semana')
+    const trimLast = i === numCols - 1 && lastColOffset < 7
     return trimLast ? `${w} ${a}` : `${w} ${a}-${a + 1}`
   })
-  return { numCols, totalDays, labels }
+  return { numCols, totalDays: numCols * 14, inclusive: false, labels }
 }
 
-/** Días que ocupa una barra, contando el día de inicio y el de fin */
-function spanDays(startStr: string, endStr: string) {
-  return Math.max(1, daysBetween(parseDate(startStr), parseDate(endStr)) + 1)
+/** Días que ocupa una barra (en la escala por días cuenta también el día de fin) */
+function spanDays(startStr: string, endStr: string, inclusive: boolean) {
+  return Math.max(1, daysBetween(parseDate(startStr), parseDate(endStr)) + (inclusive ? 1 : 0))
 }
 
 const LABEL_W      = 32   // px — group label column width
@@ -172,7 +179,7 @@ export function GanttTimeline({ entries, lang }: { entries: TimelineEntry[]; lan
     const d = parseDate(e.endDate); return d > m ? d : m
   }, parseDate(valid[0].endDate))
 
-  const { numCols, totalDays, labels: weeks } = ganttScale(minDate, maxDate, lang)
+  const { numCols, totalDays, inclusive, labels: weeks } = ganttScale(minDate, maxDate, lang)
   const gridCols   = `repeat(${numCols}, minmax(0, 1fr))`
 
   // Day-precise bar positioning (matches InteractiveGantt)
@@ -181,7 +188,7 @@ export function GanttTimeline({ entries, lang }: { entries: TimelineEntry[]; lan
     return `${(days / totalDays) * 100}%`
   }
   function barWidth(startStr: string, endStr: string): string {
-    return `${(spanDays(startStr, endStr) / totalDays) * 100}%`
+    return `${(spanDays(startStr, endStr, inclusive) / totalDays) * 100}%`
   }
 
   // Group preserving insertion order
@@ -320,7 +327,7 @@ export function InteractiveGantt({ entries, onChange, lang }: {
   }>({ active: false, type: 'move', entryIdx: -1, startMouseX: 0, origStart: '', origEnd: '', deltaDays: 0 })
 
   // Frozen layout also stores totalDays so we can compute pixels-per-day
-  const frozenLayout = useRef<{ numCols: number; totalDays: number; minDate: Date; labels: string[] } | null>(null)
+  const frozenLayout = useRef<{ numCols: number; totalDays: number; minDate: Date; labels: string[]; inclusive: boolean } | null>(null)
   const gridContainerRef = useRef<HTMLDivElement>(null)
   const entriesRef = useRef(entries)
   const onChangeRef = useRef(onChange)
@@ -385,12 +392,13 @@ export function InteractiveGantt({ entries, onChange, lang }: {
   const ds = dragState.current
 
   // Layout — frozen during drag to prevent grid jumping
-  let layoutMinDate: Date, layoutNumCols: number, layoutTotalDays: number, weeks: string[]
+  let layoutMinDate: Date, layoutNumCols: number, layoutTotalDays: number, weeks: string[], layoutInclusive: boolean
   if (ds.active && frozenLayout.current) {
     layoutMinDate   = frozenLayout.current.minDate
     layoutNumCols   = frozenLayout.current.numCols
     layoutTotalDays = frozenLayout.current.totalDays
     weeks           = frozenLayout.current.labels
+    layoutInclusive = frozenLayout.current.inclusive
   } else {
     layoutMinDate = valid.reduce((m, e) => { const d = parseDate(e.startDate); return d < m ? d : m }, parseDate(valid[0].startDate))
     const layoutMaxDate = valid.reduce((m, e) => { const d = parseDate(e.endDate); return d > m ? d : m }, parseDate(valid[0].endDate))
@@ -398,6 +406,7 @@ export function InteractiveGantt({ entries, onChange, lang }: {
     layoutNumCols   = sc.numCols
     layoutTotalDays = sc.totalDays
     weeks           = sc.labels
+    layoutInclusive = sc.inclusive
   }
 
   const gridCols = `repeat(${layoutNumCols}, minmax(0, 1fr))`
@@ -408,7 +417,7 @@ export function InteractiveGantt({ entries, onChange, lang }: {
     return `${(days / layoutTotalDays) * 100}%`
   }
   function barWidth(startStr: string, endStr: string): string {
-    return `${(spanDays(startStr, endStr) / layoutTotalDays) * 100}%`
+    return `${(spanDays(startStr, endStr, layoutInclusive) / layoutTotalDays) * 100}%`
   }
 
   function effective(entry: TimelineEntry, idx: number): { s: string; e: string } {
@@ -436,7 +445,7 @@ export function InteractiveGantt({ entries, onChange, lang }: {
     const vMin = valid.reduce((m, e) => { const d = parseDate(e.startDate); return d < m ? d : m }, parseDate(valid[0].startDate))
     const vMax = valid.reduce((m, e) => { const d = parseDate(e.endDate); return d > m ? d : m }, parseDate(valid[0].endDate))
     const sc = ganttScale(vMin, vMax, lang, true)
-    frozenLayout.current = { numCols: sc.numCols, totalDays: sc.totalDays, minDate: vMin, labels: sc.labels }
+    frozenLayout.current = { numCols: sc.numCols, totalDays: sc.totalDays, minDate: vMin, labels: sc.labels, inclusive: sc.inclusive }
     dragState.current = { active: true, type, entryIdx: idx, startMouseX: ev.clientX, origStart: entry.startDate, origEnd: entry.endDate, deltaDays: 0 }
     forceUpdate()
   }
