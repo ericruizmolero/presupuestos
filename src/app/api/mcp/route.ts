@@ -13,6 +13,7 @@ import { PROFILES, proposeAll, createDraft, formatProposal, type TimeData } from
 import { parseWhen, htmlToText, plainToHtml, isHtml } from '@/components/studio/boardUtils'
 import { QUOTE_TOOLS, QUOTE_TOOL_NAMES, handleQuoteTool } from '@/lib/mcpQuotes'
 import { QUESTIONNAIRE_TOOLS, QUESTIONNAIRE_TOOL_NAMES, handleQuestionnaireTool, questionnaireNews } from '@/lib/mcpQuestionnaires'
+import { EMAIL_TOOLS, EMAIL_TOOL_NAMES, handleEmailTool } from '@/lib/mcpEmails'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -393,6 +394,9 @@ const TOOLS = [
         contacto: { type: 'string', description: 'Punto de contacto: persona y cargo. Prioriza responsable de marketing o growth (CMO, Head of Marketing, Growth); solo si no tienen, el CEO/cofundador.' },
         motivos: { type: 'array', items: { type: 'string' } },
         enlaces: { type: 'array', items: { type: 'string' } },
+        email: { type: 'string', description: 'Email al que escribimos' },
+        propuesta: { type: 'string', description: 'Enlace a la propuesta enviada (p. ej. https://deneb.savvia.studio/)' },
+        gancho: { type: 'string', description: 'Frase personal del email: enhorabuena por la ronda, quién nos recomendó…' },
         etapa: { type: 'string', enum: ['agente', 'detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'], description: 'agente = Prospect agent (propuesto por Claude, pendiente de aceptar)' },
         mercado: { type: 'string', enum: ['es', 'us'], description: 'es = España (tono cálido); us = EE. UU. (tono directo)' },
         angulo: { type: 'string', description: 'Ángulo del rediseño de 15h: qué contaría visualmente la home nueva' },
@@ -581,6 +585,11 @@ type ToolArgs = Record<string, unknown>
 async function callTool(name: string, args: ToolArgs): Promise<{ text: string; isError?: boolean }> {
   if (QUOTE_TOOL_NAMES.has(name)) return handleQuoteTool(db(), name, args as Record<string, unknown>)
   if (QUESTIONNAIRE_TOOL_NAMES.has(name)) return handleQuestionnaireTool(db(), name, args as Record<string, unknown>)
+  if (EMAIL_TOOL_NAMES.has(name)) {
+    const cid = await boardCompanyId()
+    if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
+    return handleEmailTool(db(), cid, name, args as Record<string, unknown>)
+  }
 
   if (name === 'listar_proyectos') {
     const projects = await getProjects()
@@ -662,7 +671,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
     const ref = db().collection('prospects').doc(cid)
     const snap = await ref.get()
-    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string }
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
     const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
@@ -677,6 +686,8 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           for (const r of x.reasons) out.push(`    · ${r}`)
           if (x.angle) out.push(`    ángulo: ${x.angle}`)
           if (x.response) out.push(`    respuesta: ${x.response}`)
+          if (x.email || x.proposalUrl) out.push(`    email: ${x.email || '-'}${x.proposalUrl ? ` · propuesta: ${x.proposalUrl}` : ''}`)
+          if (x.hook) out.push(`    gancho: ${x.hook}`)
           if (x.notes) out.push(`    notas: ${x.notes}`)
           for (const l of x.links || []) out.push(`    ↗ ${l}`)
         }
@@ -720,6 +731,9 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (args.angulo !== undefined) p.angle = String(args.angulo).trim() || undefined
     if (args.mercado === 'es' || args.mercado === 'us') p.region = String(args.mercado)
     if (args.respuesta !== undefined) p.response = String(args.respuesta).trim() || undefined
+    if (typeof args.email === 'string') p.email = args.email.trim() || undefined
+    if (typeof args.propuesta === 'string') p.proposalUrl = args.propuesta.trim() || undefined
+    if (typeof args.gancho === 'string') p.hook = args.gancho.trim() || undefined
     await ref.set({ items: JSON.parse(JSON.stringify(items)), updatedAt: FieldValue.serverTimestamp() })
     const pos = items.filter((x) => x.stage === p!.stage).indexOf(p) + 1
     return { text: `✓ ${created ? 'Añadido' : 'Actualizado'} "${p.name}" — ${STG[p.stage]} #${pos} · prioridad ${p.priority ?? 'media'} · ${p.reasons.length} motivo${p.reasons.length === 1 ? '' : 's'}` }
@@ -1301,7 +1315,7 @@ export async function POST(req: NextRequest) {
       case 'ping':
         return reply({})
       case 'tools/list':
-        return reply({ tools: [...TOOLS, ...QUOTE_TOOLS, ...QUESTIONNAIRE_TOOLS] })
+        return reply({ tools: [...TOOLS, ...QUOTE_TOOLS, ...QUESTIONNAIRE_TOOLS, ...EMAIL_TOOLS] })
       case 'tools/call': {
         const name = String(rpc.params?.name || '')
         const args = (rpc.params?.arguments as ToolArgs) || {}

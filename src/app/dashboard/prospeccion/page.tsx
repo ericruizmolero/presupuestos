@@ -12,7 +12,10 @@ import {
   subscribeProspects, saveProspects, STAGES, PRIORITIES, REGIONS, type Prospect, type ProspectStage, type ProspectPriority,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
-import { Check, Plus, X, ExternalLink, Trash2, GripVertical, Sparkles, ChevronRight } from 'lucide-react'
+import {
+  subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
+} from '@/lib/firestore/emailTemplates'
+import { Check, Plus, X, ExternalLink, Trash2, GripVertical, Sparkles, ChevronRight, Copy, Mail } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -49,6 +52,7 @@ function ProspeccionContent() {
   const [showAgent, setShowAgent] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<EmailTemplate[]>(DEFAULT_TEMPLATES)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // true cuando el estado cambia por una edición hecha aquí (y hay que guardarla)
   const dirty = useRef(false)
@@ -59,11 +63,13 @@ function ProspeccionContent() {
     getUserCompanyId(user.uid).then((cid) => {
       if (!cid) { setLoading(false); return }
       setCompanyId(cid)
-      unsub = subscribeProspects(cid, (remote, local) => {
+      const unsubT = subscribeEmailTemplates(cid, setTemplates)
+      const unsubP = subscribeProspects(cid, (remote, local) => {
         // Cambios de Andoni o del conector de Claude: se aplican salvo que haya una edición local sin guardar
         if (!local && !dirty.current) setItems(remote)
         setLoading(false)
       })
+      unsub = () => { unsubT(); unsubP() }
     })
     return () => unsub?.()
   }, [user])
@@ -348,12 +354,14 @@ function ProspeccionContent() {
         )}
       </div>
 
+      {companyId && <TemplatesSection companyId={companyId} templates={templates} />}
       {companyId && <ContactsSection companyId={companyId} />}
 
       {open && (
         <ProspectSheet
           key={open.id}
           p={open}
+          templates={templates}
           onPatch={(x) => patch(open.id, x)}
           onDelete={() => { dirty.current = true; setItems((xs) => xs.filter((y) => y.id !== open.id)); setOpenId(null) }}
           onClose={() => setOpenId(null)}
@@ -363,8 +371,9 @@ function ProspeccionContent() {
   )
 }
 
-function ProspectSheet({ p, onPatch, onDelete, onClose }: {
+function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
   p: Prospect
+  templates: EmailTemplate[]
   onPatch: (x: Partial<Prospect>) => void
   onDelete: () => void
   onClose: () => void
@@ -464,6 +473,8 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
             </label>
           </section>
 
+          <EmailComposer p={p} templates={templates} onPatch={onPatch} />
+
           <section>
             <span className={LABEL}>Por qué los elegimos</span>
             <textarea
@@ -536,6 +547,129 @@ function ProspectSheet({ p, onPatch, onDelete, onClose }: {
         </div>
       </aside>
     </>
+  )
+}
+
+/** El email a este prospecto: datos que rellenan la plantilla y el texto listo para copiar */
+function EmailComposer({ p, templates, onPatch }: { p: Prospect; templates: EmailTemplate[]; onPatch: (x: Partial<Prospect>) => void }) {
+  const [email, setEmail] = useState(p.email || '')
+  const [link, setLink] = useState(p.proposalUrl || '')
+  const [hook, setHook] = useState(p.hook || '')
+  const pick = templates.find((t) => t.region === p.region) || templates[0]
+  const [tplId, setTplId] = useState(pick?.id || '')
+  const [copied, setCopied] = useState<'subject' | 'body' | null>(null)
+  const tpl = templates.find((t) => t.id === tplId) || pick
+  const filled = tpl ? fillTemplate(tpl, prospectVars({ ...p, hook, proposalUrl: link || undefined })) : null
+
+  async function copy(what: 'subject' | 'body', text: string) {
+    await navigator.clipboard.writeText(text)
+    setCopied(what)
+    setTimeout(() => setCopied(null), 1500)
+  }
+
+  return (
+    <section className="rounded-lg border border-line p-4 space-y-3">
+      <span className={`${LABEL} flex items-center gap-1.5`}><Mail size={11} strokeWidth={1.75} />Email</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input className={INPUT} value={email} placeholder="Email del contacto" onChange={(e) => setEmail(e.target.value)} onBlur={() => onPatch({ email: email.trim() || undefined })} />
+        <input className={INPUT} value={link} placeholder="Enlace de la propuesta" onChange={(e) => setLink(e.target.value)} onBlur={() => onPatch({ proposalUrl: link.trim() || undefined })} />
+      </div>
+      <textarea
+        className={`${INPUT} min-h-[3.5rem] leading-relaxed`}
+        value={hook}
+        placeholder="Gancho: «Zorionak por el proyecto y todo lo que estáis construyendo con IZAR.» o «Alfonso Rubio me ha recomendado hablar contigo.»"
+        onChange={(e) => setHook(e.target.value)}
+        onBlur={() => onPatch({ hook: hook.trim() || undefined })}
+      />
+      {templates.length > 1 && (
+        <select className={INPUT} value={tpl?.id} onChange={(e) => setTplId(e.target.value)} aria-label="Plantilla">
+          {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      )}
+      {filled ? (
+        <div className="rounded-md bg-surface px-3.5 py-3 text-sm text-ink">
+          <div className="flex items-start justify-between gap-3 pb-2 mb-2 border-b border-line">
+            <span className="font-medium">{filled.subject}</span>
+            <button onClick={() => copy('subject', filled.subject)} className="shrink-0 flex items-center gap-1 text-xs text-ink-60 hover:text-ink">
+              {copied === 'subject' ? <Check size={12} strokeWidth={2} /> : <Copy size={12} strokeWidth={1.75} />}Asunto
+            </button>
+          </div>
+          <p className="whitespace-pre-wrap leading-relaxed">{filled.body}</p>
+          <div className="flex items-center justify-between gap-3 pt-3">
+            <span className="text-xs text-ink-40">{filled.missing.length ? `Falta: ${filled.missing.join(', ')}` : p.email || email ? `Para ${email || p.email}` : ''}</span>
+            <button onClick={() => copy('body', filled.body)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover">
+              {copied === 'body' ? <><Check size={12} strokeWidth={2} />Copiado</> : <><Copy size={12} strokeWidth={1.75} />Copiar texto</>}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-ink-40">No hay plantillas. Crea una abajo, en Plantillas de email.</p>
+      )}
+    </section>
+  )
+}
+
+/** Plantillas de email editables; se guardan solas y las usa también el conector de Claude */
+function TemplatesSection({ companyId, templates }: { companyId: string; templates: EmailTemplate[] }) {
+  const [show, setShow] = useState(false)
+  const [draft, setDraft] = useState<EmailTemplate[]>(templates)
+  const [saved, setSaved] = useState(false)
+  const editing = useRef(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => { if (!editing.current) setDraft(templates) }, [templates])
+
+  function change(next: EmailTemplate[]) {
+    editing.current = true
+    setDraft(next)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(async () => {
+      await saveEmailTemplates(companyId, next)
+      editing.current = false
+      setSaved(true)
+      setTimeout(() => setSaved(false), 1500)
+    }, 800)
+  }
+  const set = (id: string, x: Partial<EmailTemplate>) => change(draft.map((t) => (t.id === id ? { ...t, ...x } : t)))
+
+  return (
+    <section className="mt-12 pt-6 border-t border-line">
+      <button onClick={() => setShow((v) => !v)} aria-expanded={show} className="flex items-baseline gap-2 text-left">
+        <ChevronRight size={12} strokeWidth={2} className={`self-center text-ink-40 transition-transform ${show ? 'rotate-90' : ''}`} />
+        <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">Plantillas de email</h2>
+        <span className="text-[10px] text-ink-40 tabular-nums">{draft.length}</span>
+        <span className="text-xs text-ink-40">{saved ? 'Guardado' : 'El email tipo para tocar la puerta. Claude las usa desde el conector.'}</span>
+      </button>
+      {show && (
+        <div className="mt-3 space-y-4">
+          <p className="text-xs text-ink-40">
+            Huecos: {PLACEHOLDERS.map((x) => <span key={x.key} title={x.hint} className="mr-2 font-mono text-ink-60">{`{${x.key}}`}</span>)}
+            Si un hueco está solo en su línea y el prospecto no lo tiene, la línea desaparece.
+          </p>
+          {draft.map((t) => (
+            <div key={t.id} className="border border-line rounded-md bg-paper p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <input className={`${INPUT} font-medium`} value={t.name} onChange={(e) => set(t.id, { name: e.target.value })} aria-label="Nombre de la plantilla" />
+                <select className="text-xs text-ink-60 bg-transparent border border-line rounded px-1.5 py-2" value={t.region || ''} onChange={(e) => set(t.id, { region: (e.target.value || undefined) as EmailTemplate['region'] })} aria-label="Mercado">
+                  <option value="">Cualquier mercado</option>
+                  <option value="es">España</option>
+                  <option value="us">EE. UU.</option>
+                </select>
+                <button onClick={() => change(draft.filter((x) => x.id !== t.id))} className="p-2 rounded-md text-ink-40 hover:text-[#B91C1C]" title="Borrar plantilla"><Trash2 size={13} strokeWidth={1.5} /></button>
+              </div>
+              <input className={INPUT} value={t.subject} onChange={(e) => set(t.id, { subject: e.target.value })} placeholder="Asunto" aria-label="Asunto" />
+              <textarea className={`${INPUT} min-h-[16rem] leading-relaxed`} value={t.body} onChange={(e) => set(t.id, { body: e.target.value })} aria-label="Cuerpo" />
+            </div>
+          ))}
+          <button
+            onClick={() => change([...draft, { id: Math.random().toString(36).slice(2, 8), name: 'Nueva plantilla', subject: '', body: '' }])}
+            className="flex items-center gap-1.5 text-sm text-ink-60 hover:text-ink"
+          >
+            <Plus size={14} strokeWidth={1.75} />Añadir plantilla
+          </button>
+        </div>
+      )}
+    </section>
   )
 }
 
