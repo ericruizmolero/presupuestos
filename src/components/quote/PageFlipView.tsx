@@ -1,5 +1,6 @@
 'use client'
 
+import { milestoneAmount } from '@/lib/milestoneAmount'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Quote } from '@/types/quote'
 import { GanttTimeline } from './GanttTimeline'
@@ -393,15 +394,7 @@ export function PageFlipView({ quote }: { quote: Quote }) {
           {quote.billingMilestones?.length ? (
             <div className="space-y-6">
               {quote.billingMilestones.map((m) => {
-                const subtotal = quote.budgetTable?.subtotal || 0
-                const amount = subtotal > 0 ? (subtotal * m.percentage) / 100 : null
-                const formatted =
-                  amount != null
-                    ? new Intl.NumberFormat('es-ES', {
-                        style: 'currency',
-                        currency: quote.currency || 'EUR',
-                      }).format(amount)
-                    : null
+                const formatted = milestoneAmount(quote, m, 'es-ES')
                 return (
                   <div key={m.id}>
                     <p className="text-sm font-medium text-ink mb-1">

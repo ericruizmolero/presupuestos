@@ -106,7 +106,7 @@ const CONTENT_PROPS = {
   },
   calendario: {
     type: 'array',
-    description: 'Timeline (sustituye la lista entera). Usa el mismo nombre de fase que en "fases".',
+    description: 'Timeline (sustituye la lista entera). Usa el mismo nombre de fase que en "fases". inicio y fin son días incluidos (una tarea de un solo día: inicio = fin). La escala se adapta sola (días, semanas o quincenas). Usa grupos cortos (2-3 palabras, salen en vertical) y nombres de fase cortos para que quepan en barras de pocos días. Evita tareas de un día en proyectos largos.',
     items: { type: 'object', properties: { fase: { type: 'string' }, grupo: { type: 'string', description: 'Agrupación temática ("Diseño", "Desarrollo"…)' }, inicio: { type: 'string', description: 'YYYY-MM-DD' }, fin: { type: 'string', description: 'YYYY-MM-DD' }, icono: { type: 'string' } }, required: ['fase', 'inicio', 'fin'], additionalProperties: false },
   },
   tabla_precios: {
@@ -137,7 +137,7 @@ const CONTENT_PROPS = {
   },
   hitos: {
     type: 'array',
-    description: 'Hitos de facturación (sustituye la lista). Por defecto 50% inicio / 50% final.',
+    description: 'Hitos de facturación (sustituye la lista). Por defecto 50% inicio / 50% final; los % de precio cerrado deben sumar 100. En modo "horas" (bolsa o facturación mensual) no hay % que repartir: un solo hito tipo "Fin de mes" con porcentaje 0; la app muestra "horas trabajadas × tarifa", nunca 0 €.',
     items: { type: 'object', properties: { etiqueta: { type: 'string' }, porcentaje: { type: 'number' }, descripcion: { type: 'string' } }, required: ['etiqueta', 'porcentaje'], additionalProperties: false },
   },
   condiciones: {
@@ -280,7 +280,7 @@ function renderQuote(q: Q): string {
   const ms = arr(q.billingMilestones)
   if (ms.length) {
     out.push('\n## Hitos de facturación')
-    ms.forEach((m) => out.push(`- ${m.label}: ${m.percentage}% — ${m.description || ''}`))
+    ms.forEach((m) => out.push(`- ${m.label}: ${m.percentage ? `${m.percentage}%` : 'por horas trabajadas'}${m.description ? ` (${m.description})` : ''}`))
   }
   if (q.billingConditions) out.push(`\n## Facturación\n${toText(q.billingConditions)}`)
   const condNames: Array<[string, string]> = [['paymentTerms', 'Forma de pago'], ['acceptanceCriteria', 'Criterios de aceptación'], ['clientResponsibilities', 'Responsabilidades del cliente'], ['penaltyClause', 'Penalización'], ['annexes', 'Anexos'], ['dataProtection', 'Protección de datos']]

@@ -1,5 +1,6 @@
 'use client'
 
+import { milestoneAmount } from '@/lib/milestoneAmount'
 import { useEffect, useRef, useState } from 'react'
 import type { Quote } from '@/types/quote'
 import { t } from '@/lib/quoteI18n'
@@ -451,11 +452,7 @@ export function QuotePreview({ quote, pageBreaksBefore = [], onTogglePageBreak }
               {quote.billingMilestones?.length ? (
                 <div className="space-y-8">
                   {quote.billingMilestones.map((m) => {
-                    const subtotal = quote.budgetTable?.subtotal || 0
-                    const amount = subtotal > 0 ? subtotal * m.percentage / 100 : null
-                    const formatted = amount != null
-                      ? new Intl.NumberFormat(locale, { style: 'currency', currency: quote.currency || 'EUR' }).format(amount)
-                      : null
+                    const formatted = milestoneAmount(quote, m, locale)
                     return (
                       <div key={m.id}>
                         <p className="text-sm font-medium text-ink mb-1">
