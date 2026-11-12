@@ -15,6 +15,7 @@ const I18N = {
     s2: 'Dónde nos inspiraríamos',
     s2sub: 'Webs en las que nos fijaríamos para el rediseño y qué tomaríamos de cada una.',
     avoid: 'Lo que evitaríamos',
+    avoidTag: 'Evitar',
     avoidSub: 'También tenemos claro por dónde no ir.',
     s3: 'Cómo lo haríamos',
     hours: 'horas',
@@ -34,6 +35,7 @@ const I18N = {
     s2: 'Where we would look for inspiration',
     s2sub: 'Sites we would look at for the redesign and what we would take from each.',
     avoid: 'What we would avoid',
+    avoidTag: 'Avoid',
     avoidSub: 'We are also clear about where not to go.',
     s3: 'How we would do it',
     hours: 'hours',
@@ -56,21 +58,25 @@ function SectionHead({ title, sub }: { title: string; sub?: string }) {
   )
 }
 
-/** Pastilla de referencia: miniatura + nombre; abre la ficha */
-function RefPill({ r, onOpen, small }: { r: AuditReference; onOpen: () => void; small?: boolean }) {
+/** Referencia dentro de un punto: miniatura, nombre y lo que destacamos de ella */
+function RefMini({ r, onOpen, t }: { r: AuditReference; onOpen: () => void; t: T }) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={`group inline-flex items-center gap-2 rounded-full border border-line bg-paper hover:border-ink-40 hover:bg-surface transition-colors ${small ? 'pl-1 pr-3 py-1 text-xs' : 'pl-1.5 pr-4 py-1.5 text-sm'} text-ink`}
-    >
-      <span className={`${small ? 'w-5 h-5 text-[9px]' : 'w-7 h-7 text-[11px]'} rounded-full overflow-hidden bg-surface border border-line shrink-0 flex items-center justify-center font-medium text-ink-60`}>
+    <button type="button" onClick={onOpen} className="group flex flex-col text-left rounded-lg border border-line bg-paper overflow-hidden hover:border-ink-40 transition-colors">
+      <span className="block aspect-[16/9] bg-surface overflow-hidden">
         {r.image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={r.image} alt="" className="w-full h-full object-cover object-top" loading="lazy" />
-        ) : r.name.slice(0, 1).toUpperCase()}
+          <img src={r.image} alt={r.name} className="w-full h-full object-cover object-top group-hover:scale-[1.03] transition-transform duration-500" loading="lazy" />
+        ) : (
+          <span className="w-full h-full flex items-center justify-center text-xl font-medium text-ink-40">{r.name}</span>
+        )}
       </span>
-      <span className={`font-medium ${r.avoid ? 'text-ink-60' : ''}`}>{r.name}</span>
+      <span className="block px-4 py-3">
+        <span className="flex items-center gap-2">
+          <span className={`text-sm font-medium ${r.avoid ? 'text-ink-60' : 'text-ink'}`}>{r.name}</span>
+          {r.avoid && <span className="px-1.5 py-px rounded-full bg-surface text-[10px] font-medium text-ink-60">{t.avoidTag}</span>}
+        </span>
+        <span className="mt-1 block text-[13px] text-ink-60 leading-snug">{r.notes.join(' ')}</span>
+      </span>
     </button>
   )
 }
@@ -299,10 +305,10 @@ export function AuditView({ audit }: { audit: Audit }) {
                         </button>
                       )}
                       {f.refs && f.refs.length > 0 && (
-                        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                        <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {f.refs.map((id) => {
                             const r = refs.find((x) => x.id === id)
-                            return r ? <RefPill key={id} r={r} small onOpen={() => openRef(id)} /> : null
+                            return r ? <RefMini key={id} r={r} t={t} onOpen={() => openRef(id)} /> : null
                           })}
                         </div>
                       )}
