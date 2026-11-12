@@ -16,7 +16,7 @@ export function AuditClient() {
       .then((a) => {
         if (!a) { setState('notfound'); return }
         setAudit(a)
-        document.title = `${a.clientCompany || a.title}, Savvia`
+        document.title = a.clientCompany ? (a.language === 'en' ? `Website audit for ${a.clientCompany} | Savvia` : `Auditoría web de ${a.clientCompany} | Savvia`) : 'Savvia'
         setState('ready')
       })
       .catch(() => setState('notfound'))

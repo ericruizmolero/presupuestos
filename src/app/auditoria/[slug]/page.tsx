@@ -4,7 +4,7 @@ import { AuditClient } from './AuditClient'
 const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
 const API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
 
-interface Field { stringValue?: string }
+interface Field { stringValue?: string; arrayValue?: { values?: Field[] } }
 
 /** Lectura pública (get por id = slug; las reglas lo permiten) para la vista previa al compartir */
 async function fetchAudit(slug: string): Promise<Record<string, Field> | null> {
@@ -27,14 +27,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   if (!f) return { title: 'Savvia', robots: { index: false, follow: false } }
   const company = f.clientCompany?.stringValue || ''
   const en = f.language?.stringValue === 'en'
-  const title = company ? `${en ? 'Website audit' : 'Auditoría web'}, ${company}` : 'Savvia'
-  const description = f.title?.stringValue || (en ? 'Website audit by Savvia' : 'Auditoría web de Savvia')
+  const title = company ? (en ? `Website audit for ${company} | Savvia` : `Auditoría web de ${company} | Savvia`) : 'Savvia'
+  const first = f.summary?.arrayValue?.values?.map((v) => v.stringValue || '').filter(Boolean) || []
+  const description = (first.length ? first.slice(0, 2).join(' ') : f.intro?.stringValue || f.title?.stringValue || (en ? 'Website audit by Savvia' : 'Auditoría web de Savvia')).slice(0, 180)
   return {
     title,
     description,
     robots: { index: false, follow: false },
-    openGraph: { title, description, type: 'website', siteName: 'Savvia' },
-    twitter: { card: 'summary', title, description },
+    openGraph: { title, description, type: 'website', siteName: 'Savvia', locale: en ? 'en_US' : 'es_ES' },
+    twitter: { card: 'summary_large_image', title, description },
   }
 }
 
