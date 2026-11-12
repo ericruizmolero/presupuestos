@@ -69,6 +69,7 @@ export const AUDIT_TOOLS = [
             additionalProperties: false,
           },
         },
+        referencias_intro: { type: 'string', description: 'Matiz bajo la sección de referencias (p. ej. qué tomar y qué no de ellas)' },
         opciones_intro: { type: 'string' },
         opciones: {
           type: 'array',
@@ -126,6 +127,7 @@ function render(a: Audit): string {
   }
   if (a.references?.length) {
     out.push('', '## Referencias')
+    if (a.referencesIntro) out.push(a.referencesIntro)
     for (const r of a.references) out.push(`- [${r.id}] ${r.avoid ? '(evitar) ' : ''}${r.name}${r.url ? ` ${r.url}` : ''}${r.image ? ' [imagen]' : ''}: ${r.notes.join(' / ')}`)
   }
   if (a.plans?.length) {
@@ -162,6 +164,7 @@ export async function handleAuditTool(db: Firestore, name: string, a: Args): Pro
     if (str(a.web) !== undefined) patch.siteUrl = str(a.web)
     if (typeof a.intro === 'string') patch.intro = a.intro
     if (typeof a.opciones_intro === 'string') patch.plansIntro = a.opciones_intro
+    if (typeof a.referencias_intro === 'string') patch.referencesIntro = a.referencias_intro
     if (typeof a.cierre === 'string') patch.closing = a.cierre
     if (a.idioma === 'es' || a.idioma === 'en') patch.language = a.idioma
     if (Array.isArray(a.esencial)) patch.summary = (a.esencial as unknown[]).map(String).filter(Boolean)

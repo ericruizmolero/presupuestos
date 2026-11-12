@@ -324,6 +324,7 @@ export function AuditView({ audit }: { audit: Audit }) {
       {refs.length > 0 && (
         <section id="a-refs" className="mb-28 scroll-mt-8">
           <SectionHead title={t.s2} sub={t.s2sub} />
+          {audit.referencesIntro && <p className="-mt-6 mb-10 text-base text-ink-60 leading-relaxed whitespace-pre-line max-w-xl">{audit.referencesIntro}</p>}
           <div className="grid sm:grid-cols-2 gap-4">
             {like.map((r) => <RefCard key={r.id} r={r} t={t} onOpen={() => openRef(r.id)} />)}
           </div>

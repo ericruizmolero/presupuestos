@@ -47,6 +47,7 @@ export interface Audit {
   references: AuditReference[]
   plans: AuditPlan[]
   plansIntro?: string
+  referencesIntro?: string  // matiz bajo «Dónde nos inspiraríamos»
   closing?: string
   language?: 'es' | 'en'
   createdAt?: unknown
