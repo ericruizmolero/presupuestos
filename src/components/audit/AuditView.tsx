@@ -171,7 +171,7 @@ export function AuditView({ audit }: { audit: Audit }) {
   const like = refs.filter((r) => !r.avoid)
   const avoid = refs.filter((r) => r.avoid)
   const plans = audit.plans || []
-  const fmt = (n: number) => new Intl.NumberFormat(audit.language === 'en' ? 'en-US' : 'es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n)
+  const fmt = (n: number) => new Intl.NumberFormat(audit.language === 'en' ? 'en-US' : 'es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' } as Intl.NumberFormatOptions).format(n)
   let sec = 0
 
   return (
@@ -195,7 +195,7 @@ export function AuditView({ audit }: { audit: Audit }) {
             <ul className="space-y-2">
               {audit.summary.map((s, i) => (
                 <li key={i} className="grid grid-cols-[1.25rem_minmax(0,1fr)] text-base text-ink leading-relaxed">
-                  <span className="text-ink-40">–</span><span>{s}</span>
+                  <span className="mt-[0.7em] w-1 h-1 rounded-full bg-ink-40" /><span>{s}</span>
                 </li>
               ))}
             </ul>
@@ -273,7 +273,7 @@ export function AuditView({ audit }: { audit: Audit }) {
                 {p.summary && <p className="mt-1.5 text-sm text-ink-60 leading-relaxed">{p.summary}</p>}
                 <ul className="mt-4 space-y-2 flex-1">
                   {p.items.map((it, i) => (
-                    <li key={i} className="grid grid-cols-[1rem_minmax(0,1fr)] text-sm text-ink leading-relaxed"><span className="text-ink-40">–</span><span>{it}</span></li>
+                    <li key={i} className="grid grid-cols-[1rem_minmax(0,1fr)] text-sm text-ink leading-relaxed"><span className="mt-[0.7em] w-1 h-1 rounded-full bg-ink-40" /><span>{it}</span></li>
                   ))}
                 </ul>
                 {typeof p.price === 'number' && p.price > 0 && (
