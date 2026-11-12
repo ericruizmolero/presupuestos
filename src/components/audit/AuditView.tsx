@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUpRight, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { findingGroups, hostOf, type Audit, type AuditReference } from '@/lib/auditModel'
 
@@ -47,10 +47,9 @@ const I18N = {
 
 type T = (typeof I18N)['es'] | (typeof I18N)['en']
 
-function SectionHead({ n, title, sub }: { n: number; title: string; sub?: string }) {
+function SectionHead({ title, sub }: { title: string; sub?: string }) {
   return (
-    <header className="mb-10">
-      <p className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-3 tabular-nums">{String(n).padStart(2, '0')}</p>
+    <header className="mb-12">
       <h2 className="text-[1.5rem] sm:text-[1.75rem] font-medium tracking-tight text-ink leading-tight">{title}</h2>
       {sub && <p className="mt-3 text-base text-ink-60 leading-relaxed max-w-xl">{sub}</p>}
     </header>
@@ -80,7 +79,7 @@ function RefPill({ r, onOpen, small }: { r: AuditReference; onOpen: () => void; 
 function RefCard({ r, onOpen, t }: { r: AuditReference; onOpen: () => void; t: T }) {
   return (
     <div id={`ref-${r.id}`} className="flex flex-col rounded-lg border border-line bg-paper overflow-hidden scroll-mt-24">
-      <button type="button" onClick={onOpen} className="block aspect-[16/10] bg-surface border-b border-line overflow-hidden cursor-zoom-in">
+      <button type="button" onClick={onOpen} className="block aspect-[16/10] bg-surface overflow-hidden cursor-zoom-in">
         {r.image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={r.image} alt={r.name} className="w-full h-full object-cover object-top hover:scale-[1.02] transition-transform duration-500" loading="lazy" />
@@ -186,6 +185,31 @@ function Sheet({ refs, index, image, onClose, onIndex, t }: {
   )
 }
 
+const zid = (s: string) => 'z-' + s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-')
+
+interface TocItem { id: string; label: string; sub?: boolean }
+
+/** Índice fijo a la izquierda, como en los presupuestos */
+function Toc({ items, activeId }: { items: TocItem[]; activeId: string }) {
+  return (
+    <nav className="w-56 shrink-0 sticky top-0 h-screen overflow-auto py-20 pl-10 pr-6 hidden xl:block">
+      <ul className="space-y-0.5">
+        {items.map((it) => (
+          <li key={it.id}>
+            <a
+              href={`#${it.id}`}
+              onClick={(e) => { e.preventDefault(); document.getElementById(it.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+              className={`block py-1 transition-all duration-150 ${it.sub ? 'pl-3 text-[11px]' : 'text-xs mt-2 first:mt-0'} ${activeId === it.id ? 'text-ink font-medium translate-x-1' : 'text-ink-40 hover:text-ink-60'}`}
+            >
+              {it.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  )
+}
+
 export function AuditView({ audit }: { audit: Audit }) {
   const t = I18N[audit.language === 'en' ? 'en' : 'es']
   const [open, setOpen] = useState<number | null>(null)
@@ -199,11 +223,34 @@ export function AuditView({ audit }: { audit: Audit }) {
   const avoid = refs.filter((r) => r.avoid)
   const plans = audit.plans || []
   const fmt = (n: number) => new Intl.NumberFormat(audit.language === 'en' ? 'en-US' : 'es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, useGrouping: 'always' } as Intl.NumberFormatOptions).format(n)
-  let sec = 0
+  const toc: TocItem[] = [{ id: 'a-top', label: audit.summary?.length ? t.summary : (audit.clientCompany || audit.title) }]
+  if (groups.length) {
+    toc.push({ id: 'a-changes', label: t.s1 })
+    groups.forEach((g) => toc.push({ id: zid(g.section), label: g.section, sub: true }))
+  }
+  if (refs.length) toc.push({ id: 'a-refs', label: t.s2 })
+  if (plans.length) toc.push({ id: 'a-plans', label: t.s3 })
+
+  const [activeId, setActiveId] = useState('a-top')
+  const obs = useRef<IntersectionObserver | null>(null)
+  const tocKey = toc.map((x) => x.id).join('|')
+  useEffect(() => {
+    obs.current?.disconnect()
+    const els = tocKey.split('|').map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[]
+    obs.current = new IntersectionObserver((entries) => {
+      const vis = entries.filter((e) => e.isIntersecting)
+      if (vis.length) setActiveId(vis.reduce((a, b) => (a.boundingClientRect.top < b.boundingClientRect.top ? a : b)).target.id)
+    }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 })
+    els.forEach((el) => obs.current!.observe(el))
+    return () => obs.current?.disconnect()
+  }, [tocKey])
 
   return (
+    <div className="flex">
+    <Toc items={toc} activeId={activeId} />
+    <div className="flex-1 min-w-0">
     <article className="max-w-3xl mx-auto px-5 sm:px-8 py-12 sm:py-20">
-      <header className="mb-16 sm:mb-20">
+      <header id="a-top" className="mb-20 sm:mb-24 scroll-mt-8">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/savvia-logo-cacao.svg" alt="Savvia" className="h-6 w-auto mb-12" />
         <p className="text-[10px] font-medium tracking-[0.18em] uppercase mb-4 text-ink-40">{t.eyebrow(audit.clientCompany || '')}</p>
@@ -231,12 +278,12 @@ export function AuditView({ audit }: { audit: Audit }) {
       </header>
 
       {groups.length > 0 && (
-        <section className="mb-24">
-          <SectionHead n={++sec} title={t.s1} sub={t.s1sub} />
-          <div className="space-y-16">
+        <section id="a-changes" className="mb-28 scroll-mt-8">
+          <SectionHead title={t.s1} sub={t.s1sub} />
+          <div className="space-y-20">
             {groups.map((g) => (
-              <div key={g.section}>
-                <h3 className="text-sm font-medium text-ink pb-3 mb-8 border-b border-line">{g.section}</h3>
+              <div key={g.section} id={zid(g.section)} className="scroll-mt-8">
+                <h3 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40 mb-6">{g.section}</h3>
                 <div className="space-y-12">
                   {g.items.map((f) => (
                     <div key={f.id}>
@@ -269,8 +316,8 @@ export function AuditView({ audit }: { audit: Audit }) {
       )}
 
       {refs.length > 0 && (
-        <section className="mb-24">
-          <SectionHead n={++sec} title={t.s2} sub={t.s2sub} />
+        <section id="a-refs" className="mb-28 scroll-mt-8">
+          <SectionHead title={t.s2} sub={t.s2sub} />
           <div className="grid sm:grid-cols-2 gap-4">
             {like.map((r) => <RefCard key={r.id} r={r} t={t} onOpen={() => openRef(r.id)} />)}
           </div>
@@ -287,8 +334,8 @@ export function AuditView({ audit }: { audit: Audit }) {
       )}
 
       {plans.length > 0 && (
-        <section className="mb-24">
-          <SectionHead n={++sec} title={t.s3} sub={audit.plansIntro} />
+        <section id="a-plans" className="mb-24 scroll-mt-8">
+          <SectionHead title={t.s3} sub={audit.plansIntro} />
           <div className={`grid gap-4 ${plans.length >= 3 ? 'sm:grid-cols-3' : plans.length === 2 ? 'sm:grid-cols-2' : ''}`}>
             {plans.map((p) => (
               <div key={p.id} className={`flex flex-col rounded-lg border px-5 py-6 ${p.recommended ? 'border-ink bg-paper' : 'border-line bg-paper'}`}>
@@ -304,7 +351,7 @@ export function AuditView({ audit }: { audit: Audit }) {
                   ))}
                 </ul>
                 {typeof p.price === 'number' && p.price > 0 && (
-                  <p className="mt-5 pt-4 border-t border-line text-sm text-ink"><span className="font-medium">{fmt(p.price)}</span> <span className="text-ink-40">{t.vat}</span></p>
+                  <p className="mt-6 text-sm text-ink"><span className="font-medium">{fmt(p.price)}</span> <span className="text-ink-40">{t.vat}</span></p>
                 )}
               </div>
             ))}
@@ -318,5 +365,8 @@ export function AuditView({ audit }: { audit: Audit }) {
 
       <Sheet refs={refs} index={open} image={zoom} onClose={() => { setOpen(null); setZoom(null) }} onIndex={setOpen} t={t} />
     </article>
+    </div>
+    <div className="w-56 shrink-0 hidden 2xl:block" aria-hidden />
+    </div>
   )
 }
