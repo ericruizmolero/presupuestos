@@ -13,7 +13,7 @@ const I18N = {
     s1sub: 'Hemos recorrido la web de arriba abajo. Esto es lo que tocaríamos en cada parte, y lo que dejaríamos tal cual.',
     keep: 'Lo mantendríamos',
     s2: 'Dónde nos inspiraríamos',
-    s2sub: 'Webs en las que nos fijaríamos para el rediseño. Pulsa cada una para ver qué nos gusta de ella.',
+    s2sub: 'Webs en las que nos fijaríamos para el rediseño y qué tomaríamos de cada una.',
     avoid: 'Lo que evitaríamos',
     avoidSub: 'También tenemos claro por dónde no ir.',
     s3: 'Cómo lo haríamos',
@@ -32,7 +32,7 @@ const I18N = {
     s1sub: 'We went through the site top to bottom. This is what we would change in each part, and what we would keep.',
     keep: 'We would keep it',
     s2: 'Where we would look for inspiration',
-    s2sub: 'Sites we would look at for the redesign. Click each one to see what we like about it.',
+    s2sub: 'Sites we would look at for the redesign and what we would take from each.',
     avoid: 'What we would avoid',
     avoidSub: 'We are also clear about where not to go.',
     s3: 'How we would do it',
@@ -73,6 +73,33 @@ function RefPill({ r, onOpen, small }: { r: AuditReference; onOpen: () => void; 
       </span>
       <span className={`font-medium ${r.avoid ? 'text-ink-60' : ''}`}>{r.name}</span>
     </button>
+  )
+}
+
+/** Tarjeta de referencia: miniatura arriba, lo que destacamos debajo y enlace a la web */
+function RefCard({ r, onOpen, t }: { r: AuditReference; onOpen: () => void; t: T }) {
+  return (
+    <div id={`ref-${r.id}`} className="flex flex-col rounded-lg border border-line bg-paper overflow-hidden scroll-mt-24">
+      <button type="button" onClick={onOpen} className="block aspect-[16/10] bg-surface border-b border-line overflow-hidden cursor-zoom-in">
+        {r.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={r.image} alt={r.name} className="w-full h-full object-cover object-top hover:scale-[1.02] transition-transform duration-500" loading="lazy" />
+        ) : (
+          <span className="w-full h-full flex items-center justify-center text-3xl font-medium text-ink-40">{r.name}</span>
+        )}
+      </button>
+      <div className="flex flex-col flex-1 px-5 py-4">
+        <h3 className={`text-base font-medium ${r.avoid ? 'text-ink-60' : 'text-ink'}`}>{r.name}</h3>
+        <div className="mt-2 space-y-1.5 flex-1">
+          {r.notes.map((n, i) => <p key={i} className="text-sm text-ink-60 leading-relaxed whitespace-pre-line">{n}</p>)}
+        </div>
+        {r.url && (
+          <a href={r.url} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 self-start text-sm font-medium text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
+            {hostOf(r.url)}<ArrowUpRight size={13} strokeWidth={1.75} />
+          </a>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -244,15 +271,15 @@ export function AuditView({ audit }: { audit: Audit }) {
       {refs.length > 0 && (
         <section className="mb-24">
           <SectionHead n={++sec} title={t.s2} sub={t.s2sub} />
-          <div className="flex flex-wrap gap-2">
-            {like.map((r) => <RefPill key={r.id} r={r} onOpen={() => openRef(r.id)} />)}
+          <div className="grid sm:grid-cols-2 gap-4">
+            {like.map((r) => <RefCard key={r.id} r={r} t={t} onOpen={() => openRef(r.id)} />)}
           </div>
           {avoid.length > 0 && (
             <div className="mt-12">
               <h3 className="text-sm font-medium text-ink">{t.avoid}</h3>
               <p className="mt-1 mb-4 text-sm text-ink-60">{t.avoidSub}</p>
-              <div className="flex flex-wrap gap-2">
-                {avoid.map((r) => <RefPill key={r.id} r={r} onOpen={() => openRef(r.id)} />)}
+              <div className="grid sm:grid-cols-3 gap-4">
+                {avoid.map((r) => <RefCard key={r.id} r={r} t={t} onOpen={() => openRef(r.id)} />)}
               </div>
             </div>
           )}
