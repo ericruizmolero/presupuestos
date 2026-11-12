@@ -31,6 +31,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const first = f.summary?.arrayValue?.values?.map((v) => v.stringValue || '').filter(Boolean) || []
   const description = (first.length ? first.slice(0, 2).join(' ') : f.intro?.stringValue || f.title?.stringValue || (en ? 'Website audit by Savvia' : 'Auditoría web de Savvia')).slice(0, 180)
   return {
+    metadataBase: new URL('https://client.savvia.studio'),
     title,
     description,
     robots: { index: false, follow: false },
