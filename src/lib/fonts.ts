@@ -4,8 +4,21 @@ import type { Font } from '@/types/quote'
 
 let activeFontName: string | null = null
 
+/** Fuentes que el visitante no tiene instaladas: se cargan de Fontshare (gratuitas) */
+const FONTSHARE: Record<string, string> = { satoshi: 'satoshi@400,500,700' }
+function loadWebFont(name: string) {
+  const spec = FONTSHARE[name.toLowerCase()]
+  if (!spec || typeof document === 'undefined' || document.getElementById('webfont-' + name.toLowerCase())) return
+  const link = document.createElement('link')
+  link.id = 'webfont-' + name.toLowerCase()
+  link.rel = 'stylesheet'
+  link.href = `https://api.fontshare.com/v2/css?f[]=${spec}&display=swap`
+  document.head.appendChild(link)
+}
+
 export function applySystemFont(fontFamily: string) {
   if (activeFontName === fontFamily) return
+  loadWebFont(fontFamily)
   const existing = document.getElementById('custom-font-face')
   if (existing) existing.remove()
   document.documentElement.style.setProperty('--font-body', `'${fontFamily}', Inter, sans-serif`)
