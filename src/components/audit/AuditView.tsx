@@ -159,9 +159,9 @@ function Sheet({ refs, index, image, onClose, onIndex, t }: {
                 )}
               </div>
               {r.avoid && <p className="mt-1 text-xs font-medium tracking-[0.12em] uppercase text-ink-40">{t.avoid}</p>}
-              <div className="mt-5 space-y-3">
+              <div className="mt-4 space-y-2">
                 {r.notes.map((n, i) => (
-                  <p key={i} className="pl-4 border-l-2 border-line text-base text-ink leading-relaxed whitespace-pre-line">{n}</p>
+                  <p key={i} className="text-base text-ink-60 leading-relaxed whitespace-pre-line">{n}</p>
                 ))}
               </div>
               {r.tags && r.tags.length > 0 && (
