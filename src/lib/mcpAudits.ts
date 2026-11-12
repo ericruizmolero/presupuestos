@@ -47,7 +47,7 @@ export const AUDIT_TOOLS = [
               texto: { type: 'string' },
               imagen: { type: 'string', description: 'URL de una captura' },
               mantener: { type: 'boolean', description: 'true si es algo que funciona y conservaríamos' },
-              referencias: { type: 'array', items: { type: 'string' }, description: 'ids o nombres de referencias relacionadas' },
+              referencias: { type: 'array', items: { type: 'string' }, description: 'ids o nombres de referencias en las que nos inspiraríamos (las de evitar solo van en su sección, nunca aquí)' },
             },
             required: ['zona', 'titulo', 'texto'],
             additionalProperties: false,
@@ -180,7 +180,7 @@ export async function handleAuditTool(db: Firestore, name: string, a: Args): Pro
     }
     const refId = (k: string) => {
       const l = k.toLowerCase().trim()
-      return references.find((r) => r.id === k || r.name.toLowerCase() === l)?.id
+      return references.find((r) => !r.avoid && (r.id === k || r.name.toLowerCase() === l))?.id
     }
     const unknownRefs: string[] = []
     if (Array.isArray(a.puntos)) {
@@ -224,7 +224,7 @@ export async function handleAuditTool(db: Firestore, name: string, a: Args): Pro
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
       })
     }
-    const warn = unknownRefs.length ? `\n⚠ Referencias que no encuentro (no se han enlazado): ${unknownRefs.join(', ')}` : ''
+    const warn = unknownRefs.length ? `\n⚠ Referencias que no se han enlazado (no existen o son de las que evitaríamos, que solo van en su sección): ${unknownRefs.join(', ')}` : ''
     return { text: `✓ Auditoría de ${empresa} ${existing ? 'actualizada' : 'creada'}.\nEnlace para el cliente: ${BASE}/auditoria/${id}\nPanel: ${BASE}/dashboard/auditorias/${id}${warn}` }
   }
 
