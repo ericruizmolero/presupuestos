@@ -43,6 +43,12 @@ service cloud.firestore {
       );
     }
 
+    // Auditorías: el cliente abre su enlace (/auditoria/<id>) y solo lee; las escribe el estudio (o el MCP)
+    match /audits/{aid} {
+      allow get: if true;
+      allow list, write: if isTeam();
+    }
+
     // Todo lo demás (tablón de proyectos, usuarios…): solo el estudio
     match /{document=**} {
       allow read, write: if isTeam();
