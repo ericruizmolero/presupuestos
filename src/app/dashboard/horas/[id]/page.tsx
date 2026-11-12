@@ -45,6 +45,39 @@ function formatMoney(n: number) {
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(n)
 }
 
+/** Nombre del proyecto editable en el sitio: clic para editar, Enter o salir guarda, Esc cancela. El slug no cambia, así el enlace del cliente sigue valiendo. */
+function EditableTitle({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const cancelled = React.useRef(false)
+  useEffect(() => { if (!editing) setDraft(value) }, [value, editing])
+  if (!editing) {
+    return (
+      <h1
+        onClick={() => { cancelled.current = false; setEditing(true) }}
+        title="Clic para cambiar el nombre"
+        className="text-2xl font-medium tracking-tight text-ink cursor-text rounded-md -mx-2 px-2 hover:bg-surface transition-colors"
+      >
+        {value}
+      </h1>
+    )
+  }
+  return (
+    <input
+      autoFocus
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onFocus={(e) => e.target.select()}
+      onBlur={() => { setEditing(false); if (!cancelled.current) onSave(draft) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        if (e.key === 'Escape') { cancelled.current = true; setDraft(value); (e.target as HTMLInputElement).blur() }
+      }}
+      className="text-2xl font-medium tracking-tight text-ink bg-transparent outline-none border-b border-line focus:border-ink -mx-2 px-2 min-w-0 flex-1 mr-4"
+    />
+  )
+}
+
 const PEOPLE = ['Eric', 'Andoni', 'Eric y Andoni']
 const DEFAULT_PERSON = 'Eric y Andoni'
 
@@ -124,6 +157,20 @@ function HorasProjectContent() {
     }
     return { total, byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1]) }
   }, [entries])
+
+  async function handleRename(name: string) {
+    if (!project) return
+    const clean = name.trim()
+    if (!clean || clean === project.name) return
+    const prev = project.name
+    setProject({ ...project, name: clean })
+    try {
+      await updateTimeProject(project.id, { name: clean })
+    } catch (err) {
+      console.error('[horas] Error renombrando proyecto:', err)
+      setProject((p) => (p ? { ...p, name: prev } : p))
+    }
+  }
 
   async function handleSetLanguage(lang: 'es' | 'en') {
     if (!project || (project.language ?? 'es') === lang) return
@@ -243,7 +290,7 @@ function HorasProjectContent() {
       </Link>
 
       <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-medium tracking-tight text-ink">{project.name}</h1>
+        <EditableTitle value={project.name} onSave={handleRename} />
         <div className="flex items-center gap-2">
           <button
             onClick={copyPublicLink}
