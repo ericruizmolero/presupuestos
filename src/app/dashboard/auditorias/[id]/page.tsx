@@ -38,7 +38,7 @@ function Content() {
 
   return (
     <div>
-      <div className="sticky top-0 z-20 bg-paper/90 backdrop-blur border-b border-line px-6 lg:px-8 py-3 flex flex-wrap items-center gap-3">
+      <div className="h-14 bg-paper border-b border-line px-6 lg:px-8 flex items-center gap-3">
         <Link href="/dashboard/auditorias" className="inline-flex items-center gap-1.5 text-xs text-ink-40 hover:text-ink">
           <ArrowLeft size={12} strokeWidth={1.75} />Auditorías
         </Link>
@@ -63,7 +63,10 @@ function Content() {
           </button>
         )}
       </div>
-      <AuditView audit={audit} />
+      {/* Scroll propio: el main del panel tiene overflow y rompe el índice fijo */}
+      <div className="h-[calc(100vh-3.5rem)] overflow-y-auto">
+        <AuditView audit={audit} />
+      </div>
     </div>
   )
 }
