@@ -1,6 +1,8 @@
 import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
+import type { ProspectTouch } from '../prospectFollowUp'
+export * from '../prospectFollowUp'
 
 /** Prospección en frío: webs que rediseñamos a ciegas para tocarles la puerta. El orden del array es el orden manual. */
 export type ProspectStage = 'agente' | 'detectado' | 'rediseno' | 'enviado' | 'conversacion' | 'ganado' | 'descartado'
@@ -49,6 +51,8 @@ export interface Prospect {
   date: string          // YYYY-MM-DD de alta
   by?: string
   stageDate?: string
+  sentDate?: string     // cuándo les escribimos (si no, la fecha en que pasó a Enviado)
+  touches?: ProspectTouch[] // seguimientos hechos después del envío
 }
 
 export async function getProspects(companyId: string): Promise<Prospect[]> {

@@ -15,6 +15,7 @@ import { QUOTE_TOOLS, QUOTE_TOOL_NAMES, handleQuoteTool } from '@/lib/mcpQuotes'
 import { QUESTIONNAIRE_TOOLS, QUESTIONNAIRE_TOOL_NAMES, handleQuestionnaireTool, questionnaireNews } from '@/lib/mcpQuestionnaires'
 import { EMAIL_TOOLS, EMAIL_TOOL_NAMES, handleEmailTool } from '@/lib/mcpEmails'
 import { AUDIT_TOOLS, AUDIT_TOOL_NAMES, handleAuditTool } from '@/lib/mcpAudits'
+import { followUpOf, type ProspectTouch } from '@/lib/prospectFollowUp'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
@@ -380,7 +381,7 @@ const TOOLS = [
   {
     name: 'ver_prospectos',
     annotations: { readOnlyHint: true },
-    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
+    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. En los enviados muestra el seguimiento: cuándo se envió, qué seguimientos se han hecho y qué toca ahora (reenviar a los 4 días, LinkedIn, otro socio, cerrar). Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?", "¿a quién toca escribir de nuevo?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -406,6 +407,9 @@ const TOOLS = [
         primero: { type: 'boolean', description: 'Subirlo al primer puesto de su etapa' },
         quitar_motivos: { type: 'array', items: { type: 'string' }, description: 'Motivos a eliminar (coincidencia parcial)' },
         notas: { type: 'string' },
+        enviado_el: { type: 'string', description: 'Fecha en que les escribimos (YYYY-MM-DD), si no es el día en que pasó a Enviado' },
+        seguimiento: { type: 'string', description: 'Apunta un seguimiento hecho hoy (o en seguimiento_fecha): "Reenvío", "LinkedIn", "Otro socio", "Último toque"…' },
+        seguimiento_fecha: { type: 'string', description: 'YYYY-MM-DD del seguimiento; por defecto hoy' },
         de: { type: 'string', enum: ['Eric', 'Andoni'] },
       },
       required: ['nombre'],
@@ -673,7 +677,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
     const ref = db().collection('prospects').doc(cid)
     const snap = await ref.get()
-    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string }
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[] }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
     const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
@@ -691,6 +695,11 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           if (x.email || x.proposalUrl) out.push(`    email: ${x.email || '-'}${x.proposalUrl ? ` · propuesta: ${x.proposalUrl}` : ''}`)
           if (x.hook) out.push(`    gancho: ${x.hook}`)
           if (x.notes) out.push(`    notas: ${x.notes}`)
+          const f = followUpOf(x, todayISO())
+          if (f) {
+            const hechos = (x.touches ?? []).map((t) => `${t.what} ${t.date}`).join(', ')
+            out.push(`    seguimiento: enviado ${f.sent} (hace ${f.sinceSent} d)${hechos ? `; hecho: ${hechos}` : ''}; ${f.step ? (f.due ? `TOCA YA: ${f.step.label}${f.overdue ? ` (${f.overdue} d tarde)` : ''}` : `siguiente: ${f.step.label} el ${f.dueDate}`) : 'sin respuesta tras todos los seguimientos: descartar o dejar dormir'}`)
+          }
           for (const l of x.links || []) out.push(`    ↗ ${l}`)
         }
       }
@@ -736,6 +745,11 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (typeof args.email === 'string') p.email = args.email.trim() || undefined
     if (typeof args.propuesta === 'string') p.proposalUrl = args.propuesta.trim() || undefined
     if (typeof args.gancho === 'string') p.hook = args.gancho.trim() || undefined
+    const isDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+    if (isDate(args.enviado_el)) p.sentDate = String(args.enviado_el)
+    if (typeof args.seguimiento === 'string' && args.seguimiento.trim()) {
+      p.touches = [...(p.touches ?? []), { date: isDate(args.seguimiento_fecha) ? String(args.seguimiento_fecha) : todayISO(), what: args.seguimiento.trim() }]
+    }
     await ref.set({ items: JSON.parse(JSON.stringify(items)), updatedAt: FieldValue.serverTimestamp() })
     const pos = items.filter((x) => x.stage === p!.stage).indexOf(p) + 1
     return { text: `✓ ${created ? 'Añadido' : 'Actualizado'} "${p.name}" — ${STG[p.stage]} #${pos} · prioridad ${p.priority ?? 'media'} · ${p.reasons.length} motivo${p.reasons.length === 1 ? '' : 's'}` }

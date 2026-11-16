@@ -9,7 +9,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { madridToday } from '@/lib/firestore/planning'
 import {
-  subscribeProspects, saveProspects, STAGES, PRIORITIES, REGIONS, type Prospect, type ProspectStage, type ProspectPriority,
+  subscribeProspects, saveProspects, STAGES, PRIORITIES, REGIONS, followUpOf, type Prospect, type ProspectStage, type ProspectPriority,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import {
@@ -27,6 +27,41 @@ function hostOf(url?: string): string {
 
 function hrefOf(url: string): string {
   return url.startsWith('http') ? url : `https://${url}`
+}
+
+/** Bajo el contacto de un enviado: cuándo se envió y qué toca ahora (reenviar, LinkedIn, otro socio…) */
+function FollowUpLine({ p, onPatch }: { p: Prospect; onPatch: (x: Partial<Prospect>) => void }) {
+  const today = madridToday()
+  const f = followUpOf(p, today)
+  if (!f) return null
+  const touches = p.touches ?? []
+  const ago = f.sinceSent <= 0 ? 'hoy' : f.sinceSent === 1 ? 'ayer' : `hace ${f.sinceSent} días`
+  return (
+    <div className="mt-2 text-xs leading-snug">
+      <p className="text-ink-40">Enviado el {fmtDay(f.sent)}, {ago}</p>
+      {touches.length > 0 && (
+        <p className="text-ink-40">{touches.map((t) => `${t.what} el ${fmtShort(t.date)}`).join(', ')}</p>
+      )}
+      {f.step ? (
+        f.due ? (
+          <div className="mt-1.5 flex items-center gap-2 rounded-md bg-[#FEF3C7] text-[#92400E] px-2 py-1">
+            <span className="flex-1 min-w-0">Toca: {f.step.label.toLowerCase()}{f.overdue > 0 ? ` (${f.overdue} d tarde)` : ''}</span>
+            <button
+              onClick={() => onPatch({ touches: [...touches, { date: today, what: f.step!.what }] })}
+              title="Apunta el seguimiento con fecha de hoy"
+              className="shrink-0 flex items-center gap-1 font-medium hover:underline"
+            >
+              <Check size={11} strokeWidth={2.5} />Hecho
+            </button>
+          </div>
+        ) : (
+          <p className="mt-0.5 text-ink-60">Siguiente: {f.step.label.toLowerCase()} el {fmtDay(f.dueDate!)}</p>
+        )
+      ) : (
+        <p className="mt-0.5 text-ink-60">Sin respuesta tras {touches.length} seguimientos: descártalo o déjalo dormir</p>
+      )}
+    </div>
+  )
 }
 
 export default function ProspeccionPage() {
@@ -191,6 +226,7 @@ function ProspeccionContent() {
             {(p.contact || !p.url) && (
               <button onClick={() => setOpenId(p.id)} className="block max-w-full mt-0.5 text-left text-xs text-ink-40 leading-snug">{p.contact || 'Sin web'}</button>
             )}
+            <FollowUpLine p={p} onPatch={(x) => patch(p.id, x)} />
           </span>
         </div>
         <button onClick={() => setOpenId(p.id)} className="col-start-2 md:col-start-auto min-w-0 text-left text-sm text-ink-60 leading-snug">
@@ -318,6 +354,10 @@ function ProspeccionContent() {
                 <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">{st.label}</h2>
                 <span className="text-[10px] text-ink-40 tabular-nums">{list.length}</span>
                 <span className="text-xs text-ink-40">· {st.hint}</span>
+                {st.id === 'enviado' && (() => {
+                  const n = list.filter((x) => followUpOf(x, madridToday())?.due).length
+                  return n ? <span className="ml-1 px-1.5 py-px rounded text-[11px] font-medium bg-[#FEF3C7] text-[#92400E]">{n === 1 ? '1 toca seguimiento' : `${n} tocan seguimiento`}</span> : null
+                })()}
               </div>
               <div
                 onDragOver={(e) => { if (dragId) e.preventDefault() }}
@@ -431,6 +471,40 @@ function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
               ))}
             </div>
           </section>
+
+          {p.stage === 'enviado' && (
+            <section>
+              <span className={LABEL}>Seguimiento</span>
+              <label className="flex items-center gap-2 text-sm text-ink-60 mb-2">
+                Enviado el
+                <input
+                  type="date"
+                  className="px-2 py-1 border border-input rounded-md text-sm text-ink focus:outline-none focus:border-accent"
+                  value={p.sentDate || p.stageDate || p.date}
+                  onChange={(e) => e.target.value && onPatch({ sentDate: e.target.value })}
+                />
+              </label>
+              {(p.touches ?? []).length > 0 ? (
+                <ul className="space-y-1">
+                  {(p.touches ?? []).map((t, i) => (
+                    <li key={i} className="group/t flex items-center gap-2 text-sm text-ink">
+                      <span className="text-ink-40 w-16 tabular-nums">{fmtShort(t.date)}</span>
+                      <span className="flex-1">{t.what}</span>
+                      <button
+                        onClick={() => onPatch({ touches: (p.touches ?? []).filter((_, j) => j !== i) })}
+                        className="p-0.5 rounded text-ink-40 opacity-0 group-hover/t:opacity-100 hover:text-ink"
+                        aria-label="Quitar seguimiento"
+                      >
+                        <X size={12} strokeWidth={1.75} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-ink-40">Aún sin seguimientos. A los 4 días toca reenviar, luego LinkedIn y después otro socio.</p>
+              )}
+            </section>
+          )}
 
           <section>
             <span className={LABEL}>Prioridad</span>
