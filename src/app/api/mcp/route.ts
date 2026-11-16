@@ -381,7 +381,7 @@ const TOOLS = [
   {
     name: 'ver_prospectos',
     annotations: { readOnlyHint: true },
-    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. En los enviados muestra el seguimiento: cuándo se envió, qué seguimientos se han hecho y qué toca ahora (reenviar a los 4 días, LinkedIn, otro socio, cerrar). Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?", "¿a quién toca escribir de nuevo?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
+    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. En los enviados muestra el seguimiento: cuándo se envió y qué acciones se han hecho después (reenvío, LinkedIn, otro socio…), con fecha. Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?", "¿cuánto hace que escribimos a X?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -698,7 +698,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           const f = followUpOf(x, todayISO())
           if (f) {
             const hechos = (x.touches ?? []).map((t) => `${t.what} ${t.date}`).join(', ')
-            out.push(`    seguimiento: enviado ${f.sent} (hace ${f.sinceSent} d)${hechos ? `; hecho: ${hechos}` : ''}; ${f.step ? (f.due ? `TOCA YA: ${f.step.label}${f.overdue ? ` (${f.overdue} d tarde)` : ''}` : `siguiente: ${f.step.label} el ${f.dueDate}`) : 'sin respuesta tras todos los seguimientos: descartar o dejar dormir'}`)
+            out.push(`    seguimiento: enviado ${f.sent} (hace ${f.sinceSent} d)${hechos ? `; después: ${hechos}` : '; sin acciones después'}`)
           }
           for (const l of x.links || []) out.push(`    ↗ ${l}`)
         }

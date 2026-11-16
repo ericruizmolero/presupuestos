@@ -9,7 +9,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { madridToday } from '@/lib/firestore/planning'
 import {
-  subscribeProspects, saveProspects, STAGES, PRIORITIES, PRIORITY_STAGES, REGIONS, followUpOf, daysBetween, FOLLOW_UP_STEPS, type Prospect, type ProspectStage, type ProspectPriority,
+  subscribeProspects, saveProspects, STAGES, PRIORITIES, PRIORITY_STAGES, REGIONS, followUpOf, daysBetween, type Prospect, type ProspectStage, type ProspectPriority,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import {
@@ -29,64 +29,30 @@ function hrefOf(url: string): string {
   return url.startsWith('http') ? url : `https://${url}`
 }
 
-/** Un enviado: días desde el envío bien visibles y los pasos de seguimiento como una línea de fechas */
-function FollowUpTrack({ p, onPatch }: { p: Prospect; onPatch: (x: Partial<Prospect>) => void }) {
+/** Un enviado: días desde el envío y las acciones hechas, con su fecha */
+function FollowUpTrack({ p }: { p: Prospect }) {
   const today = madridToday()
   const f = followUpOf(p, today)
   if (!f) return null
-  const touches = [...(p.touches ?? [])].sort((x, y) => x.date.localeCompare(y.date))
   const lastAgo = daysBetween(f.last, today)
-  const rel = (d: number) => (d === 0 ? 'hoy' : d === 1 ? 'mañana' : `en ${d} días`)
-  const future = FOLLOW_UP_STEPS.slice(touches.length + 1)
-  const chip = 'inline-flex flex-col rounded-md px-2.5 py-1.5 leading-tight'
-  const cap = 'text-[10px] font-medium tracking-[0.12em] uppercase'
+  const chip = 'inline-flex flex-col rounded-md border border-line bg-surface px-2.5 py-1.5 leading-tight'
+  const cap = 'text-[10px] font-medium tracking-[0.12em] uppercase text-ink-40'
   return (
     <div className="min-w-0">
       <p className="flex items-baseline gap-2 mb-2.5">
         <span className="text-lg font-medium tracking-tight text-ink tabular-nums">{f.sinceSent <= 0 ? 'Hoy' : f.sinceSent === 1 ? '1 día' : `${f.sinceSent} días`}</span>
         <span className="text-xs text-ink-40">
           {f.sinceSent <= 0 ? 'enviado hoy' : 'desde el envío'}
-          {touches.length > 0 && `, ${lastAgo === 0 ? 'último toque hoy' : lastAgo === 1 ? 'último toque ayer' : `último toque hace ${lastAgo} días`}`}
+          {f.touches.length > 0 && `, ${lastAgo === 0 ? 'última acción hoy' : lastAgo === 1 ? 'última acción ayer' : `última acción hace ${lastAgo} días`}`}
         </span>
       </p>
       <div className="flex flex-wrap items-stretch gap-1.5">
-        <span className={`${chip} border border-line bg-surface`}>
-          <span className={`${cap} text-ink-40 flex items-center gap-1`}><Check size={10} strokeWidth={2.5} />Email</span>
-          <span className="text-xs text-ink tabular-nums">{fmtDay(f.sent)}</span>
-        </span>
-        {touches.map((t, i) => (
-          <span key={i} className={`${chip} border border-line bg-surface`}>
-            <span className={`${cap} text-ink-40 flex items-center gap-1`}><Check size={10} strokeWidth={2.5} />{t.what}</span>
+        {[{ date: f.sent, what: 'Email' }, ...f.touches].map((t, i) => (
+          <span key={i} className={chip}>
+            <span className={cap}>{t.what}</span>
             <span className="text-xs text-ink tabular-nums">{fmtDay(t.date)}</span>
           </span>
         ))}
-        {f.step && (f.due ? (
-          <span className={`${chip} bg-[#FEF3C7] text-[#92400E]`}>
-            <span className={cap}>Toca: {f.step.what}</span>
-            <span className="flex items-center gap-2 text-xs">
-              {f.overdue > 0 ? `${f.overdue} ${f.overdue === 1 ? 'día' : 'días'} tarde` : 'hoy'}
-              <button
-                onClick={() => onPatch({ touches: [...touches, { date: today, what: f.step!.what }] })}
-                title="Apunta el seguimiento con fecha de hoy"
-                className="flex items-center gap-0.5 font-medium underline underline-offset-2"
-              >
-                Hecho
-              </button>
-            </span>
-          </span>
-        ) : (
-          <span className={`${chip} border border-input`} title={f.step.label}>
-            <span className={`${cap} text-ink-60`}>{f.step.what}</span>
-            <span className="text-xs text-ink tabular-nums">{fmtDay(f.dueDate!)}, {rel(daysBetween(today, f.dueDate!))}</span>
-          </span>
-        ))}
-        {future.map((st) => (
-          <span key={st.what} className={`${chip} border border-dashed border-line`}>
-            <span className={`${cap} text-ink-40`}>{st.what}</span>
-            <span className="text-xs text-ink-40">+{st.after} días</span>
-          </span>
-        ))}
-        {!f.step && <span className="self-center text-xs text-ink-60">Sin respuesta tras todos los seguimientos: descártalo o déjalo dormir</span>}
       </div>
     </div>
   )
@@ -260,7 +226,7 @@ function ProspeccionContent() {
         </div>
         {sent ? (
           <div className="col-start-2 md:col-start-auto min-w-0">
-            {followUpOf(p, madridToday()) ? <FollowUpTrack p={p} onPatch={(x) => patch(p.id, x)} /> : null}
+            {followUpOf(p, madridToday()) ? <FollowUpTrack p={p} /> : null}
             {p.response && (
               <button onClick={() => setOpenId(p.id)} className="block w-full text-left rounded-md bg-surface border border-line px-2.5 py-1.5 text-[13px] text-ink">
                 <span className="text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mr-1.5">Respuesta</span>
@@ -397,10 +363,6 @@ function ProspeccionContent() {
                 <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">{st.label}</h2>
                 <span className="text-[10px] text-ink-40 tabular-nums">{list.length}</span>
                 <span className="text-xs text-ink-40">· {st.hint}</span>
-                {st.id === 'enviado' && (() => {
-                  const n = list.filter((x) => followUpOf(x, madridToday())?.due).length
-                  return n ? <span className="ml-1 px-1.5 py-px rounded text-[11px] font-medium bg-[#FEF3C7] text-[#92400E]">{n === 1 ? '1 toca seguimiento' : `${n} tocan seguimiento`}</span> : null
-                })()}
               </div>
               <div
                 onDragOver={(e) => { if (dragId) e.preventDefault() }}
@@ -544,7 +506,7 @@ function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
                   ))}
                 </ul>
               ) : (
-                <p className="text-xs text-ink-40">Aún sin seguimientos. A los 4 días toca reenviar, luego LinkedIn y después otro socio.</p>
+                <p className="text-xs text-ink-40">Aún sin seguimientos. Pídeselos a Claude: «ya le he escrito por LinkedIn».</p>
               )}
             </section>
           )}
