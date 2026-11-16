@@ -9,7 +9,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { madridToday } from '@/lib/firestore/planning'
 import {
-  subscribeProspects, saveProspects, STAGES, PRIORITIES, REGIONS, followUpOf, type Prospect, type ProspectStage, type ProspectPriority,
+  subscribeProspects, saveProspects, STAGES, PRIORITIES, PRIORITY_STAGES, REGIONS, followUpOf, type Prospect, type ProspectStage, type ProspectPriority,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import {
@@ -273,13 +273,15 @@ function ProspeccionContent() {
               </button>
             </>
           )}
-          <button
-            onClick={() => cyclePriority(p)}
-            title="Prioridad — clic para cambiar"
-            className={`px-1.5 py-px rounded text-[11px] font-medium ${pr.cls}`}
-          >
-            {pr.label}
-          </button>
+          {PRIORITY_STAGES.includes(p.stage) && (
+            <button
+              onClick={() => cyclePriority(p)}
+              title="Prioridad: clic para cambiar"
+              className={`px-1.5 py-px rounded text-[11px] font-medium ${pr.cls}`}
+            >
+              {pr.label}
+            </button>
+          )}
           <select
             value={p.stage}
             onChange={(e) => patch(p.id, { stage: e.target.value as ProspectStage, stageDate: madridToday() })}
@@ -578,7 +580,10 @@ function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
               value={response}
               placeholder="Cuando contesten: «están contentos con su proveedor», «les encanta, hablamos el martes»…"
               onChange={(e) => setResponse(e.target.value)}
-              onBlur={() => onPatch({ response: response.trim() || undefined })}
+              onBlur={() => {
+                const r = response.trim() || undefined
+                onPatch(r && p.stage === 'enviado' ? { response: r, stage: 'respondido', stageDate: madridToday() } : { response: r })
+              }}
             />
           </section>
 

@@ -5,14 +5,14 @@ import type { ProspectTouch } from '../prospectFollowUp'
 export * from '../prospectFollowUp'
 
 /** Prospección en frío: webs que rediseñamos a ciegas para tocarles la puerta. El orden del array es el orden manual. */
-export type ProspectStage = 'agente' | 'detectado' | 'rediseno' | 'enviado' | 'conversacion' | 'ganado' | 'descartado'
+export type ProspectStage = 'agente' | 'detectado' | 'rediseno' | 'enviado' | 'respondido' | 'conversacion' | 'ganado' | 'descartado'
 
 export const STAGES: Array<{ id: ProspectStage; label: string; hint: string }> = [
   { id: 'agente', label: 'Prospect agent', hint: 'Propuestos por Claude: acéptalos o descártalos' },
   { id: 'detectado', label: 'Elegidos', hint: 'Los que vamos a rediseñar' },
   { id: 'rediseno', label: 'Rediseñando', hint: 'Haciendo la home' },
   { id: 'enviado', label: 'Enviado', hint: 'Les hemos tocado la puerta' },
-  { id: 'conversacion', label: 'En conversación', hint: 'Han respondido' },
+  { id: 'conversacion', label: 'Respondido', hint: 'Han contestado, para bien o para mal' },
   { id: 'ganado', label: 'Ganado', hint: 'Cliente' },
   { id: 'descartado', label: 'Descartado', hint: 'No sigue' },
 ]
@@ -25,6 +25,9 @@ export const REGIONS: Array<{ id: ProspectRegion; label: string }> = [
 ]
 
 export type ProspectPriority = 'alta' | 'media' | 'baja'
+
+/** La prioridad solo decide por cuál empezar: deja de mostrarse una vez enviado */
+export const PRIORITY_STAGES: ProspectStage[] = ['agente', 'detectado', 'rediseno']
 
 export const PRIORITIES: Array<{ id: ProspectPriority; label: string; cls: string }> = [
   { id: 'alta', label: 'Alta', cls: 'bg-[#FEE2E2] text-[#B91C1C]' },
