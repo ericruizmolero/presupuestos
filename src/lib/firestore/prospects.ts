@@ -5,7 +5,7 @@ import type { ProspectTouch } from '../prospectFollowUp'
 export * from '../prospectFollowUp'
 
 /** Prospección en frío: webs que rediseñamos a ciegas para tocarles la puerta. El orden del array es el orden manual. */
-export type ProspectStage = 'agente' | 'detectado' | 'rediseno' | 'enviado' | 'respondido' | 'conversacion' | 'ganado' | 'descartado'
+export type ProspectStage = 'agente' | 'detectado' | 'rediseno' | 'enviado' | 'conversacion' | 'ganado' | 'descartado'
 
 export const STAGES: Array<{ id: ProspectStage; label: string; hint: string }> = [
   { id: 'agente', label: 'Prospect agent', hint: 'Propuestos por Claude: acéptalos o descártalos' },

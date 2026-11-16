@@ -399,7 +399,7 @@ const TOOLS = [
         email: { type: 'string', description: 'Email al que escribimos' },
         propuesta: { type: 'string', description: 'Enlace a la propuesta enviada (p. ej. https://deneb.savvia.studio/)' },
         gancho: { type: 'string', description: 'Frase personal del email: enhorabuena por la ronda, quién nos recomendó…' },
-        etapa: { type: 'string', enum: ['agente', 'detectado', 'rediseno', 'enviado', 'respondido', 'conversacion', 'ganado', 'descartado'], description: 'agente = Prospect agent (propuesto por Claude, pendiente de aceptar); enviado = sin respuesta aún; respondido = han contestado (aunque sea que no); conversacion = seguimos hablando' },
+        etapa: { type: 'string', enum: ['agente', 'detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'], description: 'agente = Prospect agent (propuesto por Claude, pendiente de aceptar); enviado = sin respuesta aún; conversacion = Respondido: han contestado (aunque sea que no)' },
         mercado: { type: 'string', enum: ['es', 'us'], description: 'es = España (tono cálido); us = EE. UU. (tono directo)' },
         angulo: { type: 'string', description: 'Ángulo del rediseño de 15h: qué contaría visualmente la home nueva' },
         prioridad: { type: 'string', enum: ['alta', 'media', 'baja'] },
@@ -679,7 +679,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const snap = await ref.get()
     type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[] }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
-    const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', respondido: 'Respondido', conversacion: 'En conversación', ganado: 'Ganado', descartado: 'Descartado' }
+    const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'Respondido', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
       if (!items.length) return { text: 'No hay prospectos todavía.' }
       const out: string[] = []
@@ -742,7 +742,6 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (args.angulo !== undefined) p.angle = String(args.angulo).trim() || undefined
     if (args.mercado === 'es' || args.mercado === 'us') p.region = String(args.mercado)
     if (args.respuesta !== undefined) p.response = String(args.respuesta).trim() || undefined
-    if (p.response && p.stage === 'enviado' && !args.etapa) { p.stage = 'respondido'; p.stageDate = todayISO() }
     // Si contestan, sale de Enviado: pasa a Respondido (salvo que se haya pedido otra etapa)
     if (p.response && p.stage === 'enviado' && !args.etapa) { p.stage = 'conversacion'; p.stageDate = todayISO() }
     if (typeof args.email === 'string') p.email = args.email.trim() || undefined
