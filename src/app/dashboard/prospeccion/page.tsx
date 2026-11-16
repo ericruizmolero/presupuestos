@@ -219,6 +219,19 @@ function ProspeccionContent() {
                 <ExternalLink size={10} strokeWidth={1.75} className="shrink-0" />
               </a>
             )}
+            {p.proposalUrl && !PRIORITY_STAGES.includes(p.stage) && (
+              <a
+                href={hrefOf(p.proposalUrl)}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 max-w-full mt-0.5 text-xs text-ink underline decoration-line underline-offset-2 hover:decoration-ink-40"
+                title="La propuesta que les enviamos"
+              >
+                <span className="text-ink-40 no-underline shrink-0">Propuesta</span>
+                <span className="truncate">{hostOf(p.proposalUrl)}</span>
+                <ExternalLink size={10} strokeWidth={1.75} className="shrink-0" />
+              </a>
+            )}
             {(p.contact || !p.url) && (
               <button onClick={() => setOpenId(p.id)} className="block max-w-full mt-0.5 text-left text-xs text-ink-40 leading-snug">{p.contact || 'Sin web'}</button>
             )}
