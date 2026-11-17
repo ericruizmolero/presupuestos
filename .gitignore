@@ -46,3 +46,6 @@ scripts/.mcp-secret
 
 # Handoffs de trabajo (no son entregables)
 HANDOFF-*.md
+
+# logs de la CLI de Firebase
+firebase-debug.log
