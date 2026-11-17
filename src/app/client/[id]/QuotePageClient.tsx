@@ -37,26 +37,16 @@ const FS_BASE = () =>
   `https://firestore.googleapis.com/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents`
 const FS_KEY = () => process.env.NEXT_PUBLIC_FIREBASE_API_KEY
 
-async function fetchQuoteBySlug(slug: string) {
-  const url = `${FS_BASE()}:runQuery?key=${FS_KEY()}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      structuredQuery: {
-        from: [{ collectionId: 'quotes' }],
-        where: { fieldFilter: { field: { fieldPath: 'slug' }, op: 'EQUAL', value: { stringValue: slug } } },
-        limit: 1,
-      },
-    }),
+/** Pide el presupuesto al servidor; si tiene código y no es el correcto, llega solo lo de la pantalla de acceso */
+async function fetchQuoteBySlug(slug: string, code?: string) {
+  const res = await fetch(`/api/public/quote/${encodeURIComponent(slug)}`, {
+    cache: 'no-store',
+    headers: code ? { 'x-access-code': code } : {},
   })
-  const data: Array<{ document?: { name: string; fields: Record<string, FSValue> } }> = await res.json()
-  const doc = data?.[0]?.document
-  if (!doc) return null
-  const id = doc.name.split('/').pop()!
-  const fields: Record<string, unknown> = {}
-  for (const [k, fv] of Object.entries(doc.fields)) fields[k] = fromFS(fv)
-  return { id, ...fields } as import('@/types/quote').Quote
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const data = (await res.json()) as { locked: boolean; wrongCode?: boolean; quote: import('@/types/quote').Quote }
+  return data
 }
 
 async function fetchCompanyById(companyId: string) {
@@ -77,7 +67,7 @@ import { QuotePreview } from '@/components/quote/QuotePreview'
 
 // ── Password gate ─────────────────────────────────────────────────────────────
 
-function PasswordGate({ quote, onUnlock }: { quote: Quote; onUnlock: () => void }) {
+function PasswordGate({ quote, onUnlock }: { quote: Quote; onUnlock: (full: Quote) => void }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState(false)
   const [shake, setShake] = useState(false)
@@ -85,11 +75,12 @@ function PasswordGate({ quote, onUnlock }: { quote: Quote; onUnlock: () => void 
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (value === quote.accessPassword) {
-      sessionStorage.setItem(`quote-access-${quote.slug}`, '1')
-      onUnlock()
+    const r = value ? await fetchQuoteBySlug(quote.slug, value).catch(() => null) : null
+    if (r && !r.locked) {
+      try { sessionStorage.setItem(`quote-code-${quote.slug}`, value) } catch {}
+      onUnlock(r.quote)
     } else {
       setError(true)
       setShake(true)
@@ -187,14 +178,14 @@ export function QuotePageClient() {
 
   useEffect(() => {
     if (!id) return
-    fetchQuoteBySlug(id)
-      .then(async (q) => {
-        if (!q) { console.warn('[QuotePage] no document found for slug:', id); setNotFound(true); return }
+    let saved: string | undefined
+    try { saved = sessionStorage.getItem(`quote-code-${id}`) || undefined } catch {}
+    fetchQuoteBySlug(id, saved)
+      .then(async (r) => {
+        if (!r) { console.warn('[QuotePage] no document found for slug:', id); setNotFound(true); return }
+        const q = r.quote
         setQuote(q)
-        // Check if already unlocked this session (or no password set)
-        if (!q.accessPassword || sessionStorage.getItem(`quote-access-${q.slug}`) === '1') {
-          setUnlocked(true)
-        }
+        if (!r.locked) setUnlocked(true)
         const client = q.client?.company || q.client?.name || ''
         const emitter = q.emitter?.companyName || ''
         const date = q.date ? new Date(q.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
@@ -248,7 +239,7 @@ export function QuotePageClient() {
 
   // Show password gate if quote is protected and not yet unlocked
   if (!unlocked) {
-    return <PasswordGate quote={quote} onUnlock={() => setUnlocked(true)} />
+    return <PasswordGate quote={quote} onUnlock={(full) => { setQuote(full); setUnlocked(true) }} />
   }
 
   return (

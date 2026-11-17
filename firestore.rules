@@ -4,25 +4,14 @@ service cloud.firestore {
 
     // Solo el estudio: Eric y Andoni
     function isTeam() {
+      // email_verified: sin esto, cualquiera podría registrarse con usuario y contraseña con un correo nuestro que aún no tiene cuenta
       return request.auth != null
+        && request.auth.token.email_verified == true
         && request.auth.token.email in ['ericruizmolero@savvia.studio', 'andoni@savvia.studio', 'ericruizmolero@treseiscero.app', 'andoni@treseiscero.app'];
     }
 
-    // Presupuestos: lectura pública (enlace del cliente /client/…); escritura solo el estudio
-    match /quotes/{quoteId} {
-      allow read: if true;
-      allow write: if isTeam();
-    }
-
-    // Horas: lectura pública (vista del cliente /h/…); escritura solo el estudio
-    match /timeProjects/{projectId} {
-      allow read: if true;
-      allow write: if isTeam();
-    }
-    match /timeEntries/{entryId} {
-      allow read: if true;
-      allow write: if isTeam();
-    }
+    // Presupuestos y horas: solo el estudio. El cliente los ve a través del servidor
+    // (/api/public/quote y /api/public/hours), así nadie de fuera puede listarlos.
 
     // Empresa: la vista pública del presupuesto lee su ficha (logo, colores, fuentes) por id;
     // listar y escribir, solo el estudio

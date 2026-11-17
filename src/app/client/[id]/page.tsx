@@ -1,47 +1,14 @@
 import type { Metadata } from 'next'
 import { QuotePageClient } from './QuotePageClient'
 
-// ── Server-side Firestore fetch (REST API, no Admin SDK needed) ───────────────
+import { quoteBySlug } from '@/lib/adminDb'
 
-const PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!
-const API_KEY    = process.env.NEXT_PUBLIC_FIREBASE_API_KEY!
+export const runtime = 'nodejs'
 
-interface FirestoreField {
-  stringValue?: string
-  mapValue?: { fields: Record<string, FirestoreField> }
-}
+type Q = { client?: { company?: string; name?: string }; emitter?: { companyName?: string; logoUrl?: string }; language?: string; project?: { mainObjective?: string }; accessPassword?: string }
 
-async function fetchQuoteBySlug(slug: string): Promise<Record<string, FirestoreField> | null> {
-  try {
-    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery?key=${API_KEY}`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        structuredQuery: {
-          from: [{ collectionId: 'quotes' }],
-          where: {
-            fieldFilter: {
-              field: { fieldPath: 'slug' },
-              op: 'EQUAL',
-              value: { stringValue: slug },
-            },
-          },
-          limit: 1,
-        },
-      }),
-      next: { revalidate: 3600 }, // cache 1 hour
-    })
-    const data = await res.json()
-    const doc = data?.[0]?.document
-    return doc?.fields ?? null
-  } catch {
-    return null
-  }
-}
-
-function str(field?: FirestoreField): string {
-  return field?.stringValue ?? ''
+async function fetchQuote(slug: string): Promise<Q | null> {
+  try { return (await quoteBySlug(slug)) as Q | null } catch { return null }
 }
 
 function stripHtml(html: string): string {
@@ -54,18 +21,18 @@ export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<Metadata> {
   const { id: slug } = await params
-  const fields = await fetchQuoteBySlug(slug)
+  const q = await fetchQuote(slug)
 
-  if (!fields) {
+  if (!q) {
     return { title: 'Proposal', description: 'View this proposal.' }
   }
 
-  const clientName  = str(fields.client?.mapValue?.fields?.company) ||
-                      str(fields.client?.mapValue?.fields?.name)
-  const emitterName = str(fields.emitter?.mapValue?.fields?.companyName)
-  const lang        = str(fields.language) || 'es'
-  const logoUrl     = str(fields.emitter?.mapValue?.fields?.logoUrl)
-  const rawObjective = str(fields.project?.mapValue?.fields?.mainObjective)
+  const clientName  = q.client?.company || q.client?.name || ''
+  const emitterName = q.emitter?.companyName || ''
+  const lang        = q.language || 'es'
+  const logoUrl     = q.emitter?.logoUrl || ''
+  // con código de acceso, el resumen del proyecto no sale en la vista previa del enlace
+  const rawObjective = q.accessPassword ? '' : (q.project?.mainObjective || '')
   const description  = rawObjective
     ? stripHtml(rawObjective).slice(0, 160)
     : (lang === 'en' ? `Proposal from ${emitterName}` : `Presupuesto de ${emitterName}`)

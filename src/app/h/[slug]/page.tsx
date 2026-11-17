@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { getTimeProjectBySlug, getTimeEntries } from '@/lib/firestore/time'
 import type { TimeProject, TimeEntry } from '@/types/time'
 import { applyCompanyTheme } from '@/lib/companyTheme'
 
@@ -59,9 +58,10 @@ export default function PublicHoursPage() {
 
   useEffect(() => {
     if (!slug) return
-    getTimeProjectBySlug(slug).then(async (p) => {
-      if (!p) { setState('notfound'); return }
-      const [es] = await Promise.all([getTimeEntries(p.id), applyCompanyTheme(p.companyId)])
+    fetch(`/api/public/hours/${encodeURIComponent(slug)}`, { cache: 'no-store' }).then(async (res) => {
+      if (!res.ok) { setState('notfound'); return }
+      const { project: p, entries: es } = (await res.json()) as { project: TimeProject; entries: TimeEntry[] }
+      await applyCompanyTheme(p.companyId)
       setProject(p)
       setEntries(es)
       setState('ready')

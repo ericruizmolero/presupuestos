@@ -4,7 +4,9 @@ service firebase.storage {
 
     // Solo el estudio: Eric y Andoni
     function isTeam() {
+      // email_verified: sin esto, cualquiera podría registrarse con usuario y contraseña con un correo nuestro que aún no tiene cuenta
       return request.auth != null
+        && request.auth.token.email_verified == true
         && request.auth.token.email in ['ericruizmolero@savvia.studio', 'andoni@savvia.studio', 'ericruizmolero@treseiscero.app', 'andoni@treseiscero.app'];
     }
 

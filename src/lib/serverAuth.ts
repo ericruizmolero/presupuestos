@@ -17,9 +17,11 @@ export async function verifyStudioUser(req: NextRequest): Promise<string | null>
       cache: 'no-store',
     })
     if (!res.ok) return null
-    const data = (await res.json()) as { users?: Array<{ email?: string }> }
-    const email = data.users?.[0]?.email
-    return isAllowedEmail(email) ? email! : null
+    const data = (await res.json()) as { users?: Array<{ email?: string; emailVerified?: boolean }> }
+    const u = data.users?.[0]
+    const email = u?.email
+    // solo correos verificados: con usuario y contraseña cualquiera podría registrar un correo nuestro sin cuenta
+    return u?.emailVerified && isAllowedEmail(email) ? email! : null
   } catch {
     return null
   }
