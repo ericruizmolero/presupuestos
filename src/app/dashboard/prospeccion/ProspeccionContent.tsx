@@ -186,7 +186,9 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
 
   const active = STAGES.filter((s) => s.id !== 'agente' && s.id !== 'ganado' && s.id !== 'descartado')
   const agentList = items.filter((x) => x.stage === 'agente')
-  const closed = STAGES.filter((s) => s.id === 'ganado' || s.id === 'descartado')
+  // ganados en el pipeline; descartados en Prospect agent, que es donde se descartan
+  const closedStage: ProspectStage = view === 'agent' ? 'descartado' : 'ganado'
+  const closed = STAGES.filter((s) => s.id === closedStage)
   const open = openId ? items.find((x) => x.id === openId) : null
 
   function row(p: Prospect) {
@@ -424,15 +426,10 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
           )
         })}
 
-        {view === 'pipeline' && items.some((x) => x.stage === 'ganado' || x.stage === 'descartado') && (
+        {items.some((x) => x.stage === closedStage) && (
           <section>
             <button onClick={() => setShowClosed((v) => !v)} className="text-xs text-ink-40 hover:text-ink">
-              {(() => {
-                const won = items.filter((x) => x.stage === 'ganado').length
-                const lost = items.filter((x) => x.stage === 'descartado').length
-                const what = won && lost ? 'ganados y descartados' : won ? 'ganados' : 'descartados'
-                return `${showClosed ? 'Ocultar' : 'Ver'} ${what} (${won + lost})`
-              })()}
+              {`${showClosed ? 'Ocultar' : 'Ver'} ${closedStage === 'ganado' ? 'ganados' : 'descartados'} (${items.filter((x) => x.stage === closedStage).length})`}
             </button>
             {showClosed && closed.map((st) => {
               const list = items.filter((x) => x.stage === st.id)
