@@ -407,7 +407,7 @@ const TOOLS = [
         quitar_motivos: { type: 'array', items: { type: 'string' }, description: 'Motivos a eliminar (coincidencia parcial)' },
         notas: { type: 'string' },
         dudas: { type: 'boolean', description: 'Prospect agent: true = revisado por Eric o Andoni, se queda pero con dudas; false lo quita' },
-        motivo_dudas: { type: 'string', description: 'Por qué tenemos dudas (marca también dudas=true); cadena vacía lo borra' },
+        motivo_dudas: { type: 'string', description: 'Añade un comentario al hilo de dudas (marca también dudas=true); firma con "de"' },
         enviado_el: { type: 'string', description: 'Fecha en que les escribimos (YYYY-MM-DD), si no es el día en que pasó a Enviado' },
         seguimiento: { type: 'string', description: 'Apunta un seguimiento hecho hoy (o en seguimiento_fecha): "Reenvío", "LinkedIn", "Otro socio", "Último toque"…' },
         seguimiento_fecha: { type: 'string', description: 'YYYY-MM-DD del seguimiento; por defecto hoy' },
@@ -678,7 +678,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
     const ref = db().collection('prospects').doc(cid)
     const snap = await ref.get()
-    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[]; doubts?: boolean; doubtsNote?: string }
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[]; doubts?: boolean; doubtsNote?: string; doubtComments?: Array<{ id: string; by?: string; date: string; text: string }> }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
     const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'Respondido', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
@@ -692,7 +692,10 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
           out.push(`${list.indexOf(x) + 1}. ${x.name}${x.doubts ? ' (revisado, con dudas)' : ''}${x.region ? ` {${x.region === 'us' ? 'EE. UU.' : 'España'}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
           for (const r of x.reasons) out.push(`    · ${r}`)
           if (x.angle) out.push(`    ángulo: ${x.angle}`)
-          if (x.doubts && x.doubtsNote) out.push(`    dudas: ${x.doubtsNote}`)
+          if (x.doubts) {
+            const hilo = x.doubtComments ?? (x.doubtsNote ? [{ id: 'legacy', date: '', text: x.doubtsNote }] : [])
+            for (const c of hilo) out.push(`    duda${c.by ? ` de ${c.by}` : ''}${c.date ? ` (${c.date})` : ''}: ${c.text}`)
+          }
           if (x.response) out.push(`    respuesta: ${x.response}`)
           if (x.email || x.proposalUrl) out.push(`    email: ${x.email || '-'}${x.proposalUrl ? ` · propuesta: ${x.proposalUrl}` : ''}`)
           if (x.hook) out.push(`    gancho: ${x.hook}`)
@@ -749,9 +752,14 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (typeof args.email === 'string') p.email = args.email.trim() || undefined
     if (typeof args.propuesta === 'string') p.proposalUrl = args.propuesta.trim() || undefined
     if (typeof args.gancho === 'string') p.hook = args.gancho.trim() || undefined
-    if (typeof args.motivo_dudas === 'string') { const m = args.motivo_dudas.trim(); if (m) { p.doubtsNote = m; p.doubts = true } else delete p.doubtsNote }
+    if (typeof args.motivo_dudas === 'string' && args.motivo_dudas.trim()) {
+      const hilo = p.doubtComments ?? (p.doubtsNote ? [{ id: 'legacy', date: '', text: p.doubtsNote }] : [])
+      p.doubtComments = [...hilo, { id: Date.now().toString(36), ...(args.de ? { by: String(args.de) } : {}), date: todayISO(), text: args.motivo_dudas.trim() }]
+      delete p.doubtsNote
+      p.doubts = true
+    }
     if (args.dudas === true) p.doubts = true
-    if (args.dudas === false || (p.stage !== 'agente' && p.doubts)) { delete p.doubts; delete p.doubtsNote }
+    if (args.dudas === false || (p.stage !== 'agente' && p.doubts)) { delete p.doubts; delete p.doubtsNote; delete p.doubtComments }
     const isDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
     if (isDate(args.enviado_el)) p.sentDate = String(args.enviado_el)
     if (typeof args.seguimiento === 'string' && args.seguimiento.trim()) {

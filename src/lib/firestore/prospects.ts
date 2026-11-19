@@ -35,6 +35,13 @@ export const PRIORITIES: Array<{ id: ProspectPriority; label: string; cls: strin
   { id: 'baja', label: 'Baja', cls: 'bg-surface text-ink-60 border border-line' },
 ]
 
+export interface ProspectComment {
+  id: string
+  by?: string   // Eric | Andoni
+  date: string  // YYYY-MM-DD
+  text: string
+}
+
 export interface Prospect {
   id: string
   name: string
@@ -56,7 +63,8 @@ export interface Prospect {
   stageDate?: string
   sentDate?: string     // cuándo les escribimos (si no, la fecha en que pasó a Enviado)
   doubts?: boolean      // Prospect agent: revisado, se queda pero con dudas
-  doubtsNote?: string   // por qué tenemos dudas
+  doubtsNote?: string   // (antiguo) primera duda, sin autor
+  doubtComments?: ProspectComment[] // hilo de dudas: quién, cuándo y qué
   touches?: ProspectTouch[] // seguimientos hechos después del envío
 }
 

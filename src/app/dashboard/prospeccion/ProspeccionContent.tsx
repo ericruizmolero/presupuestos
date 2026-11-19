@@ -17,7 +17,7 @@ import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import {
   subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, firstName, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
 } from '@/lib/firestore/emailTemplates'
-import { ArrowRight, Check, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
+import { ArrowRight, Check, Inbox, Target, PenTool, Send, MessageCircle, Trophy, CircleX, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -60,27 +60,83 @@ function FollowUpTrack({ p }: { p: Prospect }) {
   )
 }
 
-/** Las dudas de un candidato del agente: se escriben en la propia fila y se guardan al salir */
-function DoubtsNote({ p, onPatch }: { p: Prospect; onPatch: (x: Partial<Prospect>) => void }) {
-  const [v, setV] = useState(p.doubtsNote || '')
-  useEffect(() => { setV(p.doubtsNote || '') }, [p.doubtsNote])
+/** Hilo de dudas de un candidato del agente: quién lo escribió, cuándo, y se puede contestar */
+function DoubtsThread({ p, me, onPatch }: { p: Prospect; me: string; onPatch: (x: Partial<Prospect>) => void }) {
+  const [v, setV] = useState('')
+  // las dudas antiguas (un solo texto sin autor) cuentan como el primer comentario
+  const comments = p.doubtComments ?? (p.doubtsNote ? [{ id: 'legacy', date: '', text: p.doubtsNote }] : [])
+  function send() {
+    const text = v.trim()
+    if (!text) return
+    const c = { id: Date.now().toString(36), by: me, date: madridToday(), text }
+    onPatch({ doubtComments: [...comments, c], doubtsNote: undefined })
+    setV('')
+  }
+  function remove(id: string) {
+    onPatch({ doubtComments: comments.filter((c) => c.id !== id), doubtsNote: undefined })
+  }
   return (
-    <label className="col-start-2 md:col-start-3 md:col-span-2 mt-1 flex items-start gap-2 rounded-md bg-[#FEF3C7] px-2.5 py-1.5">
-      <span className="shrink-0 pt-px text-[10px] font-medium tracking-[0.14em] uppercase text-[#92400E]">Dudas</span>
-      <textarea
-        rows={1}
-        value={v}
-        placeholder="¿Qué no nos convence? (ronda pequeña, sector regulado, ya tienen agencia…)"
-        onChange={(e) => setV(e.target.value)}
-        onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px' }}
-        onBlur={() => { const n = v.trim() || undefined; if (n !== p.doubtsNote) onPatch({ doubtsNote: n }) }}
-        className="flex-1 min-w-0 resize-none [field-sizing:content] bg-transparent text-[13px] leading-snug text-[#92400E] placeholder-[#92400E]/50 outline-none"
-      />
-    </label>
+    <div className="col-start-2 md:col-start-3 md:col-span-2 mt-1 rounded-md border border-line bg-surface px-3 py-2.5">
+      <span className="block mb-2 text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40">Dudas</span>
+      {comments.length > 0 && (
+        <ul className="space-y-2.5 mb-2.5">
+          {comments.map((c) => (
+            <li key={c.id} className="group/c flex gap-2.5">
+              <span className="shrink-0 mt-px w-5 h-5 rounded-full bg-ink text-paper text-[10px] font-medium flex items-center justify-center">
+                {c.by ? c.by[0] : '?'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-ink-40">
+                  <span className="font-medium text-ink">{c.by || 'Sin autor'}</span>
+                  {c.date && <span className="ml-1.5">{fmtShort(c.date)}</span>}
+                  {c.by === me && (
+                    <button onClick={() => remove(c.id)} className="ml-2 opacity-0 group-hover/c:opacity-100 hover:text-ink" aria-label="Borrar comentario">
+                      Borrar
+                    </button>
+                  )}
+                </p>
+                <p className="text-[13px] leading-snug text-ink whitespace-pre-wrap">{c.text}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-start gap-2">
+        <textarea
+          rows={1}
+          value={v}
+          placeholder={comments.length ? 'Responder…' : '¿Qué no nos convence? (ronda pequeña, ya tienen agencia…)'}
+          onChange={(e) => setV(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+          className="flex-1 min-w-0 resize-none [field-sizing:content] rounded-md border border-line bg-paper px-2.5 py-1.5 text-[13px] leading-snug text-ink placeholder-ink-40 outline-none focus:border-input"
+        />
+        {v.trim() && (
+          <button onClick={send} className="shrink-0 px-2.5 py-1.5 rounded-md text-xs font-medium bg-accent text-on-accent hover:bg-accent-hover">
+            Enviar
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
-/** Prospección en dos vistas: el pipeline (Elegidos → Ganado) y Prospect agent (lo que propone Claude) */
+/** Color e icono de cada etapa: en el desplegable y en el botón */
+const STAGE_LOOK: Record<string, { icon: typeof Inbox; color: string }> = {
+  agente: { icon: Inbox, color: '#8A8580' },
+  detectado: { icon: Target, color: '#2563EB' },
+  rediseno: { icon: PenTool, color: '#7C3AED' },
+  enviado: { icon: Send, color: '#D97706' },
+  conversacion: { icon: MessageCircle, color: '#0D9488' },
+  ganado: { icon: Trophy, color: '#16A34A' },
+  descartado: { icon: CircleX, color: '#B91C1C' },
+}
+function stageIcon(id: string) {
+  const l = STAGE_LOOK[id]
+  if (!l) return null
+  const I = l.icon
+  return <I size={12} strokeWidth={2} className="shrink-0" style={{ color: l.color }} />
+}
+
 export function ProspeccionPage({ view }: { view: 'pipeline' | 'agent' }) {
   return (
     <AuthGuard>
@@ -303,7 +359,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
               <button
                 onClick={() => patch(p.id, { doubts: !p.doubts })}
                 title={p.doubts ? 'Quitar la marca de dudas' : 'Revisado, se queda en Prospect agent pero con dudas'}
-                className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors ${p.doubts ? 'border-[#F59E0B] bg-[#FEF3C7] text-[#92400E]' : 'border-line text-ink-60 hover:border-input hover:text-ink'}`}
+                className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors ${p.doubts ? 'border-input bg-surface text-ink' : 'border-line text-ink-60 hover:border-input hover:text-ink'}`}
               >
                 Tengo dudas
               </button>
@@ -319,6 +375,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
           )}
           {p.stage !== 'agente' && <Select
             size="compact"
+            decorate={stageIcon}
             value={p.stage}
             onChange={(e) => patch(p.id, { stage: e.target.value as ProspectStage, stageDate: madridToday() })}
             aria-label="Etapa"
@@ -326,7 +383,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
             {STAGES.map((s2) => <option key={s2.id} value={s2.id}>{s2.label}</option>)}
           </Select>}
         </span>
-        {p.stage === 'agente' && p.doubts && <DoubtsNote p={p} onPatch={(x) => patch(p.id, x)} />}
+        {p.stage === 'agente' && p.doubts && <DoubtsThread p={p} me={me} onPatch={(x) => patch(p.id, x)} />}
       </div>
     )
   }

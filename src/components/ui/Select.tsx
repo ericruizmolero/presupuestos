@@ -32,13 +32,15 @@ interface Props {
   size?: 'compact' | 'field'
   disabled?: boolean
   'aria-label'?: string
+  /** Pinta un icono o color delante de cada opción (y en el botón) */
+  decorate?: (value: string) => React.ReactNode
 }
 
 /**
  * Desplegable propio (sustituye al <select> nativo). Misma API que un select:
  * <Select value onChange={(e) => e.target.value}><option …/></Select>
  */
-export function Select({ value, onChange, onKeyDown, children, className = '', size = 'field', disabled, ...rest }: Props) {
+export function Select({ value, onChange, onKeyDown, children, className = '', size = 'field', disabled, decorate, ...rest }: Props) {
   const options = readOptions(children)
   const current = options.find((o) => o.value === String(value ?? ''))
   const [open, setOpen] = useState(false)
@@ -130,6 +132,7 @@ export function Select({ value, onChange, onKeyDown, children, className = '', s
         onKeyDown={key}
         className={`${base} transition-colors focus:outline-none focus-visible:border-accent disabled:opacity-50 ${open ? 'border-input text-ink' : ''} ${className}`}
       >
+        {current && decorate?.(current.value)}
         <span className="truncate">{current?.label ?? ''}</span>
         <ChevronDown
           size={size === 'compact' ? 12 : 15}
@@ -157,12 +160,13 @@ export function Select({ value, onChange, onKeyDown, children, className = '', s
                 onMouseEnter={() => setHi(i)}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(o)}
-                className={`flex items-center gap-2 pl-2.5 pr-3 py-1.5 rounded-md cursor-pointer whitespace-nowrap ${size === 'compact' ? 'text-xs' : 'text-sm'} ${
+                className={`flex items-center gap-2 pl-2.5 pr-2.5 py-1.5 rounded-md cursor-pointer whitespace-nowrap ${size === 'compact' ? 'text-xs' : 'text-sm'} ${
                   o.disabled ? 'opacity-40 cursor-default' : ''
                 } ${i === hi ? 'bg-surface' : ''} ${sel ? 'text-ink font-medium' : 'text-ink-60'}`}
               >
-                <Check size={12} strokeWidth={2.25} className={`shrink-0 ${sel ? 'text-ink' : 'invisible'}`} />
+                {decorate ? decorate(o.value) : <Check size={12} strokeWidth={2.25} className={`shrink-0 ${sel ? 'text-ink' : 'invisible'}`} />}
                 {o.label}
+                {decorate && sel && <Check size={12} strokeWidth={2.25} className="ml-auto pl-2 shrink-0 text-ink" />}
               </li>
             )
           })}
