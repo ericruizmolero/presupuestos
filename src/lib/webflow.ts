@@ -193,12 +193,12 @@ export async function removeConnection(id: string): Promise<void> {
 // ── Tokens vigentes ──────────────────────────────────────────────────────────
 class Expired extends Error {}
 
-async function currentTokens(db: Firestore, id: string, force = false): Promise<Tokens> {
+async function currentTokens(db: Firestore, id: string, force = false, margin = 60_000): Promise<Tokens> {
   const ref = db.collection(CONNECTIONS).doc(id)
   const d = (await ref.get()).data() as Stored | undefined
   if (!d?.tokens) throw new Expired()
   const t = JSON.parse(open(d.tokens)) as Tokens
-  const stale = force || (t.expiresAt !== undefined && t.expiresAt < Date.now() + 60_000)
+  const stale = force || (t.expiresAt !== undefined && t.expiresAt < Date.now() + margin)
   if (!stale) return t
   if (!t.refresh) throw new Expired()
   let fresh: Tokens
@@ -284,6 +284,27 @@ async function rpc(db: Firestore, id: string, method: string, params: unknown): 
       throw e2
     }
   }
+}
+
+/**
+ * Mantenimiento (cron cada hora): renueva los tokens que caducan antes de la próxima pasada,
+ * para que las conexiones sigan vivas aunque nadie las use. Con force, todos.
+ */
+export async function keepAlive(force = false): Promise<{ name: string; ok: boolean }[]> {
+  const db = adminDb()
+  const all = await db.collection(CONNECTIONS).get()
+  const out: { name: string; ok: boolean }[] = []
+  for (const doc of all.docs) {
+    const d = doc.data() as Stored
+    if (!d.tokens) continue
+    try {
+      await currentTokens(db, doc.id, force, 75 * 60_000)
+      out.push({ name: d.name, ok: true })
+    } catch {
+      out.push({ name: d.name, ok: false })
+    }
+  }
+  return out
 }
 
 type WfTool = { name: string; description?: string; inputSchema?: unknown; annotations?: unknown }
