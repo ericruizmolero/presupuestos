@@ -16,7 +16,7 @@ import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import {
   subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, firstName, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
 } from '@/lib/firestore/emailTemplates'
-import { Check, Plus, X, ExternalLink, Trash2, GripVertical, Sparkles, ChevronRight, Copy, Mail } from 'lucide-react'
+import { ArrowRight, Check, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -388,13 +388,21 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
           </section>
         ))))}
 
-        {view === 'pipeline' && agentList.length > 0 && (
-          <Link href="/dashboard/prospeccion/agente" className="flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-xs text-ink-60 hover:text-ink hover:border-input">
-            <Sparkles size={12} strokeWidth={1.75} />
-            Prospect agent tiene {agentList.length} {agentList.length === 1 ? 'propuesta' : 'propuestas'}{agentList.some((x) => !x.doubts) ? `, ${agentList.filter((x) => !x.doubts).length} sin revisar` : ''}
-            <ChevronRight size={12} strokeWidth={2} className="ml-auto" />
-          </Link>
-        )}
+        {view === 'pipeline' && agentList.length > 0 && (() => {
+          const fresh = agentList.filter((x) => !x.doubts).length
+          const doubts = agentList.length - fresh
+          const parts = [fresh ? `${fresh} por revisar` : '', doubts ? `${doubts} con dudas` : ''].filter(Boolean)
+          return (
+            <Link href="/dashboard/prospeccion/agente" className="group flex items-baseline gap-3 text-sm">
+              <span className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-40">Prospect agent</span>
+              <span className={fresh ? 'text-ink' : 'text-ink-60'}>{parts.join(' y ')}</span>
+              <span className="inline-flex items-center gap-1 text-ink-40 group-hover:text-ink transition-colors">
+                Ver
+                <ArrowRight size={12} strokeWidth={1.75} className="translate-y-px transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </Link>
+          )
+        })()}
 
         {view === 'pipeline' && active.map((st) => {
           const list = items.filter((x) => x.stage === st.id)
