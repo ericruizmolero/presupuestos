@@ -270,11 +270,18 @@ function ProspeccionContent() {
           {p.stage === 'agente' && (
             <>
               <button
-                onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday() })}
+                onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday(), doubts: undefined })}
                 title="Elegir: pasa a Elegidos"
                 className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-accent text-on-accent hover:bg-accent-hover"
               >
                 <Check size={12} strokeWidth={2.5} />Elegir
+              </button>
+              <button
+                onClick={() => patch(p.id, { doubts: !p.doubts })}
+                title={p.doubts ? 'Quitar la marca de dudas' : 'Revisado, se queda en Prospect agent pero con dudas'}
+                className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors ${p.doubts ? 'border-[#F59E0B] bg-[#FEF3C7] text-[#92400E]' : 'border-line text-ink-60 hover:border-input hover:text-ink'}`}
+              >
+                Tengo dudas
               </button>
               <button
                 onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
@@ -340,7 +347,7 @@ function ProspeccionContent() {
               <Sparkles size={12} strokeWidth={1.75} className="self-center text-ink-60" />
               <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">Prospect agent</h2>
               <span className="text-[10px] text-ink-40 tabular-nums">{agentList.length}</span>
-              <span className="text-xs text-ink-40">· Propuestos por Claude. Elegir lo pasa a Elegidos; ✕ lo descarta.</span>
+              <span className="text-xs text-ink-40">· Propuestos por Claude. Elegir lo pasa a Elegidos, Tengo dudas lo deja aquí marcado como revisado y ✕ lo descarta.</span>
             </button>
             {showAgent && <div
               onDragOver={(e) => { if (dragId) e.preventDefault() }}

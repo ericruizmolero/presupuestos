@@ -55,6 +55,7 @@ export interface Prospect {
   by?: string
   stageDate?: string
   sentDate?: string     // cuándo les escribimos (si no, la fecha en que pasó a Enviado)
+  doubts?: boolean      // Prospect agent: revisado, se queda pero con dudas
   touches?: ProspectTouch[] // seguimientos hechos después del envío
 }
 

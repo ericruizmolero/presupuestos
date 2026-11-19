@@ -381,7 +381,7 @@ const TOOLS = [
   {
     name: 'ver_prospectos',
     annotations: { readOnlyHint: true },
-    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. En los enviados muestra el seguimiento: cuándo se envió y qué acciones se han hecho después (reenvío, LinkedIn, otro socio…), con fecha. Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?", "¿cuánto hace que escribimos a X?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
+    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni; los marcados "(revisado, con dudas)" ya los han visto y no los tienen claros. En los enviados muestra el seguimiento: cuándo se envió y qué acciones se han hecho después (reenvío, LinkedIn, otro socio…), con fecha. Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?", "¿cuánto hace que escribimos a X?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -406,6 +406,7 @@ const TOOLS = [
         primero: { type: 'boolean', description: 'Subirlo al primer puesto de su etapa' },
         quitar_motivos: { type: 'array', items: { type: 'string' }, description: 'Motivos a eliminar (coincidencia parcial)' },
         notas: { type: 'string' },
+        dudas: { type: 'boolean', description: 'Prospect agent: true = revisado por Eric o Andoni, se queda pero con dudas; false lo quita' },
         enviado_el: { type: 'string', description: 'Fecha en que les escribimos (YYYY-MM-DD), si no es el día en que pasó a Enviado' },
         seguimiento: { type: 'string', description: 'Apunta un seguimiento hecho hoy (o en seguimiento_fecha): "Reenvío", "LinkedIn", "Otro socio", "Último toque"…' },
         seguimiento_fecha: { type: 'string', description: 'YYYY-MM-DD del seguimiento; por defecto hoy' },
@@ -676,7 +677,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
     const ref = db().collection('prospects').doc(cid)
     const snap = await ref.get()
-    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[] }
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[]; doubts?: boolean }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
     const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'Respondido', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
@@ -687,7 +688,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         if (!list.length) continue
         out.push(`## ${STG[k]}`)
         for (const x of list) {
-          out.push(`${list.indexOf(x) + 1}. ${x.name}${x.region ? ` {${x.region === 'us' ? 'EE. UU.' : 'España'}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
+          out.push(`${list.indexOf(x) + 1}. ${x.name}${x.doubts ? ' (revisado, con dudas)' : ''}${x.region ? ` {${x.region === 'us' ? 'EE. UU.' : 'España'}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
           for (const r of x.reasons) out.push(`    · ${r}`)
           if (x.angle) out.push(`    ángulo: ${x.angle}`)
           if (x.response) out.push(`    respuesta: ${x.response}`)
@@ -746,6 +747,8 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (typeof args.email === 'string') p.email = args.email.trim() || undefined
     if (typeof args.propuesta === 'string') p.proposalUrl = args.propuesta.trim() || undefined
     if (typeof args.gancho === 'string') p.hook = args.gancho.trim() || undefined
+    if (args.dudas === true) p.doubts = true
+    if (args.dudas === false || (p.stage !== 'agente' && p.doubts)) delete p.doubts
     const isDate = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
     if (isDate(args.enviado_el)) p.sentDate = String(args.enviado_el)
     if (typeof args.seguimiento === 'string' && args.seguimiento.trim()) {
