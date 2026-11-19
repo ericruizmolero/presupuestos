@@ -1,7 +1,7 @@
 /**
- * Cron de Vercel (cada hora): mantiene vivas las conexiones de Webflow renovando sus tokens.
+ * Cron de Vercel (diario): mantiene vivas las conexiones de Webflow renovando sus tokens.
  * Vercel manda Authorization: Bearer CRON_SECRET si esa variable existe. Sin ella, la ruta solo
- * renueva lo que está a punto de caducar (inofensivo). Forzar todo requiere la clave del conector.
+ * renueva lo que lleva más de 12 h sin renovarse (inofensivo). Forzar todo requiere la clave del conector.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { keepAlive } from '@/lib/webflow'

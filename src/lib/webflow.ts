@@ -59,6 +59,7 @@ export interface Connection {
 }
 interface Stored extends Omit<Connection, 'id'> {
   client?: SealedClient
+  refreshedAt?: number
   tokens?: string // sellado: { access, refresh, expiresAt }
   tokenVersion?: number
   toolsCache?: { at: number; json: string }
@@ -164,7 +165,7 @@ export async function finishConnect(state: string, code: string): Promise<string
   const now = new Date().toISOString()
   await ref.set({
     name: p.name, status: 'ok', active: true, connectedBy: p.by, connectedAt: now,
-    tokens: seal(JSON.stringify(t)), tokenVersion: FieldValue.increment(1), toolsCache: FieldValue.delete(),
+    tokens: seal(JSON.stringify(t)), tokenVersion: FieldValue.increment(1), toolsCache: FieldValue.delete(), refreshedAt: Date.now(),
     ...(p.client ? { client: p.client } : {}),
   }, { merge: true })
   // Qué espacio es: se apunta si se puede, sin bloquear la conexión
@@ -193,12 +194,12 @@ export async function removeConnection(id: string): Promise<void> {
 // ── Tokens vigentes ──────────────────────────────────────────────────────────
 class Expired extends Error {}
 
-async function currentTokens(db: Firestore, id: string, force = false, margin = 60_000): Promise<Tokens> {
+async function currentTokens(db: Firestore, id: string, force = false): Promise<Tokens> {
   const ref = db.collection(CONNECTIONS).doc(id)
   const d = (await ref.get()).data() as Stored | undefined
   if (!d?.tokens) throw new Expired()
   const t = JSON.parse(open(d.tokens)) as Tokens
-  const stale = force || (t.expiresAt !== undefined && t.expiresAt < Date.now() + margin)
+  const stale = force || (t.expiresAt !== undefined && t.expiresAt < Date.now() + 60_000)
   if (!stale) return t
   if (!t.refresh) throw new Expired()
   let fresh: Tokens
@@ -215,7 +216,7 @@ async function currentTokens(db: Firestore, id: string, force = false, margin = 
   await db.runTransaction(async (tx) => {
     const cur = (await tx.get(ref)).data() as Stored | undefined
     if (cur?.tokenVersion !== d.tokenVersion) return // otro ya guardó uno nuevo; el nuestro también vale
-    tx.update(ref, { tokens: seal(JSON.stringify(fresh)), tokenVersion: FieldValue.increment(1), status: 'ok' })
+    tx.update(ref, { tokens: seal(JSON.stringify(fresh)), tokenVersion: FieldValue.increment(1), status: 'ok', refreshedAt: Date.now() })
   })
   return fresh
 }
@@ -287,8 +288,8 @@ async function rpc(db: Firestore, id: string, method: string, params: unknown): 
 }
 
 /**
- * Mantenimiento (cron cada hora): renueva los tokens que caducan antes de la próxima pasada,
- * para que las conexiones sigan vivas aunque nadie las use. Con force, todos.
+ * Mantenimiento (cron diario): renueva el token de las conexiones que llevan más de 12 h sin renovarse,
+ * para que el token de refresco no caduque aunque nadie use la cuenta en semanas. Con force, todas.
  */
 export async function keepAlive(force = false): Promise<{ name: string; ok: boolean }[]> {
   const db = adminDb()
@@ -297,8 +298,10 @@ export async function keepAlive(force = false): Promise<{ name: string; ok: bool
   for (const doc of all.docs) {
     const d = doc.data() as Stored
     if (!d.tokens) continue
+    const recent = d.refreshedAt && Date.now() - d.refreshedAt < 12 * 3600_000
+    if (recent && !force) continue
     try {
-      await currentTokens(db, doc.id, force, 75 * 60_000)
+      await currentTokens(db, doc.id, true)
       out.push({ name: d.name, ok: true })
     } catch {
       out.push({ name: d.name, ok: false })
