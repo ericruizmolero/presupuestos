@@ -18,7 +18,7 @@ import { Faces } from '@/components/studio/StudioMarks'
 import {
   subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, firstName, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
 } from '@/lib/firestore/emailTemplates'
-import { ArrowRight, Check, Inbox, Target, PenTool, Send, MessageCircle, ThumbsDown, Trophy, CircleX, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
+import { ArrowRight, Check, Inbox, Target, PenTool, Send, MessageCircle, ThumbsDown, Trophy, CircleX, CircleHelp, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -355,28 +355,31 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
         <span className="col-start-2 md:col-start-auto flex items-center gap-2 justify-end">
           {p.stage === 'agente' && (
             <>
-              <button
-                onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday(), doubts: undefined })}
-                title="Elegir: pasa a Elegidos"
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-accent text-on-accent hover:bg-accent-hover"
-              >
-                <Check size={12} strokeWidth={2.5} />Elegir
-              </button>
-              <button
-                onClick={() => patch(p.id, { doubts: !p.doubts })}
-                title={p.doubts ? 'Quitar la marca de dudas' : 'Revisado, se queda en Prospect agent pero con dudas'}
-                className={`px-2 py-0.5 rounded-md text-xs font-medium border transition-colors ${p.doubts ? 'border-input bg-surface text-ink' : 'border-line text-ink-60 hover:border-input hover:text-ink'}`}
-              >
-                Tengo dudas
-              </button>
-              <button
-                onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
-                title="Descartar (queda en descartados y el agente no lo vuelve a proponer)"
-                className="p-1 rounded-md text-ink-40 hover:text-ink hover:bg-surface-hover"
-                aria-label="Descartar"
-              >
-                <X size={14} strokeWidth={1.75} />
-              </button>
+              <span className="inline-flex h-7 rounded-md border border-line bg-paper divide-x divide-line overflow-hidden text-xs">
+                <button
+                  onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday(), doubts: undefined })}
+                  title="Elegir: pasa a Elegidos"
+                  className="flex items-center gap-1.5 pl-2.5 pr-3 font-medium text-ink hover:bg-surface transition-colors"
+                >
+                  <Target size={12} strokeWidth={2} className="shrink-0" style={{ color: STAGE_LOOK.detectado.color }} />Elegir
+                </button>
+                <button
+                  onClick={() => patch(p.id, { doubts: !p.doubts })}
+                  aria-pressed={!!p.doubts}
+                  title={p.doubts ? 'Quitar la marca de dudas' : 'Revisado, se queda en Prospect agent pero con dudas'}
+                  className={`flex items-center gap-1.5 pl-2.5 pr-3 transition-colors ${p.doubts ? 'bg-surface text-ink font-medium' : 'text-ink-60 hover:bg-surface hover:text-ink'}`}
+                >
+                  <CircleHelp size={12} strokeWidth={2} className="shrink-0" style={{ color: '#6366F1' }} />Tengo dudas
+                  {p.doubts && <Check size={11} strokeWidth={2.5} className="shrink-0 text-ink" />}
+                </button>
+                <button
+                  onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
+                  title="Descartar (queda en descartados y el agente no lo vuelve a proponer)"
+                  className="flex items-center gap-1.5 pl-2.5 pr-3 text-ink-60 hover:bg-surface hover:text-ink transition-colors"
+                >
+                  <CircleX size={12} strokeWidth={2} className="shrink-0" style={{ color: STAGE_LOOK.descartado.color }} />Descartar
+                </button>
+              </span>
             </>
           )}
           {p.stage !== 'agente' && <Select
@@ -408,7 +411,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
       </div>
       {view === 'agent' ? (
         <p className="text-sm text-ink-40 mb-8 max-w-2xl">
-          Empresas que propone Claude. Elegir las pasa a Elegidos, Tengo dudas las deja aquí marcadas como revisadas y ✕ las descarta.
+          Empresas que propone Claude. Elegir las pasa a Elegidos, Tengo dudas las deja aquí marcadas como revisadas y Descartar las saca.
         </p>
       ) : (
         <>
