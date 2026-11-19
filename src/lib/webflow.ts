@@ -18,7 +18,7 @@ export const APP_BASE = 'https://client.savvia.studio'
 export const REDIRECT_URI = `${APP_BASE}/api/webflow/callback`
 const CONNECTIONS = 'webflowConnections'
 const PENDING = 'webflowPending'
-const CLIENT_DOC = 'webflowOAuth/client'
+const LEGACY_CLIENT_DOC = 'webflowOAuth/client'
 const TOOLS_TTL = 60 * 60 * 1000
 const PROTOCOL = '2025-06-18'
 
@@ -58,6 +58,7 @@ export interface Connection {
   lastUsedAt?: string
 }
 interface Stored extends Omit<Connection, 'id'> {
+  client?: SealedClient
   tokens?: string // sellado: { access, refresh, expiresAt }
   tokenVersion?: number
   toolsCache?: { at: number; json: string }
@@ -81,17 +82,20 @@ export async function listConnections(db: Firestore = adminDb()): Promise<Connec
 }
 
 // ── OAuth ────────────────────────────────────────────────────────────────────
-/** Registro dinámico de Savvia como cliente OAuth en Webflow (una sola vez) */
-async function oauthClient(db: Firestore): Promise<{ clientId: string; clientSecret?: string }> {
-  const ref = db.doc(CLIENT_DOC)
-  const snap = await ref.get()
-  const d = snap.data() as { clientId?: string; clientSecret?: string; redirectUri?: string } | undefined
-  if (d?.clientId && d.redirectUri === REDIRECT_URI) return { clientId: d.clientId, clientSecret: d.clientSecret ? open(d.clientSecret) : undefined }
+/**
+ * Cliente OAuth de cada conexión. Webflow guarda UNA autorización por usuario de Webflow y cliente OAuth:
+ * si todas las conexiones compartieran cliente, conectar un espacio anularía el anterior del mismo usuario.
+ * Por eso cada conexión registra el suyo (registro dinámico) y lo reutiliza al reconectar.
+ */
+type Client = { clientId: string; clientSecret?: string }
+type SealedClient = { clientId: string; clientSecret?: string | null }
+
+async function registerClient(name: string): Promise<SealedClient> {
   const res = await fetch(WF.register, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      client_name: 'Savvia',
+      client_name: `Savvia (${name})`,
       client_uri: APP_BASE,
       redirect_uris: [REDIRECT_URI],
       grant_types: ['authorization_code', 'refresh_token'],
@@ -101,21 +105,32 @@ async function oauthClient(db: Firestore): Promise<{ clientId: string; clientSec
   })
   if (!res.ok) throw new Error(`Webflow no aceptó el registro del cliente OAuth (${res.status})`)
   const j = (await res.json()) as { client_id: string; client_secret?: string }
-  await ref.set({ clientId: j.client_id, clientSecret: j.client_secret ? seal(j.client_secret) : null, redirectUri: REDIRECT_URI, at: new Date().toISOString() })
-  return { clientId: j.client_id, clientSecret: j.client_secret }
+  return { clientId: j.client_id, clientSecret: j.client_secret ? seal(j.client_secret) : null }
+}
+
+const unseal = (c: SealedClient): Client => ({ clientId: c.clientId, clientSecret: c.clientSecret ? open(c.clientSecret) : undefined })
+
+/** Cliente de una conexión; las primeras conexiones usaban el compartido */
+async function clientOf(db: Firestore, d: { client?: SealedClient }): Promise<Client> {
+  if (d.client?.clientId) return unseal(d.client)
+  const legacy = (await db.doc(LEGACY_CLIENT_DOC).get()).data() as SealedClient | undefined
+  if (!legacy?.clientId) throw new Error('Conexión sin cliente OAuth')
+  return unseal(legacy)
 }
 
 /** Prepara una conexión (nueva o reconexión) y devuelve la URL de autorización de Webflow */
 export async function startConnect(by: string, name: string, connectionId?: string): Promise<string> {
   const db = adminDb()
-  const { clientId } = await oauthClient(db)
+  // al reconectar se reutiliza su cliente (sustituye su propia autorización); si no tiene, uno nuevo
+  const existing = connectionId ? ((await db.collection(CONNECTIONS).doc(connectionId).get()).data() as { client?: SealedClient } | undefined) : undefined
+  const client = existing?.client?.clientId ? existing.client : await registerClient(name)
   const verifier = b64url(randomBytes(32))
   const challenge = b64url(createHash('sha256').update(verifier).digest())
   const state = b64url(randomBytes(24))
-  await db.collection(PENDING).doc(state).set({ verifier: seal(verifier), name, by, connectionId: connectionId || null, createdAt: Date.now() })
+  await db.collection(PENDING).doc(state).set({ verifier: seal(verifier), name, by, connectionId: connectionId || null, client, createdAt: Date.now() })
   const u = new URL(WF.authorize)
   u.searchParams.set('response_type', 'code')
-  u.searchParams.set('client_id', clientId)
+  u.searchParams.set('client_id', client.clientId)
   u.searchParams.set('redirect_uri', REDIRECT_URI)
   u.searchParams.set('code_challenge', challenge)
   u.searchParams.set('code_challenge_method', 'S256')
@@ -124,10 +139,9 @@ export async function startConnect(by: string, name: string, connectionId?: stri
   return u.toString()
 }
 
-async function tokenRequest(db: Firestore, params: Record<string, string>): Promise<Tokens> {
-  const { clientId, clientSecret } = await oauthClient(db)
-  const body = new URLSearchParams({ ...params, client_id: clientId, resource: WF.mcp })
-  if (clientSecret) body.set('client_secret', clientSecret)
+async function tokenRequest(client: Client, params: Record<string, string>): Promise<Tokens> {
+  const body = new URLSearchParams({ ...params, client_id: client.clientId, resource: WF.mcp })
+  if (client.clientSecret) body.set('client_secret', client.clientSecret)
   const res = await fetch(WF.token, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' }, body })
   if (!res.ok) {
     // sin cuerpo en el log: podría llevar datos sensibles
@@ -141,16 +155,17 @@ async function tokenRequest(db: Firestore, params: Record<string, string>): Prom
 export async function finishConnect(state: string, code: string): Promise<string> {
   const db = adminDb()
   const pref = db.collection(PENDING).doc(state)
-  const p = (await pref.get()).data() as { verifier: string; name: string; by: string; connectionId: string | null; createdAt: number } | undefined
+  const p = (await pref.get()).data() as { verifier: string; name: string; by: string; connectionId: string | null; client?: SealedClient; createdAt: number } | undefined
   if (!p) throw new Error('Este enlace de conexión ya se usó o no existe. Vuelve a empezar desde Savvia.')
   await pref.delete()
   if (Date.now() - p.createdAt > 15 * 60 * 1000) throw new Error('El enlace de conexión ha caducado. Vuelve a empezar desde Savvia.')
-  const t = await tokenRequest(db, { grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI, code_verifier: open(p.verifier) })
+  const t = await tokenRequest(await clientOf(db, p), { grant_type: 'authorization_code', code, redirect_uri: REDIRECT_URI, code_verifier: open(p.verifier) })
   const ref = p.connectionId ? db.collection(CONNECTIONS).doc(p.connectionId) : db.collection(CONNECTIONS).doc()
   const now = new Date().toISOString()
   await ref.set({
     name: p.name, status: 'ok', active: true, connectedBy: p.by, connectedAt: now,
     tokens: seal(JSON.stringify(t)), tokenVersion: FieldValue.increment(1), toolsCache: FieldValue.delete(),
+    ...(p.client ? { client: p.client } : {}),
   }, { merge: true })
   // Qué espacio es: se apunta si se puede, sin bloquear la conexión
   try { await describeWorkspace(db, ref.id) } catch (e) { console.error('[webflow] No se pudo leer el espacio:', e instanceof Error ? e.message : e) }
@@ -165,7 +180,7 @@ export async function removeConnection(id: string): Promise<void> {
     // revocación de buena fe; si Webflow no la acepta, el token muere al caducar
     try {
       const t = JSON.parse(open(d.tokens)) as Tokens
-      const { clientId } = await oauthClient(db)
+      const { clientId } = await clientOf(db, d)
       await fetch(`${WF.base}/oauth/revoke`, {
         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token: t.refresh || t.access, client_id: clientId }),
@@ -188,7 +203,7 @@ async function currentTokens(db: Firestore, id: string, force = false): Promise<
   if (!t.refresh) throw new Expired()
   let fresh: Tokens
   try {
-    fresh = await tokenRequest(db, { grant_type: 'refresh_token', refresh_token: t.refresh })
+    fresh = await tokenRequest(await clientOf(db, d), { grant_type: 'refresh_token', refresh_token: t.refresh })
   } catch {
     // ¿lo ha refrescado otra llamada a la vez? entonces usamos el suyo
     const again = (await ref.get()).data() as Stored | undefined
