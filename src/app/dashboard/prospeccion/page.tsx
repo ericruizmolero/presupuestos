@@ -58,6 +58,26 @@ function FollowUpTrack({ p }: { p: Prospect }) {
   )
 }
 
+/** Las dudas de un candidato del agente: se escriben en la propia fila y se guardan al salir */
+function DoubtsNote({ p, onPatch }: { p: Prospect; onPatch: (x: Partial<Prospect>) => void }) {
+  const [v, setV] = useState(p.doubtsNote || '')
+  useEffect(() => { setV(p.doubtsNote || '') }, [p.doubtsNote])
+  return (
+    <label className="col-start-2 md:col-start-3 md:col-span-2 mt-1 flex items-start gap-2 rounded-md bg-[#FEF3C7] px-2.5 py-1.5">
+      <span className="shrink-0 pt-px text-[10px] font-medium tracking-[0.14em] uppercase text-[#92400E]">Dudas</span>
+      <textarea
+        rows={1}
+        value={v}
+        placeholder="¿Qué no nos convence? (ronda pequeña, sector regulado, ya tienen agencia…)"
+        onChange={(e) => setV(e.target.value)}
+        onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px' }}
+        onBlur={() => { const n = v.trim() || undefined; if (n !== p.doubtsNote) onPatch({ doubtsNote: n }) }}
+        className="flex-1 min-w-0 resize-none [field-sizing:content] bg-transparent text-[13px] leading-snug text-[#92400E] placeholder-[#92400E]/50 outline-none"
+      />
+    </label>
+  )
+}
+
 export default function ProspeccionPage() {
   return (
     <AuthGuard>
@@ -302,6 +322,7 @@ function ProspeccionContent() {
             {STAGES.map((s2) => <option key={s2.id} value={s2.id}>{s2.label}</option>)}
           </select>}
         </span>
+        {p.stage === 'agente' && p.doubts && <DoubtsNote p={p} onPatch={(x) => patch(p.id, x)} />}
       </div>
     )
   }
