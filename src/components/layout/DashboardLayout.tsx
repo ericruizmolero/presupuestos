@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import { signOut } from '@/lib/auth'
 import { Faces } from '@/components/studio/StudioMarks'
 import { myName } from '@/components/studio/boardUtils'
-import { ChevronDown, FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug, ClipboardList, ScanSearch } from 'lucide-react'
+import { ChevronDown, FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug, ClipboardList, ScanSearch, Globe } from 'lucide-react'
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 
@@ -24,6 +24,7 @@ const navLinks: Array<{ href: string; label: string; icon: typeof FileText; chil
       { href: '/dashboard/prospeccion/agente', label: 'Prospect agent' },
     ],
   },
+  { href: '/webflow', label: 'Webflow', icon: Globe },
   { href: '/dashboard/mcp', label: 'MCP', icon: Plug },
   { href: '/settings', label: 'Configuración', icon: Settings },
   { href: '/tematica', label: 'Temática', icon: Palette },

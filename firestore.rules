@@ -38,9 +38,10 @@ service cloud.firestore {
       allow list, write: if isTeam();
     }
 
-    // Todo lo demás (tablón de proyectos, usuarios…): solo el estudio
-    match /{document=**} {
-      allow read, write: if isTeam();
+    // Todo lo demás (tablón de proyectos, usuarios…): solo el estudio.
+    // Las conexiones de Webflow (tokens cifrados) solo las toca el servidor: ni el estudio las lee desde el navegador.
+    match /{coll}/{document=**} {
+      allow read, write: if isTeam() && !(coll in ['webflowConnections', 'webflowPending', 'webflowOAuth']);
     }
   }
 }

@@ -49,3 +49,4 @@ HANDOFF-*.md
 
 # logs de la CLI de Firebase
 firebase-debug.log
+scripts/.webflow-token-key

@@ -15,11 +15,13 @@ import { QUOTE_TOOLS, QUOTE_TOOL_NAMES, handleQuoteTool } from '@/lib/mcpQuotes'
 import { QUESTIONNAIRE_TOOLS, QUESTIONNAIRE_TOOL_NAMES, handleQuestionnaireTool, questionnaireNews } from '@/lib/mcpQuestionnaires'
 import { EMAIL_TOOLS, EMAIL_TOOL_NAMES, handleEmailTool } from '@/lib/mcpEmails'
 import { AUDIT_TOOLS, AUDIT_TOOL_NAMES, handleAuditTool } from '@/lib/mcpAudits'
+import { WEBFLOW_TOOLS, WEBFLOW_TOOL_NAMES, handleWebflowTool } from '@/lib/webflow'
 import { followUpOf, type ProspectTouch } from '@/lib/prospectFollowUp'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 
 const DEFAULT_PERSON = 'Eric y Andoni'
 const PUBLIC_BASE = 'https://client.savvia.studio'
@@ -588,7 +590,8 @@ const TOOLS = [
 
 type ToolArgs = Record<string, unknown>
 
-async function callTool(name: string, args: ToolArgs): Promise<{ text: string; isError?: boolean }> {
+async function callTool(name: string, args: ToolArgs): Promise<{ text: string; isError?: boolean; content?: unknown[] }> {
+  if (WEBFLOW_TOOL_NAMES.has(name)) return handleWebflowTool(db(), name, args as Record<string, unknown>)
   if (QUOTE_TOOL_NAMES.has(name)) return handleQuoteTool(db(), name, args as Record<string, unknown>)
   if (QUESTIONNAIRE_TOOL_NAMES.has(name)) return handleQuestionnaireTool(db(), name, args as Record<string, unknown>)
   if (AUDIT_TOOL_NAMES.has(name)) return handleAuditTool(db(), name, args as Record<string, unknown>)
@@ -1346,12 +1349,13 @@ export async function POST(req: NextRequest) {
       case 'ping':
         return reply({})
       case 'tools/list':
-        return reply({ tools: [...TOOLS, ...QUOTE_TOOLS, ...QUESTIONNAIRE_TOOLS, ...EMAIL_TOOLS, ...AUDIT_TOOLS] })
+        return reply({ tools: [...TOOLS, ...QUOTE_TOOLS, ...QUESTIONNAIRE_TOOLS, ...EMAIL_TOOLS, ...AUDIT_TOOLS, ...WEBFLOW_TOOLS] })
       case 'tools/call': {
         const name = String(rpc.params?.name || '')
         const args = (rpc.params?.arguments as ToolArgs) || {}
-        const { text, isError } = await callTool(name, args)
-        return reply({ content: [{ type: 'text', text }], isError: isError === true })
+        const { text, isError, content } = await callTool(name, args)
+        // Webflow: su respuesta va tal cual (puede traer imágenes)
+        return reply({ content: content ?? [{ type: 'text', text }], isError: isError === true })
       }
       default:
         return fail(-32601, `Método no soportado: ${rpc.method}`)
