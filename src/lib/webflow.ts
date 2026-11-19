@@ -283,8 +283,7 @@ async function toolsOf(db: Firestore, id: string, d: Stored): Promise<WfTool[]> 
 
 /** Tras conectar: apunta los sitios que ve el token, para reconocer el espacio */
 async function describeWorkspace(db: Firestore, id: string): Promise<void> {
-  const r = (await rpc(db, id, 'tools/call', { name: 'data_sites_tool', arguments: { actions: [{ list_sites: {} }] } })) as { content?: Array<{ type: string; text?: string }> }
-  const text = (r?.content || []).map((c) => c.text || '').join('\n')
+  const r = (await rpc(db, id, 'tools/call', { name: 'data_sites_tool', arguments: { actions: [{ label: 'savvia', list_sites: {} }] } })) as { content?: Array<{ type: string; text?: string }> }
   const names = new Set<string>()
   let workspace: string | undefined
   try {
@@ -297,7 +296,7 @@ async function describeWorkspace(db: Firestore, id: string): Promise<void> {
         Object.values(o).forEach(walk)
       }
     }
-    walk(JSON.parse(text))
+    for (const c of r?.content || []) { try { walk(JSON.parse(c.text || '')) } catch {} }
   } catch {}
   const patch: Record<string, unknown> = {}
   if (names.size) patch.sites = [...names].slice(0, 20)
@@ -370,7 +369,13 @@ const expired = (name: string): Result => ({ text: `La conexión ${name} ha cadu
 
 export async function handleWebflowTool(db: Firestore, name: string, a: Record<string, unknown>): Promise<Result> {
   if (name === 'webflow_cuentas') {
-    const list = await listConnections(db)
+    let list = await listConnections(db)
+    // las que aún no tienen sitios apuntados: se intenta una vez ahora
+    const missing = list.filter((c) => c.active && c.status === 'ok' && !c.sites?.length)
+    if (missing.length) {
+      await Promise.all(missing.map((c) => describeWorkspace(db, c.id).catch(() => {})))
+      list = await listConnections(db)
+    }
     if (!list.length) return { text: `No hay cuentas de Webflow conectadas. Se conectan en ${APP_BASE}/webflow` }
     return {
       text: list.map((c) => {
