@@ -144,13 +144,17 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="px-3 py-4 border-t border-line space-y-1">
-          <div className="flex items-center gap-2.5 px-3 py-2 min-w-0">
+          <Link
+            href="/cuenta"
+            title="Tu cuenta"
+            className={`flex items-center gap-2.5 px-3 py-2 min-w-0 rounded-md transition-colors ${pathname === '/cuenta' ? 'bg-surface-hover' : 'hover:bg-surface-hover'}`}
+          >
             <Faces who={myName(user?.displayName, user?.email)} size={28} ring="var(--color-surface)" />
             <div className="min-w-0">
               <p className="text-sm font-medium text-ink truncate">{user?.displayName || myName(user?.displayName, user?.email)}</p>
               <p className="text-xs text-ink-40 truncate">{user?.email}</p>
             </div>
-          </div>
+          </Link>
           <button
             onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-ink-60 hover:bg-surface-hover hover:text-ink transition-colors"

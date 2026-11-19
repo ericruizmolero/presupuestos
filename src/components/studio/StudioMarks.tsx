@@ -2,6 +2,7 @@
 
 import { FACES, logoFor, initials } from '@/lib/studioAssets'
 import { ImageIcon } from 'lucide-react'
+import { useTeamPhotos } from '@/lib/teamPhotos'
 
 type Who = 'Eric' | 'Andoni' | 'Eric y Andoni'
 
@@ -12,13 +13,14 @@ function asWho(value?: string): Who {
 /** Cara redonda; para "Eric y Andoni" las dos superpuestas */
 export function Faces({ who, size = 22, ring = 'var(--color-paper)' }: { who?: string; size?: number; ring?: string }) {
   const w = asWho(who)
+  const photos = useTeamPhotos()
   const people: Array<'Eric' | 'Andoni'> = w === 'Eric y Andoni' ? ['Eric', 'Andoni'] : [w]
   return (
     <span className="inline-flex items-center shrink-0" aria-label={w === 'Eric y Andoni' ? 'Eric y Andoni' : w}>
       {people.map((p, i) => (
         <img
           key={p}
-          src={FACES[p]}
+          src={photos[p] || FACES[p]}
           alt={p}
           width={size}
           height={size}

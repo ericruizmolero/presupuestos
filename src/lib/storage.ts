@@ -51,3 +51,11 @@ export async function uploadTaskImage(companyId: string, file: File): Promise<st
   await uploadBytes(storageRef, blob, { contentType: blob.type || file.type })
   return getDownloadURL(storageRef)
 }
+
+/** Foto de perfil: cuadrada no hace falta, se recorta en redondo al pintarla */
+export async function uploadAvatar(uid: string, file: File): Promise<string> {
+  const blob = await downscale(file, 512)
+  const storageRef = ref(storage, `users/${uid}/avatar-${Date.now()}.webp`)
+  await uploadBytes(storageRef, blob, { contentType: blob.type || file.type })
+  return getDownloadURL(storageRef)
+}
