@@ -9,7 +9,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 import { madridToday } from '@/lib/firestore/planning'
 import {
-  subscribeProspects, saveProspects, STAGES, PRIORITIES, PRIORITY_STAGES, REGIONS, followUpOf, daysBetween, type Prospect, type ProspectStage, type ProspectPriority,
+  subscribeProspects, saveProspects, STAGES, PRIORITY_STAGES, REGIONS, followUpOf, daysBetween, type Prospect, type ProspectStage,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
 import {
@@ -151,12 +151,6 @@ function ProspeccionContent() {
     setOverId(null)
   }
 
-  function cyclePriority(p: Prospect) {
-    const order: ProspectPriority[] = ['alta', 'media', 'baja']
-    const cur = p.priority ?? 'media'
-    patch(p.id, { priority: order[(order.indexOf(cur) + 1) % order.length] })
-  }
-
   function add() {
     const name = newName.trim()
     if (!name) return
@@ -175,7 +169,6 @@ function ProspeccionContent() {
   const open = openId ? items.find((x) => x.id === openId) : null
 
   function row(p: Prospect) {
-    const pr = PRIORITIES.find((x) => x.id === (p.priority ?? 'media'))!
     // Una vez enviado, la fila se compacta: fechas y seguimiento (o la respuesta); los motivos siguen en la ficha
     const sent = !PRIORITY_STAGES.includes(p.stage)
     return (
@@ -293,23 +286,14 @@ function ProspeccionContent() {
               </button>
             </>
           )}
-          {PRIORITY_STAGES.includes(p.stage) && (
-            <button
-              onClick={() => cyclePriority(p)}
-              title="Prioridad: clic para cambiar"
-              className={`px-1.5 py-px rounded text-[11px] font-medium ${pr.cls}`}
-            >
-              {pr.label}
-            </button>
-          )}
-          <select
+          {p.stage !== 'agente' && <select
             value={p.stage}
             onChange={(e) => patch(p.id, { stage: e.target.value as ProspectStage, stageDate: madridToday() })}
             className="text-xs text-ink-60 bg-transparent border border-line rounded px-1.5 py-0.5 hover:border-input focus:outline-none focus:border-accent"
             aria-label="Etapa"
           >
             {STAGES.map((s2) => <option key={s2.id} value={s2.id}>{s2.label}</option>)}
-          </select>
+          </select>}
         </span>
       </div>
     )
@@ -356,7 +340,7 @@ function ProspeccionContent() {
               <Sparkles size={12} strokeWidth={1.75} className="self-center text-ink-60" />
               <h2 className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink">Prospect agent</h2>
               <span className="text-[10px] text-ink-40 tabular-nums">{agentList.length}</span>
-              <span className="text-xs text-ink-40">· Propuestos por Claude. Elige los que te convenzan; pasan a Elegidos. ✕ los descarta.</span>
+              <span className="text-xs text-ink-40">· Propuestos por Claude. Elegir lo pasa a Elegidos; ✕ lo descarta.</span>
             </button>
             {showAgent && <div
               onDragOver={(e) => { if (dragId) e.preventDefault() }}
@@ -523,21 +507,6 @@ function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
               )}
             </section>
           )}
-
-          <section>
-            <span className={LABEL}>Prioridad</span>
-            <div className="flex gap-1.5">
-              {PRIORITIES.map((x) => (
-                <button
-                  key={x.id}
-                  onClick={() => onPatch({ priority: x.id })}
-                  className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${(p.priority ?? 'media') === x.id ? 'border-accent bg-surface text-ink font-medium' : 'border-line text-ink-60 hover:border-input hover:text-ink'}`}
-                >
-                  {x.label}
-                </button>
-              ))}
-            </div>
-          </section>
 
           <section>
             <span className={LABEL}>Mercado</span>

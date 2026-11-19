@@ -381,13 +381,13 @@ const TOOLS = [
   {
     name: 'ver_prospectos',
     annotations: { readOnlyHint: true },
-    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con prioridad, mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. En los enviados muestra el seguimiento: cuándo se envió y qué acciones se han hecho después (reenvío, LinkedIn, otro socio…), con fecha. Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?", "¿cuánto hace que escribimos a X?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
+    description: 'Lista la prospección en frío (empresas a las que rediseñar la home a ciegas para ofrecerles el servicio), por etapa y en el orden de prioridad del estudio, con mercado (España/EE. UU.), contacto, motivos, ángulo del rediseño, notas y enlaces. La primera sección, "Prospect agent", son candidatos que propuso Claude y aún no han aceptado Eric o Andoni. En los enviados muestra el seguimiento: cuándo se envió y qué acciones se han hecho después (reenvío, LinkedIn, otro socio…), con fecha. Responde a "¿a quién atacamos?", "¿por cuál empezamos?", "¿qué ha encontrado el agente?", "¿cuánto hace que escribimos a X?". Úsala antes de buscar candidatos nuevos para no repetir empresas.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'anadir_prospecto',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos = por qué los elegimos (NO lo que respondieron), respuesta = qué contestaron, enlaces (noticias, perfiles, rediseño enviado), etapa, prioridad y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Elegidos (etapa detectado). IMPORTANTE: cuando Claude proponga candidatos por su cuenta (búsqueda de rondas, webs flojas…), usa etapa="agente" (sección Prospect agent) para que Eric o Andoni los acepten; solo usa "detectado" si te lo piden explícitamente. Elegir = etapa "detectado" (sección Elegidos); descartar = "descartado" (no volver a proponer los descartados).',
+    description: 'Añade o actualiza (por nombre) un candidato de prospección en frío: empresa, web, contacto, motivos = por qué los elegimos (NO lo que respondieron), respuesta = qué contestaron, enlaces (noticias, perfiles, rediseño enviado), etapa y notas. Motivos y enlaces se suman sin duplicar; quitar_motivos los elimina; primero=true lo sube al primer puesto de su etapa. Los nuevos entran arriba de Elegidos (etapa detectado). IMPORTANTE: cuando Claude proponga candidatos por su cuenta (búsqueda de rondas, webs flojas…), usa etapa="agente" (sección Prospect agent) para que Eric o Andoni los acepten; solo usa "detectado" si te lo piden explícitamente. Elegir = etapa "detectado" (sección Elegidos); descartar = "descartado" (no volver a proponer los descartados).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -402,7 +402,6 @@ const TOOLS = [
         etapa: { type: 'string', enum: ['agente', 'detectado', 'rediseno', 'enviado', 'conversacion', 'ganado', 'descartado'], description: 'agente = Prospect agent (propuesto por Claude, pendiente de aceptar); enviado = sin respuesta aún; conversacion = Respondido: han contestado (aunque sea que no)' },
         mercado: { type: 'string', enum: ['es', 'us'], description: 'es = España (tono cálido); us = EE. UU. (tono directo)' },
         angulo: { type: 'string', description: 'Ángulo del rediseño de 15h: qué contaría visualmente la home nueva' },
-        prioridad: { type: 'string', enum: ['alta', 'media', 'baja'] },
         respuesta: { type: 'string', description: 'Qué respondieron (va aparte de los motivos, que son el porqué los elegimos); cadena vacía la borra. Si estaba en Enviado, pasa solo a Respondido (etapa conversacion)' },
         primero: { type: 'boolean', description: 'Subirlo al primer puesto de su etapa' },
         quitar_motivos: { type: 'array', items: { type: 'string' }, description: 'Motivos a eliminar (coincidencia parcial)' },
@@ -688,7 +687,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         if (!list.length) continue
         out.push(`## ${STG[k]}`)
         for (const x of list) {
-          out.push(`${list.indexOf(x) + 1}. ${x.name} [${x.priority ?? 'media'}]${x.region ? ` {${x.region === 'us' ? 'EE. UU.' : 'España'}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
+          out.push(`${list.indexOf(x) + 1}. ${x.name}${x.region ? ` {${x.region === 'us' ? 'EE. UU.' : 'España'}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
           for (const r of x.reasons) out.push(`    · ${r}`)
           if (x.angle) out.push(`    ángulo: ${x.angle}`)
           if (x.response) out.push(`    respuesta: ${x.response}`)
@@ -754,7 +753,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     }
     await ref.set({ items: JSON.parse(JSON.stringify(items)), updatedAt: FieldValue.serverTimestamp() })
     const pos = items.filter((x) => x.stage === p!.stage).indexOf(p) + 1
-    return { text: `✓ ${created ? 'Añadido' : 'Actualizado'} "${p.name}" — ${STG[p.stage]} #${pos} · prioridad ${p.priority ?? 'media'} · ${p.reasons.length} motivo${p.reasons.length === 1 ? '' : 's'}` }
+    return { text: `✓ ${created ? 'Añadido' : 'Actualizado'} "${p.name}" — ${STG[p.stage]} #${pos} · ${p.reasons.length} motivo${p.reasons.length === 1 ? '' : 's'}` }
   }
 
   if (name === 'resumen_semana') {
