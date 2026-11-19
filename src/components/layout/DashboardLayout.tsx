@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { signOut } from '@/lib/auth'
-import { FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug, ClipboardList, ScanSearch } from 'lucide-react'
+import { ChevronDown, FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug, ClipboardList, ScanSearch } from 'lucide-react'
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 
@@ -32,6 +32,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const { user, company } = useAuth()
   const [quoteCount, setQuoteCount] = useState<number | null>(null)
+  // Grupos del menú plegados o desplegados: lo decide cada uno y se recuerda en este navegador
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    try { setOpenGroups(JSON.parse(localStorage.getItem('nav-groups') || '{}')) } catch {}
+  }, [])
+  function toggleGroup(href: string, open: boolean) {
+    setOpenGroups((g) => {
+      const next = { ...g, [href]: open }
+      try { localStorage.setItem('nav-groups', JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
 
   function refreshCount() {
     if (!user) return
@@ -72,26 +84,38 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <div className="my-4 border-t border-line" />
           {navLinks.map(({ href, label, icon: Icon, children }) => {
             if (children) {
+              const inside = children.some((c) => pathname === c.href)
+              const isOpen = openGroups[href] ?? true
               return (
                 <div key={href}>
-                  <Link href={href} className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors text-ink-60 hover:bg-surface-hover hover:text-ink">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(href, !isOpen)}
+                    aria-expanded={isOpen}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors hover:bg-surface-hover hover:text-ink ${
+                      !isOpen && inside ? 'text-ink font-medium' : 'text-ink-60'
+                    }`}
+                  >
                     <Icon size={15} strokeWidth={1.5} />
                     {label}
-                  </Link>
-                  <div className="ml-[1.4rem] pl-3 border-l border-line space-y-0.5 mt-0.5">
-                    {children.map((c) => {
-                      const on = pathname === c.href
-                      return (
-                        <Link
-                          key={c.href}
-                          href={c.href}
-                          className={`block px-3 py-1.5 rounded-md text-[13px] transition-colors ${on ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover hover:text-ink'}`}
-                        >
-                          {c.label}
-                        </Link>
-                      )
-                    })}
-                  </div>
+                    <ChevronDown size={13} strokeWidth={1.75} className={`ml-auto text-ink-40 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+                  </button>
+                  {isOpen && (
+                    <div className="ml-[1.4rem] pl-3 border-l border-line space-y-0.5 mt-0.5">
+                      {children.map((c) => {
+                        const on = pathname === c.href
+                        return (
+                          <Link
+                            key={c.href}
+                            href={c.href}
+                            className={`block px-3 py-1.5 rounded-md text-[13px] transition-colors ${on ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover hover:text-ink'}`}
+                          >
+                            {c.label}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             }

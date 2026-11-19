@@ -1,5 +1,6 @@
 'use client'
 
+import { Select } from '@/components/ui/Select'
 import { useEffect, useRef, useState } from 'react'
 import { X, Archive, Check } from 'lucide-react'
 import { madridToday, type BoardChip, type BoardGroup } from '@/lib/firestore/planning'
@@ -175,14 +176,14 @@ export function TaskSheet({ chip: c, groups, owner, me, companyId, onPatch, onSt
 
             <div className={ROW}>
               <span className={KEY}>Proyecto</span>
-              <select
+              <Select
                 value={c.group}
                 onChange={(e) => onPatch({ group: e.target.value })}
-                className="justify-self-start text-sm border border-input rounded-md px-2 py-1 text-ink bg-paper focus:outline-none focus:border-accent"
+                className="justify-self-start text-sm border border-input rounded-md pl-2.5 pr-2 py-1 text-ink bg-paper hover:border-ink-40"
                 aria-label="Proyecto"
               >
                 {groups.map((g) => <option key={g.name} value={g.name}>{g.name}</option>)}
-              </select>
+              </Select>
             </div>
 
             <div className={ROW}>

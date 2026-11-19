@@ -1,5 +1,6 @@
 'use client'
 
+import { Select } from '@/components/ui/Select'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
@@ -158,10 +159,10 @@ function Content() {
         </label>
         <label>
           <span className={LABEL}>Idioma</span>
-          <select className={INPUT} value={q.language || 'es'} onChange={(e) => patch({ language: e.target.value as 'es' | 'en' })}>
+          <Select className={INPUT} value={q.language || 'es'} onChange={(e) => patch({ language: e.target.value as 'es' | 'en' })}>
             <option value="es">Español</option>
             <option value="en">English</option>
-          </select>
+          </Select>
         </label>
       </section>
 

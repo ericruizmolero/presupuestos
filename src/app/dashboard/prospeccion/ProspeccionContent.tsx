@@ -1,5 +1,6 @@
 'use client'
 
+import { Select } from '@/components/ui/Select'
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { doc, getDoc } from 'firebase/firestore'
@@ -99,7 +100,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [openId, setOpenId] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
-  const [showClosed, setShowClosed] = useState(false)
+  const [showClosed, setShowClosed] = useState(view === 'agent')
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
   const [templates, setTemplates] = useState<EmailTemplate[]>(DEFAULT_TEMPLATES)
@@ -316,14 +317,14 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
               </button>
             </>
           )}
-          {p.stage !== 'agente' && <select
+          {p.stage !== 'agente' && <Select
+            size="compact"
             value={p.stage}
             onChange={(e) => patch(p.id, { stage: e.target.value as ProspectStage, stageDate: madridToday() })}
-            className="text-xs text-ink-60 bg-transparent border border-line rounded px-1.5 py-0.5 hover:border-input focus:outline-none focus:border-accent"
             aria-label="Etapa"
           >
             {STAGES.map((s2) => <option key={s2.id} value={s2.id}>{s2.label}</option>)}
-          </select>}
+          </Select>}
         </span>
         {p.stage === 'agente' && p.doubts && <DoubtsNote p={p} onPatch={(x) => patch(p.id, x)} />}
       </div>
@@ -699,9 +700,9 @@ function EmailComposer({ p, templates, onPatch }: { p: Prospect; templates: Emai
         onBlur={() => onPatch({ hook: hook.trim() || undefined })}
       />
       {templates.length > 1 && (
-        <select className={INPUT} value={tpl?.id} onChange={(e) => setTplId(e.target.value)} aria-label="Plantilla">
+        <Select className={INPUT} value={tpl?.id} onChange={(e) => setTplId(e.target.value)} aria-label="Plantilla">
           {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+        </Select>
       )}
       {filled ? (
         <>
@@ -790,11 +791,11 @@ function TemplatesSection({ companyId, templates }: { companyId: string; templat
             <div key={t.id} className="border border-line rounded-md bg-paper p-4 space-y-2">
               <div className="flex items-center gap-2">
                 <input className={`${INPUT} font-medium`} value={t.name} onChange={(e) => set(t.id, { name: e.target.value })} aria-label="Nombre de la plantilla" />
-                <select className="text-xs text-ink-60 bg-transparent border border-line rounded px-1.5 py-2" value={t.region || ''} onChange={(e) => set(t.id, { region: (e.target.value || undefined) as EmailTemplate['region'] })} aria-label="Mercado">
+                <Select size="compact" className="shrink-0 h-9" value={t.region || ''} onChange={(e) => set(t.id, { region: (e.target.value || undefined) as EmailTemplate['region'] })} aria-label="Mercado">
                   <option value="">Cualquier mercado</option>
                   <option value="es">España</option>
                   <option value="us">EE. UU.</option>
-                </select>
+                </Select>
                 <button onClick={() => change(draft.filter((x) => x.id !== t.id))} className="p-2 rounded-md text-ink-40 hover:text-[#B91C1C]" title="Borrar plantilla"><Trash2 size={13} strokeWidth={1.5} /></button>
               </div>
               <input className={INPUT} value={t.subject} onChange={(e) => set(t.id, { subject: e.target.value })} placeholder="Asunto" aria-label="Asunto" />

@@ -444,8 +444,8 @@ function HorasProjectContent() {
                         <DatePicker value={editDate} onChange={setEditDate} />
                       </td>
                       <td className="px-2 py-2 w-36">
-                        <select
-                          className={EDIT_INPUT + ' appearance-none'}
+                        <Select
+                          className={EDIT_INPUT}
                           value={editPerson}
                           onChange={(ev) => setEditPerson(ev.target.value)}
                           onKeyDown={(ev) => { if (ev.key === 'Escape') cancelEdit() }}
@@ -454,7 +454,7 @@ function HorasProjectContent() {
                             <option value={editPerson}>{editPerson}</option>
                           )}
                           {PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
-                        </select>
+                        </Select>
                       </td>
                       <td className="px-2 py-2">
                         <textarea
