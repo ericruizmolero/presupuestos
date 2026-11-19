@@ -9,13 +9,19 @@ import { FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 
-const navLinks = [
+const navLinks: Array<{ href: string; label: string; icon: typeof FileText; children?: Array<{ href: string; label: string }> }> = [
   { href: '/dashboard', label: 'Presupuestos', icon: FileText },
   { href: '/dashboard/cuestionarios', label: 'Cuestionarios', icon: ClipboardList },
   { href: '/dashboard/auditorias', label: 'Auditorías', icon: ScanSearch },
   { href: '/dashboard/horas', label: 'Horas', icon: Clock },
   { href: '/dashboard/proyectos', label: 'Proyectos', icon: StickyNote },
-  { href: '/dashboard/prospeccion', label: 'Prospección', icon: Crosshair },
+  {
+    href: '/dashboard/prospeccion', label: 'Prospección', icon: Crosshair,
+    children: [
+      { href: '/dashboard/prospeccion', label: 'Pipeline' },
+      { href: '/dashboard/prospeccion/agente', label: 'Prospect agent' },
+    ],
+  },
   { href: '/dashboard/mcp', label: 'MCP', icon: Plug },
   { href: '/settings', label: 'Configuración', icon: Settings },
   { href: '/tematica', label: 'Temática', icon: Palette },
@@ -64,7 +70,31 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             Nuevo presupuesto
           </Link>
           <div className="my-4 border-t border-line" />
-          {navLinks.map(({ href, label, icon: Icon }) => {
+          {navLinks.map(({ href, label, icon: Icon, children }) => {
+            if (children) {
+              return (
+                <div key={href}>
+                  <Link href={href} className="flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors text-ink-60 hover:bg-surface-hover hover:text-ink">
+                    <Icon size={15} strokeWidth={1.5} />
+                    {label}
+                  </Link>
+                  <div className="ml-[1.4rem] pl-3 border-l border-line space-y-0.5 mt-0.5">
+                    {children.map((c) => {
+                      const on = pathname === c.href
+                      return (
+                        <Link
+                          key={c.href}
+                          href={c.href}
+                          className={`block px-3 py-1.5 rounded-md text-[13px] transition-colors ${on ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover hover:text-ink'}`}
+                        >
+                          {c.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            }
             const active = (pathname === href || pathname.startsWith(href + '/'))
               && !(href === '/dashboard' && navLinks.some((l) => l.href !== '/dashboard' && pathname.startsWith(l.href)))
             return (
