@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { signOut } from '@/lib/auth'
+import { Faces } from '@/components/studio/StudioMarks'
+import { myName } from '@/components/studio/boardUtils'
 import { ChevronDown, FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug, ClipboardList, ScanSearch } from 'lucide-react'
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
@@ -142,7 +144,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="px-3 py-4 border-t border-line space-y-1">
-          <div className="px-3 py-2 text-xs text-ink-40 truncate">{user?.email}</div>
+          <div className="flex items-center gap-2.5 px-3 py-2 min-w-0">
+            <Faces who={myName(user?.displayName, user?.email)} size={28} ring="var(--color-surface)" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink truncate">{user?.displayName || myName(user?.displayName, user?.email)}</p>
+              <p className="text-xs text-ink-40 truncate">{user?.email}</p>
+            </div>
+          </div>
           <button
             onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm text-ink-60 hover:bg-surface-hover hover:text-ink transition-colors"

@@ -14,10 +14,11 @@ import {
   subscribeProspects, saveProspects, STAGES, PRIORITY_STAGES, REGIONS, followUpOf, daysBetween, type Prospect, type ProspectStage,
 } from '@/lib/firestore/prospects'
 import { myName, fmtShort, fmtDay } from '@/components/studio/boardUtils'
+import { Faces } from '@/components/studio/StudioMarks'
 import {
   subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, firstName, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
 } from '@/lib/firestore/emailTemplates'
-import { ArrowRight, Check, Inbox, Target, PenTool, Send, MessageCircle, Trophy, CircleX, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
+import { ArrowRight, Check, Inbox, Target, PenTool, Send, MessageCircle, ThumbsDown, Trophy, CircleX, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -82,9 +83,13 @@ function DoubtsThread({ p, me, onPatch }: { p: Prospect; me: string; onPatch: (x
         <ul className="space-y-2.5 mb-2.5">
           {comments.map((c) => (
             <li key={c.id} className="group/c flex gap-2.5">
-              <span className="shrink-0 mt-px w-5 h-5 rounded-full bg-ink text-paper text-[10px] font-medium flex items-center justify-center">
-                {c.by ? c.by[0] : '?'}
-              </span>
+              {c.by === 'Eric' || c.by === 'Andoni' ? (
+                <span className="mt-px"><Faces who={c.by} size={20} ring="var(--color-surface)" /></span>
+              ) : (
+                <span className="shrink-0 mt-px w-5 h-5 rounded-full bg-ink text-paper text-[10px] font-medium flex items-center justify-center">
+                  {c.by ? c.by[0] : '?'}
+                </span>
+              )}
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-ink-40">
                   <span className="font-medium text-ink">{c.by || 'Sin autor'}</span>
@@ -127,6 +132,7 @@ const STAGE_LOOK: Record<string, { icon: typeof Inbox; color: string }> = {
   rediseno: { icon: PenTool, color: '#7C3AED' },
   enviado: { icon: Send, color: '#D97706' },
   conversacion: { icon: MessageCircle, color: '#0D9488' },
+  rechazado: { icon: ThumbsDown, color: '#C2410C' },
   ganado: { icon: Trophy, color: '#16A34A' },
   descartado: { icon: CircleX, color: '#B91C1C' },
 }
