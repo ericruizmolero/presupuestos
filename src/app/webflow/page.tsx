@@ -97,7 +97,7 @@ function Webflow() {
 
   return (
     <div className="px-8 py-12 max-w-3xl">
-      <h1 className="text-2xl font-medium tracking-tight text-ink mb-2">Webflow</h1>
+      <h1 className="text-2xl font-medium tracking-tight text-ink mb-2">Webflow MCP</h1>
       <p className="text-sm text-ink-60 mb-10 max-w-xl">
         Cuentas y espacios de Webflow conectados a la vez. Claude los usa desde el conector de Savvia indicando la cuenta, sin desconectar ni volver a autorizar.
       </p>

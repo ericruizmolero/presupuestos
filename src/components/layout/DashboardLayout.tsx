@@ -7,11 +7,18 @@ import { useAuth } from '@/context/AuthContext'
 import { signOut } from '@/lib/auth'
 import { Faces } from '@/components/studio/StudioMarks'
 import { myName } from '@/components/studio/boardUtils'
-import { ChevronDown, FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug, ClipboardList, ScanSearch, Globe } from 'lucide-react'
+import { ChevronDown, FileText, Settings, LogOut, Plus, Palette, Clock, StickyNote, Crosshair, Plug, ClipboardList, ScanSearch } from 'lucide-react'
 import { getQuotes } from '@/lib/firestore/quotes'
 import { getUserCompanyId } from '@/lib/firestore/companies'
 
-const navLinks: Array<{ href: string; label: string; icon: typeof FileText; children?: Array<{ href: string; label: string }> }> = [
+/** Logo de Webflow (simple-icons, CC0), con la misma API que los iconos de lucide */
+const WebflowMark = (({ size = 15, className }: { size?: number; className?: string }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+    <path d="m24 4.515-7.658 14.97H9.149l3.205-6.204h-.144C9.566 16.713 5.621 18.973 0 19.485v-6.118s3.596-.213 5.71-2.435H0V4.515h6.417v5.278l.144-.001 2.622-5.277h4.854v5.244h.144l2.72-5.244H24Z" />
+  </svg>
+)) as unknown as typeof FileText
+
+const navLinks: Array<{ href: string; label: string; icon: typeof FileText; children?: Array<{ href: string; label: string; icon?: typeof FileText }> }> = [
   { href: '/dashboard', label: 'Presupuestos', icon: FileText },
   { href: '/dashboard/cuestionarios', label: 'Cuestionarios', icon: ClipboardList },
   { href: '/dashboard/auditorias', label: 'Auditorías', icon: ScanSearch },
@@ -24,8 +31,13 @@ const navLinks: Array<{ href: string; label: string; icon: typeof FileText; chil
       { href: '/dashboard/prospeccion/agente', label: 'Prospect agent' },
     ],
   },
-  { href: '/webflow', label: 'Webflow', icon: Globe },
-  { href: '/dashboard/mcp', label: 'MCP', icon: Plug },
+  {
+    href: '/dashboard/mcp', label: 'MCP', icon: Plug,
+    children: [
+      { href: '/dashboard/mcp', label: 'Conector Savvia' },
+      { href: '/webflow', label: 'Webflow', icon: WebflowMark },
+    ],
+  },
   { href: '/settings', label: 'Configuración', icon: Settings },
   { href: '/tematica', label: 'Temática', icon: Palette },
 ]
@@ -111,8 +123,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                           <Link
                             key={c.href}
                             href={c.href}
-                            className={`block px-3 py-1.5 rounded-md text-[13px] transition-colors ${on ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover hover:text-ink'}`}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[13px] transition-colors ${on ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover hover:text-ink'}`}
                           >
+                            {c.icon && <c.icon size={12} strokeWidth={1.5} />}
                             {c.label}
                           </Link>
                         )
