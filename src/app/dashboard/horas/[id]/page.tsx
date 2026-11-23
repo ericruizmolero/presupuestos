@@ -16,8 +16,6 @@ import { DatePicker } from '@/components/ui/DatePicker'
 import { Select } from '@/components/ui/Select'
 import { Plus, Trash2, ExternalLink, Copy, Check, ArrowLeft, X } from 'lucide-react'
 
-const INPUT = 'w-full px-4 py-3 border border-input rounded-md text-base text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
-const FIELD_LABEL = 'block text-sm font-medium text-ink mb-2'
 const SECTION_LABEL = 'text-xs font-medium tracking-widest uppercase text-ink-60'
 
 function todayISO() {
