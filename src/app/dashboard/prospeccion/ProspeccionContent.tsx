@@ -397,8 +397,85 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
     )
   }
 
+  /** Tarjeta del Prospect agent: lo justo para decidir; el detalle, en la ficha */
+  function card(p: Prospect) {
+    const shown = p.reasons.slice(0, 2)
+    const more = p.reasons.length - shown.length
+    return (
+      <article key={p.id} className="flex flex-col rounded-lg border border-line bg-paper hover:border-input transition-colors">
+        <button onClick={() => setOpenId(p.id)} className="flex-1 text-left px-4 pt-4 pb-3" title="Abrir la ficha completa">
+          <div className="flex items-start gap-2.5 mb-3">
+            {p.url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`https://www.google.com/s2/favicons?domain=${hostOf(p.url)}&sz=64`} alt="" className="w-6 h-6 rounded shrink-0 mt-px" />
+            ) : (
+              <span className="block w-6 h-6 rounded bg-surface border border-line shrink-0" />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
+                <span className="truncate">{p.name}</span>
+                {p.region && <span className="shrink-0 px-1 py-px rounded border border-line text-[10px] font-normal text-ink-40">{p.region === 'us' ? 'EE. UU.' : 'ES'}</span>}
+              </span>
+              <span className="block text-xs text-ink-40 truncate">{p.url ? hostOf(p.url) : 'Sin web'}</span>
+            </span>
+          </div>
+          {shown.length > 0 && (
+            <ul className="space-y-1.5 text-[13px] text-ink-60 leading-snug">
+              {shown.map((r, i) => (
+                <li key={i} className="grid grid-cols-[0.75rem_minmax(0,1fr)]">
+                  <span className="mt-[7px] w-1 h-1 rounded-full bg-ink-40" />
+                  <span className="line-clamp-3">{r}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {more > 0 && <span className="block mt-1.5 pl-3 text-xs text-ink-40">{more === 1 ? '1 motivo más' : `${more} motivos más`}</span>}
+          {p.angle && (
+            <span className="block mt-3 rounded-md bg-surface px-3 py-2 text-[13px] text-ink leading-snug">
+              <span className="block text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mb-0.5">Ángulo</span>
+              <span className="line-clamp-3">{p.angle}</span>
+            </span>
+          )}
+        </button>
+        {p.url && (
+          <div className="px-4 pb-3 -mt-1">
+            <a href={hrefOf(p.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-ink-60 underline decoration-line underline-offset-2 hover:text-ink">
+              Ver la web<ExternalLink size={10} strokeWidth={1.75} />
+            </a>
+          </div>
+        )}
+        <div className="grid grid-cols-3 border-t border-line divide-x divide-line text-xs">
+          <button
+            onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday(), doubts: undefined })}
+            title="Elegir: pasa a Elegidos"
+            className="flex items-center justify-center gap-1.5 h-9 font-medium text-ink hover:bg-surface rounded-bl-lg transition-colors"
+          >
+            <Target size={12} strokeWidth={2} style={{ color: STAGE_LOOK.detectado.color }} />Elegir
+          </button>
+          <button
+            onClick={() => patch(p.id, { doubts: !p.doubts })}
+            aria-pressed={!!p.doubts}
+            title={p.doubts ? 'Quitar la marca de dudas' : 'Revisado, se queda en Prospect agent pero con dudas'}
+            className={`flex items-center justify-center gap-1.5 h-9 transition-colors ${p.doubts ? 'bg-surface text-ink font-medium' : 'text-ink-60 hover:bg-surface hover:text-ink'}`}
+          >
+            <CircleHelp size={12} strokeWidth={2} style={{ color: '#6366F1' }} />Dudas
+            {p.doubts && <Check size={11} strokeWidth={2.5} className="text-ink" />}
+          </button>
+          <button
+            onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
+            title="Descartar (queda en descartados y el agente no lo vuelve a proponer)"
+            className="flex items-center justify-center gap-1.5 h-9 text-ink-60 hover:bg-surface hover:text-ink rounded-br-lg transition-colors"
+          >
+            <CircleX size={12} strokeWidth={2} style={{ color: STAGE_LOOK.descartado.color }} />Descartar
+          </button>
+        </div>
+        {p.doubts && <div className="border-t border-line px-3 pb-3 [&>*]:mt-3"><DoubtsThread p={p} me={me} onPatch={(x) => patch(p.id, x)} /></div>}
+      </article>
+    )
+  }
+
   return (
-    <div className="px-6 lg:px-8 py-8 max-w-5xl">
+    <div className={`px-6 lg:px-8 py-8 ${view === 'agent' ? 'max-w-7xl' : 'max-w-5xl'}`}>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-medium tracking-tight text-ink">{view === 'agent' ? 'Prospect agent' : 'Prospección'}</h1>
@@ -411,7 +488,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
       </div>
       {view === 'agent' ? (
         <p className="text-sm text-ink-40 mb-8 max-w-2xl">
-          Empresas que propone Claude. Elegir las pasa a Elegidos, Tengo dudas las deja aquí marcadas como revisadas y Descartar las saca.
+          Empresas que propone Claude. Elegir las pasa a Elegidos, Dudas las deja aquí marcadas como revisadas y Descartar las saca. Pulsa una tarjeta para ver la ficha completa.
         </p>
       ) : (
         <>
@@ -447,12 +524,8 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
               <span className="text-[10px] text-ink-40 tabular-nums">{g.list.length}</span>
               <span className="text-xs text-ink-40">{g.hint}</span>
             </div>
-            <div
-              onDragOver={(e) => { if (dragId) e.preventDefault() }}
-              onDrop={() => dropOn(null, 'agente')}
-              className="border border-line rounded-md bg-paper divide-y divide-line"
-            >
-              {g.list.map(row)}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+              {g.list.map(card)}
             </div>
           </section>
         ))))}
