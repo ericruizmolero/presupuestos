@@ -1,5 +1,6 @@
 'use client'
 
+import { PageLoader } from '@/components/ui/PageLoader'
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 
@@ -220,9 +221,7 @@ export function QuotePageClient() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-4 h-4 border border-ink border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PageLoader />
     )
   }
 

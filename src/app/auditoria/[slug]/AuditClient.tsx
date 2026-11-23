@@ -1,5 +1,6 @@
 'use client'
 
+import { PageLoader } from '@/components/ui/PageLoader'
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getAudit, type Audit } from '@/lib/firestore/audits'
@@ -24,7 +25,7 @@ export function AuditClient() {
       .catch(() => setState('notfound'))
   }, [slug])
 
-  if (state === 'loading') return <main className="min-h-screen bg-paper flex items-center justify-center text-sm text-ink-40">…</main>
+  if (state === 'loading') return <PageLoader />
   if (state === 'notfound' || !audit) {
     return (
       <main className="min-h-screen bg-paper flex items-center justify-center px-6">

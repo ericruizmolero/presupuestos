@@ -1,5 +1,6 @@
 'use client'
 
+import { PageLoader } from '@/components/ui/PageLoader'
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import type { TimeProject, TimeEntry } from '@/types/time'
@@ -57,7 +58,7 @@ function monthLabel(iso: string, locale: string) {
 
 export default function PublicHoursPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-paper" />}>
+    <Suspense fallback={<PageLoader />}>
       <PublicHours />
     </Suspense>
   )
@@ -127,7 +128,7 @@ function PublicHours() {
   const { locale } = t
 
   if (state === 'loading') {
-    return <main className="min-h-screen bg-paper flex items-center justify-center text-sm text-ink-40">…</main>
+    return <PageLoader />
   }
 
   if (state === 'notfound' || !project) {

@@ -1,5 +1,6 @@
 'use client'
 
+import { PageLoader } from '@/components/ui/PageLoader'
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { getQuestionnaireBySlug, saveAnswers, fieldsOf, type Questionnaire } from '@/lib/firestore/questionnaires'
@@ -125,7 +126,7 @@ export function QuestionnaireClient() {
   }
 
   if (state === 'loading') {
-    return <main className="min-h-screen bg-paper flex items-center justify-center text-sm text-ink-40">…</main>
+    return <PageLoader />
   }
   if (state === 'notfound' || !q) {
     return (
