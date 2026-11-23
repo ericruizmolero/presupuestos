@@ -308,7 +308,7 @@ function HorasProjectContent() {
   }
 
   return (
-    <div className="px-8 py-12 max-w-4xl">
+    <div className="px-8 py-12 max-w-5xl">
       <Link
         href="/dashboard/horas"
         className="inline-flex items-center gap-1.5 text-sm text-ink-60 hover:text-ink transition-colors mb-6"
@@ -378,7 +378,7 @@ function HorasProjectContent() {
       </div>
 
       {/* Apuntar horas: campos con el estilo de la app */}
-      <div className={`grid grid-cols-2 ${subs.length ? 'sm:grid-cols-[8.5rem_10rem_9rem_1fr_5.5rem_auto]' : 'sm:grid-cols-[8.5rem_10rem_1fr_5.5rem_auto]'} gap-2 items-end mb-10`}>
+      <div className={`grid grid-cols-2 ${subs.length ? 'sm:grid-cols-[8.5rem_9.5rem_8.5rem_minmax(14rem,1fr)_5rem_auto]' : 'sm:grid-cols-[8.5rem_9.5rem_minmax(14rem,1fr)_5rem_auto]'} gap-2 items-end mb-10`}>
         <label className="block">
           <span className={MINI_LABEL}>Fecha</span>
           <DatePicker value={date} onChange={setDate} className={`${FIELD} flex items-center pr-9`} />
