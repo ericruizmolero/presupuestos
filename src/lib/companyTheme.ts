@@ -9,7 +9,15 @@ export async function applyCompanyTheme(companyId: string) {
   try {
     const snap = await getDoc(doc(db, 'companies', companyId))
     if (!snap.exists()) return
-    const c = snap.data() as Company
+    applyCompanyThemeData(snap.data() as Company)
+  } catch {
+    // sin ficha: tipografía por defecto
+  }
+}
+
+/** Lo mismo con la ficha ya en mano (la manda el servidor): sin esperar a Firestore en el navegador */
+export function applyCompanyThemeData(c: Partial<Company>) {
+  try {
     if (c.themeColors) applyThemeColors(c.themeColors)
     else if (c.paletteId) applyPalette(c.paletteId)
     if (c.inkOpacitySecondary != null || c.inkOpacityTertiary != null) applyInkOpacities(c.inkOpacitySecondary ?? 60, c.inkOpacityTertiary ?? 40)

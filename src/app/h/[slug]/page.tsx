@@ -3,7 +3,8 @@
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import type { TimeProject, TimeEntry } from '@/types/time'
-import { applyCompanyTheme } from '@/lib/companyTheme'
+import { applyCompanyThemeData } from '@/lib/companyTheme'
+import type { Company } from '@/types/quote'
 
 const I18N = {
   es: {
@@ -75,8 +76,8 @@ function PublicHours() {
     if (!slug) return
     fetch(`/api/public/hours/${encodeURIComponent(slug)}`, { cache: 'no-store' }).then(async (res) => {
       if (!res.ok) { setState('notfound'); return }
-      const { project: p, entries: es } = (await res.json()) as { project: TimeProject; entries: TimeEntry[] }
-      await applyCompanyTheme(p.companyId)
+      const { project: p, entries: es, theme } = (await res.json()) as { project: TimeProject; entries: TimeEntry[]; theme?: Partial<Company> }
+      if (theme) applyCompanyThemeData(theme)
       setProject(p)
       setEntries(es)
       setState('ready')

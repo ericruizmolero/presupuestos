@@ -12,12 +12,24 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const ps = await db.collection('timeProjects').where('slug', '==', slug).limit(1).get()
     if (ps.empty) return NextResponse.json({ error: 'not_found' }, { status: 404 })
     const pd = ps.docs[0]
-    const es = await db.collection('timeEntries').where('projectId', '==', pd.id).get()
+    const companyId = pd.data().companyId as string | undefined
+    // entradas y ficha del estudio a la vez: un solo viaje para la página
+    const [es, comp] = await Promise.all([
+      db.collection('timeEntries').where('projectId', '==', pd.id).get(),
+      companyId ? db.collection('companies').doc(companyId).get() : Promise.resolve(null),
+    ])
+    const c = comp?.exists ? comp.data() || {} : {}
+    // solo lo visual (colores y tipografía), lo mismo que ya es público en la ficha
+    const theme = {
+      themeColors: c.themeColors, paletteId: c.paletteId,
+      inkOpacitySecondary: c.inkOpacitySecondary, inkOpacityTertiary: c.inkOpacityTertiary,
+      defaultFontName: c.defaultFontName, fonts: c.fonts,
+    }
     const entries = es.docs
       .map((d) => ({ id: d.id, ...(plain(d.data()) as Record<string, unknown>) }) as { id: string; date?: string })
       .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
     return NextResponse.json(
-      { project: { id: pd.id, ...(plain(pd.data()) as Record<string, unknown>) }, entries },
+      { project: { id: pd.id, ...(plain(pd.data()) as Record<string, unknown>) }, entries, theme: plain(theme) },
       { headers: { 'Cache-Control': 'no-store' } },
     )
   } catch (e) {
