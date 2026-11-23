@@ -10,6 +10,7 @@ export interface TimeProject {
   language?: 'es' | 'en' // idioma de la vista pública (heredado del presupuesto del cliente)
   hourlyRate?: number    // €/h, heredado del presupuesto del cliente si existe
   archived?: boolean
+  subprojects?: string[] // p. ej. Farco: SurePayroll, Wisable, Farco (se factura junto, las horas van por separado)
   createdAt?: string
   updatedAt?: string
 }
@@ -23,6 +24,7 @@ export interface TimeEntry {
   date: string        // ISO yyyy-mm-dd
   hours: number
   description: string
+  subproject?: string // uno de project.subprojects
   createdAt?: string
 }
 

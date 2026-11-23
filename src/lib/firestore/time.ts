@@ -9,6 +9,7 @@ import {
   query,
   where,
   serverTimestamp,
+  deleteField,
 } from 'firebase/firestore'
 import { db } from '../firebase'
 import { stripUndefinedDeep } from './quotes'
@@ -117,7 +118,10 @@ export async function addTimeEntry(
 }
 
 export async function updateTimeEntry(id: string, data: Partial<TimeEntryFormData>) {
-  await updateDoc(doc(db, 'timeEntries', id), stripUndefinedDeep(data) as Record<string, unknown>)
+  const clean = stripUndefinedDeep(data) as Record<string, unknown>
+  // subproyecto vacío = quitarlo
+  if (clean.subproject === '') clean.subproject = deleteField()
+  await updateDoc(doc(db, 'timeEntries', id), clean)
 }
 
 export async function deleteTimeEntry(id: string) {

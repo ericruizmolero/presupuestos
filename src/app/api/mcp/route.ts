@@ -45,6 +45,22 @@ interface Project {
   language?: string
   hourlyRate?: number
   companyId?: string
+  subprojects?: string[]
+}
+
+/** Subproyecto del proyecto que coincide (sin mayúsculas ni acentos), o undefined */
+function matchSub(p: Project, name: string): string | undefined {
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  const n = norm(name)
+  if (!n) return undefined
+  return (p.subprojects || []).find((s) => norm(s) === n) || (p.subprojects || []).find((s) => norm(s).includes(n) || n.includes(norm(s)))
+}
+
+/** Horas por subproyecto ("Sin asignar" para las que no tienen) */
+function bySub(entries: Array<{ hours?: number; subproject?: string }>): Array<[string, number]> {
+  const m = new Map<string, number>()
+  for (const e of entries) m.set(e.subproject || 'Sin asignar', (m.get(e.subproject || 'Sin asignar') || 0) + (e.hours || 0))
+  return [...m.entries()].sort((a, b) => b[1] - a[1])
 }
 
 function todayISO(): string {
@@ -69,7 +85,12 @@ async function findProject(needle: string): Promise<Project | string> {
     (p.slug || '').toLowerCase().includes(n)
   )
   if (matches.length === 1) return matches[0]
-  const list = projects.map((p) => `- ${p.name} (slug: ${p.slug})`).join('\n')
+  if (matches.length === 0) {
+    // "wisable" → el proyecto de horas que lo tiene como subproyecto (Farco)
+    const bySubName = projects.filter((p) => matchSub(p, needle))
+    if (bySubName.length === 1) return bySubName[0]
+  }
+  const list = projects.map((p) => `- ${p.name} (slug: ${p.slug})${p.subprojects?.length ? ` subproyectos: ${p.subprojects.join(', ')}` : ''}`).join('\n')
   return matches.length === 0
     ? `Ningún proyecto coincide con "${needle}". Proyectos disponibles:\n${list}`
     : `"${needle}" es ambiguo. Proyectos disponibles:\n${list}`
@@ -78,7 +99,7 @@ async function findProject(needle: string): Promise<Project | string> {
 async function projectTotals(projectId: string) {
   const snap = await db().collection('timeEntries').where('projectId', '==', projectId).get()
   const entries = snap.docs
-    .map((d) => ({ id: d.id, ...d.data() } as { id: string; date?: string; hours?: number; person?: string; description?: string }))
+    .map((d) => ({ id: d.id, ...d.data() } as { id: string; date?: string; hours?: number; person?: string; description?: string; subproject?: string }))
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
   const total = entries.reduce((s, e) => s + (e.hours || 0), 0)
   return { entries, total }
@@ -222,17 +243,18 @@ const TOOLS = [
   {
     name: 'listar_proyectos',
     annotations: { readOnlyHint: true },
-    description: 'Lista los proyectos de horas de Savvia (antes treseiscero) con horas acumuladas, tarifa, idioma y enlace público.',
+    description: 'Lista los proyectos de horas de Savvia (antes treseiscero) con horas acumuladas, tarifa, idioma, enlace público y, si los tiene, sus subproyectos con las horas de cada uno (p. ej. Farco: SurePayroll, Wisable, Farco).',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'ver_registro',
     annotations: { readOnlyHint: true },
-    description: 'Muestra el registro de horas de un proyecto (entradas, total e importe).',
+    description: 'Muestra el registro de horas de un proyecto (entradas, total e importe). Si tiene subproyectos, separa las horas de cada uno; "subproyecto" filtra solo ese.',
     inputSchema: {
       type: 'object',
       properties: {
-        proyecto: { type: 'string', description: 'Nombre, cliente o slug del proyecto (acepta substring, p. ej. "vidflare")' },
+        proyecto: { type: 'string', description: 'Nombre, cliente o slug del proyecto (acepta substring, p. ej. "vidflare"); también vale un subproyecto ("wisable")' },
+        subproyecto: { type: 'string', description: 'Solo las horas de este subproyecto' },
       },
       required: ['proyecto'],
       additionalProperties: false,
@@ -526,6 +548,7 @@ const TOOLS = [
         horas: { type: 'number', description: 'Nuevas horas' },
         concepto: { type: 'string', description: 'Nuevo concepto' },
         persona: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Nueva persona' },
+        subproyecto: { type: 'string', description: 'Subproyecto del proyecto (p. ej. "Wisable"); cadena vacía lo quita' },
       },
       required: ['id'],
       additionalProperties: false,
@@ -562,7 +585,7 @@ const TOOLS = [
   {
     name: 'anadir_horas',
     annotations: { destructiveHint: false, idempotentHint: true },
-    description: 'Añade una o varias entradas de horas a un proyecto de Savvia. Si no se indica fecha se usa hoy (Madrid); si no se indica persona se usa "Eric y Andoni". El concepto va en el idioma del proyecto.',
+    description: 'Añade una o varias entradas de horas a un proyecto de Savvia. Si no se indica fecha se usa hoy (Madrid); si no se indica persona se usa "Eric y Andoni". El concepto va en el idioma del proyecto. Algunos proyectos tienen subproyectos (Farco: SurePayroll, Wisable y Farco, la web del propio Farco): ahí indica SIEMPRE el subproyecto de cada entrada; se factura todo junto pero el cliente pide las horas por subproyecto. Si dices el subproyecto como "proyecto" ("wisable"), se apunta en Farco con ese subproyecto.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -577,11 +600,14 @@ const TOOLS = [
               horas: { type: 'number', description: 'Horas, decimales permitidos (2.5)' },
               concepto: { type: 'string', description: 'Descripción corta del trabajo' },
               persona: { type: 'string', enum: ['Eric', 'Andoni', 'Eric y Andoni'], description: 'Omitir para "Eric y Andoni"' },
+              subproyecto: { type: 'string', description: 'Subproyecto de esta entrada; si no, el general' },
             },
             required: ['horas', 'concepto'],
             additionalProperties: false,
           },
         },
+        subproyecto: { type: 'string', description: 'Subproyecto para todas las entradas (p. ej. "Wisable")' },
+        nuevo_subproyecto: { type: 'boolean', description: 'true para crear el subproyecto si aún no existe en el proyecto' },
       },
       required: ['proyecto', 'entradas'],
       additionalProperties: false,
@@ -608,7 +634,12 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const lines = await Promise.all(projects.map(async (p) => {
       const { total } = await projectTotals(p.id)
       const rate = p.hourlyRate ? ` · ${p.hourlyRate} €/h · ${(total * p.hourlyRate).toFixed(2)} €` : ''
-      return `${p.name} — ${total} h${rate} · idioma ${p.language || 'es'} · ${PUBLIC_BASE}/h/${p.slug}`
+      let subs = ''
+      if (p.subprojects?.length) {
+        const { entries } = await projectTotals(p.id)
+        subs = `\n    subproyectos: ${bySub(entries).map(([n, h]) => `${n} ${h} h`).join(', ')}`
+      }
+      return `${p.name} — ${total} h${rate} · idioma ${p.language || 'es'} · ${PUBLIC_BASE}/h/${p.slug}${subs}`
     }))
     return { text: lines.join('\n') }
   }
@@ -616,10 +647,21 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
   if (name === 'ver_registro') {
     const found = await findProject(String(args.proyecto || ''))
     if (typeof found === 'string') return { text: found, isError: true }
-    const { entries, total } = await projectTotals(found.id)
-    const rows = entries.map((e) => `[${e.id}] ${e.date}  ${e.hours} h  ${e.person}  ${e.description || ''}`).join('\n')
+    const all = await projectTotals(found.id)
+    // filtro por subproyecto: explícito, o implícito si "proyecto" era el nombre del subproyecto
+    const subName = typeof args.subproyecto === 'string' && args.subproyecto.trim()
+      ? matchSub(found, args.subproyecto)
+      : (!String(args.proyecto || '').toLowerCase().split(/\s+/).some((w) => (found.name || '').toLowerCase().includes(w)) ? matchSub(found, String(args.proyecto || '')) : undefined)
+    if (typeof args.subproyecto === 'string' && args.subproyecto.trim() && !subName) {
+      return { text: `"${args.subproyecto}" no es un subproyecto de ${found.name}. Tiene: ${(found.subprojects || []).join(', ') || 'ninguno'}`, isError: true }
+    }
+    const entries = subName ? all.entries.filter((e) => e.subproject === subName) : all.entries
+    const total = entries.reduce((t, e) => t + (e.hours || 0), 0)
+    const rows = entries.map((e) => `[${e.id}] ${e.date}  ${e.hours} h  ${e.person}${e.subproject && !subName ? `  {${e.subproject}}` : ''}  ${e.description || ''}`).join('\n')
     const amount = found.hourlyRate ? ` · ${(total * found.hourlyRate).toFixed(2)} € (a ${found.hourlyRate} €/h)` : ''
-    return { text: `${found.name} — Total ${total} h${amount}\n${rows || '(sin entradas)'}\nVista cliente: ${PUBLIC_BASE}/h/${found.slug}` }
+    const split = found.subprojects?.length && !subName ? `\nPor subproyecto: ${bySub(entries).map(([n, h]) => `${n} ${h} h`).join(', ')}` : ''
+    const link = `${PUBLIC_BASE}/h/${found.slug}${subName ? `?p=${encodeURIComponent(subName)}` : ''}`
+    return { text: `${found.name}${subName ? ` / ${subName}` : ''} — Total ${total} h${amount}${split}\n${rows || '(sin entradas)'}\nVista cliente: ${link}` }
   }
 
   if (name === 'ver_facturas') {
@@ -1148,7 +1190,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     const ref = db().collection('timeEntries').doc(id)
     const snap = await ref.get()
     if (!snap.exists) return { text: `No existe ninguna entrada con id ${id}.`, isError: true }
-    const current = snap.data() as { date?: string; hours?: number; person?: string; description?: string }
+    const current = snap.data() as { date?: string; hours?: number; person?: string; description?: string; subproject?: string; projectId?: string }
 
     if (name === 'borrar_entrada') {
       await ref.delete()
@@ -1169,12 +1211,22 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     }
     if (args.concepto !== undefined) patch.description = String(args.concepto).trim()
     if (args.persona !== undefined) patch.person = String(args.persona).trim()
+    if (typeof args.subproyecto === 'string') {
+      if (!args.subproyecto.trim()) patch.subproject = FieldValue.delete()
+      else {
+        const proj = (await getProjects()).find((p) => p.id === current.projectId)
+        const sub = proj ? matchSub(proj, args.subproyecto) : undefined
+        if (!sub) return { text: `"${args.subproyecto}" no es un subproyecto de ${proj?.name || 'este proyecto'}. Tiene: ${(proj?.subprojects || []).join(', ') || 'ninguno'}`, isError: true }
+        patch.subproject = sub
+      }
+    }
     if (Object.keys(patch).length === 0) {
-      return { text: 'Indica al menos un campo a cambiar (fecha, horas, concepto o persona).', isError: true }
+      return { text: 'Indica al menos un campo a cambiar (fecha, horas, concepto, persona o subproyecto).', isError: true }
     }
     await ref.update(patch)
-    const updated = { ...current, ...patch } as typeof current & { date?: string }
-    return { text: `✓ Actualizada: ${updated.date}  ${updated.hours} h  ${updated.person}  ${updated.description || ''}` }
+    const updated = { ...current, ...patch } as typeof current
+    const subShown = typeof patch.subproject === 'string' ? patch.subproject : 'subproject' in patch ? '' : current.subproject
+    return { text: `✓ Actualizada: ${updated.date}  ${updated.hours} h  ${updated.person}${subShown ? `  {${subShown}}` : ''}  ${updated.description || ''}` }
   }
 
   if (name === 'crear_proyecto') {
@@ -1242,10 +1294,28 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
   if (name === 'anadir_horas') {
     const found = await findProject(String(args.proyecto || ''))
     if (typeof found === 'string') return { text: found, isError: true }
-    const entradas = args.entradas as Array<{ fecha?: string; horas: number; concepto: string; persona?: string }>
+    const entradas = args.entradas as Array<{ fecha?: string; horas: number; concepto: string; persona?: string; subproyecto?: string }>
     if (!Array.isArray(entradas) || entradas.length === 0) {
       return { text: 'Falta el array "entradas".', isError: true }
     }
+    // Subproyectos: el de cada entrada, el general, o el implícito si "proyecto" era su nombre ("wisable" → Farco / Wisable)
+    const implied = matchSub(found, String(args.proyecto || '')) && !(found.name || '').toLowerCase().includes(String(args.proyecto || '').toLowerCase())
+      ? matchSub(found, String(args.proyecto || '')) : undefined
+    const general = typeof args.subproyecto === 'string' && args.subproyecto.trim() ? args.subproyecto.trim() : implied
+    const subs = [...(found.subprojects || [])]
+    const resolveSub = (raw?: string): string | undefined | { error: string } => {
+      const want = (raw && raw.trim()) || general
+      if (!want) {
+        return subs.length ? { error: `${found.name} tiene subproyectos (${subs.join(', ')}): indica "subproyecto" en cada entrada o para todas.` } : undefined
+      }
+      const hit = matchSub({ ...found, subprojects: subs }, want)
+      if (hit) return hit
+      if (args.nuevo_subproyecto === true) { subs.push(want); return want }
+      return { error: `"${want}" no es un subproyecto de ${found.name}. Tiene: ${subs.join(', ') || 'ninguno'}. Para crearlo, repite con nuevo_subproyecto: true.` }
+    }
+    const resolved = entradas.map((e) => resolveSub(e.subproyecto))
+    const bad = resolved.find((r) => r && typeof r === 'object') as { error: string } | undefined
+    if (bad) return { text: bad.error, isError: true }
     const database = db()
     const batch = database.batch()
     const added: string[] = []
@@ -1262,7 +1332,8 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
       })
     )
 
-    for (const e of entradas) {
+    for (const [i, e] of entradas.entries()) {
+      const sub = resolved[i] as string | undefined
       const hours = Number(e.horas)
       if (!hours || hours <= 0) return { text: `Horas inválidas: ${e.horas}`, isError: true }
       if (e.fecha && !/^\d{4}-\d{2}-\d{2}$/.test(e.fecha)) {
@@ -1282,11 +1353,15 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         hours,
         description: (e.concepto || '').trim(),
         person: (e.persona || '').trim() || DEFAULT_PERSON,
+        ...(sub ? { subproject: sub } : {}),
         createdAt: FieldValue.serverTimestamp(),
       }
       batch.set(database.collection('timeEntries').doc(), entry)
       sum += hours
-      added.push(`✓ ${entry.date}  ${entry.hours} h  ${entry.person}  ${entry.description}`)
+      added.push(`✓ ${entry.date}  ${entry.hours} h  ${entry.person}${sub ? `  {${sub}}` : ''}  ${entry.description}`)
+    }
+    if (subs.length !== (found.subprojects || []).length) {
+      batch.update(database.collection('timeProjects').doc(found.id), { subprojects: subs })
     }
     if (added.length > 0) await batch.commit()
     const skippedNote = skipped.length

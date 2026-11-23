@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
 import type { TimeProject, TimeEntry } from '@/types/time'
 import { applyCompanyTheme } from '@/lib/companyTheme'
 
@@ -15,6 +15,8 @@ const I18N = {
     empty: 'Aún no hay horas registradas.',
     notFound: 'Este registro de horas no existe o ya no está disponible.',
     updated: 'actualizado a',
+    all: 'Todos',
+    other: 'Otros',
   },
   en: {
     locale: 'en-GB',
@@ -25,6 +27,8 @@ const I18N = {
     empty: 'No hours logged yet.',
     notFound: 'This time log does not exist or is no longer available.',
     updated: 'updated',
+    all: 'All',
+    other: 'Other',
   },
 } as const
 
@@ -51,7 +55,18 @@ function monthLabel(iso: string, locale: string) {
 }
 
 export default function PublicHoursPage() {
+  return (
+    <Suspense fallback={<main className="min-h-screen bg-paper" />}>
+      <PublicHours />
+    </Suspense>
+  )
+}
+
+function PublicHours() {
   const { slug } = useParams<{ slug: string }>()
+  const search = useSearchParams()
+  // ?p=Wisable abre directamente ese subproyecto (enlace para compartir)
+  const [sub, setSub] = useState(search.get('p') || '')
   const [project, setProject] = useState<TimeProject | null>(null)
   const [entries, setEntries] = useState<TimeEntry[]>([])
   const [state, setState] = useState<'loading' | 'ready' | 'notfound'>('loading')
@@ -68,16 +83,31 @@ export default function PublicHoursPage() {
     }).catch(() => setState('notfound'))
   }, [slug])
 
+  const subs = project?.subprojects || []
+  const hasOther = subs.length > 0 && entries.some((e) => !e.subproject)
+  const visible = useMemo(() => {
+    if (!sub || !subs.length) return entries
+    return entries.filter((e) => (sub === '__other' ? !e.subproject : e.subproject === sub))
+  }, [entries, sub, subs.length])
+
+  function pick(next: string) {
+    setSub(next)
+    const url = new URL(window.location.href)
+    if (next) url.searchParams.set('p', next)
+    else url.searchParams.delete('p')
+    window.history.replaceState(null, '', url.toString())
+  }
+
   const byMonth = useMemo(() => {
     const groups = new Map<string, TimeEntry[]>()
-    for (const e of entries) {
+    for (const e of visible) {
       const key = (e.date || '').slice(0, 7) // yyyy-mm
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(e)
     }
     // Newest month first; entries inside are already date-desc
     return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]))
-  }, [entries])
+  }, [visible])
 
   // Solo el mes en curso (Madrid): lo anterior ya está facturado
   const totals = useMemo(() => {
@@ -85,11 +115,11 @@ export default function PublicHoursPage() {
       timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit',
     }).format(new Date())
     let total = 0
-    for (const e of entries) {
+    for (const e of visible) {
       if ((e.date || '').startsWith(month)) total += e.hours || 0
     }
     return { total }
-  }, [entries])
+  }, [visible])
 
   const lang: Lang = project?.language === 'en' ? 'en' : 'es'
   const t = I18N[lang]
@@ -131,6 +161,23 @@ export default function PublicHoursPage() {
           )}
         </header>
 
+        {/* Subproyectos */}
+        {subs.length > 0 && (
+          <nav className="flex flex-wrap gap-1.5 mb-8">
+            {[['', t.all], ...subs.map((x) => [x, x]), ...(hasOther ? [['__other', t.other]] : [])].map(([key, label]) => (
+              <button
+                key={key || 'all'}
+                onClick={() => pick(key)}
+                className={`h-8 px-3 rounded-full border text-sm transition-colors ${
+                  sub === key ? 'border-accent bg-accent text-on-accent' : 'border-line text-ink-60 hover:border-input hover:text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        )}
+
         {/* Totals */}
         <section className="flex flex-wrap items-baseline gap-x-6 gap-y-2 mb-12 pb-6 border-b border-line">
           <div>
@@ -152,6 +199,9 @@ export default function PublicHoursPage() {
         ) : (
           byMonth.map(([month, monthEntries], mi) => {
             const monthTotal = monthEntries.reduce((s, e) => s + (e.hours || 0), 0)
+            const split = subs.length && !sub
+              ? [...subs, ''].map((x) => [x || t.other, monthEntries.filter((e) => (x ? e.subproject === x : !e.subproject)).reduce((a, e) => a + (e.hours || 0), 0)] as const).filter(([, h]) => h > 0)
+              : []
             return (
               <section key={month} className={mi === 0 ? 'mb-16' : 'mb-16 pt-10 border-t border-line'}>
                 <div className="flex items-baseline justify-between mb-4">
@@ -165,6 +215,13 @@ export default function PublicHoursPage() {
                     ) : null}
                   </span>
                 </div>
+                {split.length > 1 && (
+                  <p className="-mt-2 mb-4 text-xs text-ink-60">
+                    {split.map(([n, h], i) => (
+                      <span key={n}>{i > 0 && ', '}{n} <span className="text-ink font-medium">{formatHours(h, locale)}</span></span>
+                    ))}
+                  </p>
+                )}
                 <div className="border border-line rounded-md overflow-hidden">
                   {/* Desktop: table */}
                   <table className="w-full text-sm hidden sm:table">
@@ -172,7 +229,12 @@ export default function PublicHoursPage() {
                       {monthEntries.map((e, i) => (
                         <tr key={e.id} className={`border-b border-line last:border-b-0 ${i % 2 === 1 ? 'bg-surface' : 'bg-paper'}`}>
                           <td className="px-4 py-3 whitespace-nowrap text-ink-60 w-28 align-top">{formatDate(e.date, locale)}</td>
-                          <td className="px-4 py-3 text-ink-60">{e.description || '—'}</td>
+                          <td className="px-4 py-3 text-ink-60">
+                            {subs.length > 0 && !sub && e.subproject && (
+                              <span className="inline-flex mr-2 px-1.5 py-px rounded border border-line text-[11px] text-ink align-[1px]">{e.subproject}</span>
+                            )}
+                            {e.description || '—'}
+                          </td>
                           <td className="px-4 py-3 text-right font-medium whitespace-nowrap w-20 align-top">{formatHours(e.hours, locale)}</td>
                         </tr>
                       ))}
@@ -188,7 +250,12 @@ export default function PublicHoursPage() {
                           </span>
                           <span className="text-sm font-medium whitespace-nowrap">{formatHours(e.hours, locale)}</span>
                         </div>
-                        <p className="text-sm text-ink-60 leading-snug">{e.description || '—'}</p>
+                        <p className="text-sm text-ink-60 leading-snug">
+                          {subs.length > 0 && !sub && e.subproject && (
+                            <span className="inline-flex mr-1.5 px-1.5 py-px rounded border border-line text-[11px] text-ink">{e.subproject}</span>
+                          )}
+                          {e.description || '—'}
+                        </p>
                       </div>
                     ))}
                   </div>

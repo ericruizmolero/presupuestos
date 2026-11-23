@@ -110,7 +110,10 @@ function HorasProjectContent() {
   const [person, setPerson] = useState('')
   const [hours, setHours] = useState('')
   const [description, setDescription] = useState('')
+  const [sub, setSub] = useState('')
   const [savingEntry, setSavingEntry] = useState(false)
+  // Filtro por subproyecto ('' = todos, '__none' = sin asignar)
+  const [subFilter, setSubFilter] = useState('')
 
   // Inline entry editing
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -118,6 +121,7 @@ function HorasProjectContent() {
   const [editPerson, setEditPerson] = useState('')
   const [editHours, setEditHours] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editSub, setEditSub] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => {
@@ -137,26 +141,48 @@ function HorasProjectContent() {
     })
   }, [user, id, router])
 
+  const subs = project?.subprojects || []
+  const visible = useMemo(() => (
+    !subFilter ? entries : entries.filter((e) => (subFilter === '__none' ? !e.subproject : e.subproject === subFilter))
+  ), [entries, subFilter])
+
+  // Horas por subproyecto (para el resumen y los filtros)
+  const subTotals = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const e of entries) m.set(e.subproject || '__none', (m.get(e.subproject || '__none') || 0) + (e.hours || 0))
+    return m
+  }, [entries])
+
   // Entradas agrupadas por mes (más reciente primero; entries ya vienen date-desc)
   const byMonth = useMemo(() => {
     const groups = new Map<string, TimeEntry[]>()
-    for (const e of entries) {
+    for (const e of visible) {
       const key = (e.date || '').slice(0, 7)
       if (!groups.has(key)) groups.set(key, [])
       groups.get(key)!.push(e)
     }
     return [...groups.entries()].sort((a, b) => b[0].localeCompare(a[0]))
-  }, [entries])
+  }, [visible])
 
   const totals = useMemo(() => {
     const byPerson = new Map<string, number>()
     let total = 0
-    for (const e of entries) {
+    for (const e of visible) {
       total += e.hours || 0
       byPerson.set(e.person, (byPerson.get(e.person) || 0) + (e.hours || 0))
     }
     return { total, byPerson: [...byPerson.entries()].sort((a, b) => b[1] - a[1]) }
-  }, [entries])
+  }, [visible])
+
+  async function saveSubprojects(next: string[]) {
+    if (!project) return
+    setProject({ ...project, subprojects: next })
+    try {
+      await updateTimeProject(project.id, { subprojects: next })
+    } catch (err) {
+      console.error('[horas] Error guardando subproyectos:', err)
+    }
+  }
 
   async function handleRename(name: string) {
     if (!project) return
@@ -206,6 +232,7 @@ function HorasProjectContent() {
         date,
         hours: h,
         description: description.trim(),
+        ...(subs.length && (sub || subs[0]) ? { subproject: sub || subs[0] } : {}),
       }
       const entryId = await addTimeEntry(data, user.uid, companyId)
       setEntries((es) => [{ id: entryId, companyId, createdBy: user.uid, ...data }, ...es]
@@ -224,6 +251,7 @@ function HorasProjectContent() {
     setEditPerson(e.person || '')
     setEditHours(String(e.hours).replace('.', ','))
     setEditDescription(e.description || '')
+    setEditSub(e.subproject || '')
   }
 
   function cancelEdit() {
@@ -236,9 +264,9 @@ function HorasProjectContent() {
     if (!h || h <= 0 || !editDate || !editPerson.trim()) return
     setSavingEdit(true)
     try {
-      const patch = { date: editDate, person: editPerson.trim(), hours: h, description: editDescription.trim() }
+      const patch = { date: editDate, person: editPerson.trim(), hours: h, description: editDescription.trim(), ...(subs.length ? { subproject: editSub } : {}) }
       await updateTimeEntry(editingId, patch)
-      setEntries((es) => es.map((e) => e.id === editingId ? { ...e, ...patch } : e)
+      setEntries((es) => es.map((e) => e.id === editingId ? { ...e, ...patch, subproject: subs.length ? (editSub || undefined) : e.subproject } : e)
         .sort((a, b) => (b.date || '').localeCompare(a.date || '')))
       setEditingId(null)
     } catch (err) {
@@ -330,8 +358,10 @@ function HorasProjectContent() {
         </div>
       </div>
 
-      {/* New entry: fecha + persona + concepto + horas */}
-      <div className="grid grid-cols-2 sm:grid-cols-[10rem_11rem_1fr_6rem_auto] gap-3 items-end mb-10">
+      <SubprojectsEditor value={subs} onChange={saveSubprojects} />
+
+      {/* New entry: fecha + persona + (subproyecto) + concepto + horas */}
+      <div className={`grid grid-cols-2 ${subs.length ? 'sm:grid-cols-[10rem_11rem_10rem_1fr_6rem_auto]' : 'sm:grid-cols-[10rem_11rem_1fr_6rem_auto]'} gap-3 items-end mb-10`}>
         <div>
           <label className={FIELD_LABEL}>Fecha</label>
           <DatePicker value={date} onChange={setDate} />
@@ -342,6 +372,14 @@ function HorasProjectContent() {
             {PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
           </Select>
         </div>
+        {subs.length > 0 && (
+          <div>
+            <label className={FIELD_LABEL}>Subproyecto</label>
+            <Select value={sub || subs[0]} onChange={(e) => setSub(e.target.value)} className={INPUT}>
+              {subs.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
+            </Select>
+          </div>
+        )}
         <div className="col-span-2 sm:col-span-1">
           <label className={FIELD_LABEL}>Concepto</label>
           <input
@@ -369,6 +407,26 @@ function HorasProjectContent() {
           Añadir
         </button>
       </div>
+
+      {subs.length > 0 && entries.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-5">
+          {[['', 'Todos', entries.reduce((t, e) => t + (e.hours || 0), 0)] as const,
+            ...subs.map((s2) => [s2, s2, subTotals.get(s2) || 0] as const),
+            ...(subTotals.get('__none') ? [['__none', 'Sin asignar', subTotals.get('__none') || 0] as const] : []),
+          ].map(([key, label, h]) => (
+            <button
+              key={key || 'all'}
+              onClick={() => setSubFilter(key)}
+              className={`flex items-center gap-2 h-8 px-3 rounded-md border text-sm transition-colors ${
+                subFilter === key ? 'border-accent bg-accent text-on-accent' : 'border-line text-ink-60 hover:border-input hover:text-ink'
+              }`}
+            >
+              {label}
+              <span className={`text-xs tabular-nums ${subFilter === key ? 'opacity-70' : 'text-ink-40'}`}>{formatHours(h)}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Totals + rate */}
       <div className="flex items-center gap-6 mb-6">
@@ -409,6 +467,7 @@ function HorasProjectContent() {
               <tr className="text-left text-xs font-medium tracking-widest uppercase text-ink-60 border-b border-line">
                 <th className="px-4 py-3 font-medium">Fecha</th>
                 <th className="px-4 py-3 font-medium">Persona</th>
+                {subs.length > 0 && <th className="px-4 py-3 font-medium">Subproyecto</th>}
                 <th className="px-4 py-3 font-medium">Concepto</th>
                 <th className="px-4 py-3 font-medium text-right">Horas</th>
                 <th className="px-2 py-3 w-10" />
@@ -420,7 +479,7 @@ function HorasProjectContent() {
                 return (
                   <React.Fragment key={month}>
                     <tr className="bg-surface border-y border-line">
-                      <td colSpan={5} className="px-4 py-2">
+                      <td colSpan={subs.length ? 6 : 5} className="px-4 py-2">
                         <span className="flex items-baseline justify-between">
                           <span className="text-[10px] font-medium tracking-[0.18em] uppercase text-ink-60">
                             {monthLabel(month)}
@@ -456,6 +515,14 @@ function HorasProjectContent() {
                           {PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
                         </Select>
                       </td>
+                      {subs.length > 0 && (
+                        <td className="px-2 py-2 w-36">
+                          <Select className={EDIT_INPUT} value={editSub} onChange={(ev) => setEditSub(ev.target.value)}>
+                            <option value="">Sin asignar</option>
+                            {subs.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
+                          </Select>
+                        </td>
+                      )}
                       <td className="px-2 py-2">
                         <textarea
                           ref={(el) => {
@@ -516,6 +583,13 @@ function HorasProjectContent() {
                   >
                     <td className="px-4 py-3 whitespace-nowrap text-ink-60">{formatDate(e.date)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{e.person}</td>
+                    {subs.length > 0 && (
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {e.subproject
+                          ? <span className="inline-flex px-2 py-0.5 rounded border border-line bg-surface text-xs text-ink">{e.subproject}</span>
+                          : <span className="text-xs text-[#B45309]">Sin asignar</span>}
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-ink-60">{e.description || '—'}</td>
                     <td className="px-4 py-3 text-right font-medium whitespace-nowrap">{formatHours(e.hours)}</td>
                     <td className="px-2 py-3" onClick={(ev) => ev.stopPropagation()}>
@@ -565,6 +639,50 @@ function HorasProjectContent() {
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Subproyectos del proyecto (p. ej. Farco: SurePayroll, Wisable, Farco). Se factura todo junto; las horas se separan */
+function SubprojectsEditor({ value, onChange }: { value: string[]; onChange: (next: string[]) => void }) {
+  const [draft, setDraft] = useState('')
+  const [adding, setAdding] = useState(false)
+  function add() {
+    const v = draft.trim()
+    if (v && !value.some((x) => x.toLowerCase() === v.toLowerCase())) onChange([...value, v])
+    setDraft('')
+    setAdding(false)
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 -mt-6 mb-10">
+      <span className="text-xs uppercase tracking-widest text-ink-40 mr-1">Subproyectos</span>
+      {value.map((s) => (
+        <span key={s} className="group inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-md border border-line text-xs text-ink">
+          {s}
+          <button
+            onClick={() => { if (confirm(`¿Quitar el subproyecto ${s}? Sus horas se quedan, sin asignar.`)) onChange(value.filter((x) => x !== s)) }}
+            className="p-0.5 rounded text-ink-40 opacity-0 group-hover:opacity-100 hover:text-ink focus-visible:opacity-100"
+            aria-label={`Quitar ${s}`}
+          >
+            <X size={11} strokeWidth={2} />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={add}
+          onKeyDown={(e) => { if (e.key === 'Enter') add(); if (e.key === 'Escape') { setDraft(''); setAdding(false) } }}
+          placeholder="Wisable"
+          className="h-7 w-32 px-2.5 rounded-md border border-input text-xs text-ink focus:outline-none focus:border-accent"
+        />
+      ) : (
+        <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs text-ink-40 hover:text-ink hover:bg-surface-hover">
+          <Plus size={12} strokeWidth={2} />{value.length ? 'Añadir' : 'Separar en subproyectos'}
+        </button>
+      )}
     </div>
   )
 }
