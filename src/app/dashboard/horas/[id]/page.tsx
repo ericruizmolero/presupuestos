@@ -16,6 +16,8 @@ import { DatePicker } from '@/components/ui/DatePicker'
 import { Select } from '@/components/ui/Select'
 import { Plus, Trash2, ExternalLink, Copy, Check, ArrowLeft, X } from 'lucide-react'
 
+const MINI_LABEL = 'block mb-1.5 text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40'
+const FIELD = 'h-10 px-3 border border-input rounded-md bg-paper text-sm text-ink focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
 const SECTION_LABEL = 'text-xs font-medium tracking-widest uppercase text-ink-60'
 
 function todayISO() {
@@ -375,50 +377,55 @@ function HorasProjectContent() {
         <SubprojectsEditor value={subs} onChange={saveSubprojects} />
       </div>
 
-      {/* Apuntar horas: una barra compacta */}
-      <div className="flex flex-wrap sm:flex-nowrap items-stretch rounded-lg border border-input bg-paper mb-10 focus-within:border-accent focus-within:ring-[3px] focus-within:ring-black/[0.06] transition-colors">
-        <div className="w-32 shrink-0 border-r border-line" title="Fecha">
-          <DatePicker value={date} onChange={setDate} className="h-11 flex items-center pl-3.5 pr-9 text-sm" />
-        </div>
-        <div className="w-40 shrink-0 border-r border-line">
-          <Select value={person} onChange={(e) => setPerson(e.target.value)} aria-label="Persona" className="w-full h-11 px-3.5 text-sm text-ink">
+      {/* Apuntar horas: campos con el estilo de la app */}
+      <div className={`grid grid-cols-2 ${subs.length ? 'sm:grid-cols-[8.5rem_10rem_9rem_1fr_5.5rem_auto]' : 'sm:grid-cols-[8.5rem_10rem_1fr_5.5rem_auto]'} gap-2 items-end mb-10`}>
+        <label className="block">
+          <span className={MINI_LABEL}>Fecha</span>
+          <DatePicker value={date} onChange={setDate} className={`${FIELD} flex items-center pr-9`} />
+        </label>
+        <div>
+          <span className={MINI_LABEL}>Persona</span>
+          <Select value={person} onChange={(e) => setPerson(e.target.value)} aria-label="Persona" className={`${FIELD} w-full`}>
             {PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
           </Select>
         </div>
         {subs.length > 0 && (
-          <div className="w-36 shrink-0 border-r border-line">
-            <Select value={sub || subs[0]} onChange={(e) => setSub(e.target.value)} aria-label="Subproyecto" className="w-full h-11 px-3.5 text-sm text-ink font-medium">
+          <div>
+            <span className={MINI_LABEL}>Subproyecto</span>
+            <Select value={sub || subs[0]} onChange={(e) => setSub(e.target.value)} aria-label="Subproyecto" className={`${FIELD} w-full`}>
               {subs.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
             </Select>
           </div>
         )}
-        <input
-          className="flex-1 min-w-[12rem] h-11 px-3.5 bg-transparent text-sm text-ink placeholder-ink-40 focus:outline-none"
-          value={description}
-          aria-label="Concepto"
-          onChange={(e) => setDescription(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
-          placeholder="Qué se ha hecho"
-        />
-        <input
-          className="w-20 shrink-0 h-11 px-3 border-l border-line bg-transparent text-sm text-right text-ink placeholder-ink-40 focus:outline-none"
-          value={hours}
-          aria-label="Horas"
-          inputMode="decimal"
-          onChange={(e) => setHours(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
-          placeholder="0 h"
-        />
-        <div className="p-1 shrink-0">
-          <button
-            onClick={handleAddEntry}
-            disabled={savingEntry || !parseFloat(hours.replace(',', '.'))}
-            className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Plus size={14} strokeWidth={2} />
-            Añadir
-          </button>
-        </div>
+        <label className="block col-span-2 sm:col-span-1">
+          <span className={MINI_LABEL}>Concepto</span>
+          <input
+            className={`${FIELD} w-full placeholder-ink-40`}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+            placeholder="Qué se ha hecho"
+          />
+        </label>
+        <label className="block">
+          <span className={MINI_LABEL}>Horas</span>
+          <input
+            className={`${FIELD} w-full text-right placeholder-ink-40`}
+            value={hours}
+            inputMode="decimal"
+            onChange={(e) => setHours(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+            placeholder="2,5"
+          />
+        </label>
+        <button
+          onClick={handleAddEntry}
+          disabled={savingEntry || !parseFloat(hours.replace(',', '.'))}
+          className="flex items-center justify-center gap-1.5 h-10 px-3.5 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Plus size={14} strokeWidth={2} />
+          Añadir
+        </button>
       </div>
 
       {/* Resumen: filtros por subproyecto a la izquierda, total a la derecha */}
