@@ -27,7 +27,7 @@ const navLinks: Array<{ href: string; label: string; icon: typeof FileText; chil
   {
     href: '/dashboard/mcp', label: 'MCP', icon: Plug,
     children: [
-      { href: '/dashboard/mcp', label: 'Conector Savvia' },
+      { href: '/dashboard/mcp', label: 'Savvia MCP' },
       { href: '/webflow', label: 'Webflow MCP' },
     ],
   },
