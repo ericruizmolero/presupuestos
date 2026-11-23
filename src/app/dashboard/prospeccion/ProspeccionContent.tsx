@@ -423,7 +423,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
             <ul className="space-y-1.5 text-[13px] text-ink-60 leading-snug">
               {shown.map((r, i) => (
                 <li key={i} className="grid grid-cols-[0.75rem_minmax(0,1fr)]">
-                  <span className="mt-[7px] w-1 h-1 rounded-full bg-ink-40" />
+                  <span className="block mt-[7px] w-1 h-1 rounded-full bg-ink-40" />
                   <span className="line-clamp-3">{r}</span>
                 </li>
               ))}
@@ -524,7 +524,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
               <span className="text-[10px] text-ink-40 tabular-nums">{g.list.length}</span>
               <span className="text-xs text-ink-40">{g.hint}</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {g.list.map(card)}
             </div>
           </section>
