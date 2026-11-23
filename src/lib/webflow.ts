@@ -56,6 +56,10 @@ export interface Connection {
   connectedBy?: string
   connectedAt?: string
   lastUsedAt?: string
+  /** última renovación del token (ms) */
+  refreshedAt?: number
+  /** herramientas de Webflow disponibles (si ya se pidieron) */
+  toolCount?: number
 }
 interface Stored extends Omit<Connection, 'id'> {
   client?: SealedClient
@@ -70,10 +74,15 @@ export function slugName(s: string): string {
   return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
 }
 
+function toolCountOf(d: Stored): number | undefined {
+  try { return d.toolsCache ? (JSON.parse(d.toolsCache.json) as unknown[]).length : undefined } catch { return undefined }
+}
+
 export function publicView(id: string, d: Stored): Connection {
   return {
     id, name: d.name, workspace: d.workspace, sites: d.sites, status: d.status || 'ok', active: d.active !== false,
     connectedBy: d.connectedBy, connectedAt: d.connectedAt, lastUsedAt: d.lastUsedAt,
+    refreshedAt: d.refreshedAt, toolCount: toolCountOf(d),
   }
 }
 
