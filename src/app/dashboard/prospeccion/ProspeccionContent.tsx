@@ -425,8 +425,8 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
             ) : <span className="text-ink-40">Sin web</span>}
           </div>
           {p.angle && (
-            <button onClick={() => setOpenId(p.id)} className={`w-full mt-2.5 pl-[1.875rem] text-left text-[13px] text-ink leading-snug ${expanded ? 'block' : 'line-clamp-2'}`}>
-              {p.angle}
+            <button onClick={() => setOpenId(p.id)} className="block w-full mt-2.5 pl-[1.875rem] text-left text-[13px] text-ink leading-snug">
+              <span className={expanded ? 'block' : 'line-clamp-2'}>{p.angle}</span>
             </button>
           )}
           {p.reasons.length > 0 && (
