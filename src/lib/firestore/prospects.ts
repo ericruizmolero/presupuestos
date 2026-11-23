@@ -56,6 +56,7 @@ export interface Prospect {
   notes?: string
   angle?: string        // ángulo del rediseño de 15h
   region?: ProspectRegion // España (tono cálido) o EE. UU. (tono directo)
+  location?: string     // de dónde son: "Donostia", "Derio, Bizkaia", "Austin, TX"
   email?: string        // a quién escribimos
   proposalUrl?: string  // la propuesta que le enseñamos
   hook?: string         // frase personal del email (gancho)

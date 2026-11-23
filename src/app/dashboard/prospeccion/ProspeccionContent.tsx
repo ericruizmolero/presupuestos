@@ -18,7 +18,7 @@ import { Faces } from '@/components/studio/StudioMarks'
 import {
   subscribeEmailTemplates, saveEmailTemplates, fillTemplate, prospectVars, firstName, PLACEHOLDERS, DEFAULT_TEMPLATES, type EmailTemplate,
 } from '@/lib/firestore/emailTemplates'
-import { ArrowRight, Check, Inbox, Target, PenTool, Send, MessageCircle, ThumbsDown, Trophy, CircleX, CircleHelp, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail } from 'lucide-react'
+import { ArrowRight, Check, Inbox, Target, PenTool, Send, MessageCircle, ThumbsDown, Trophy, CircleX, CircleHelp, Plus, X, ExternalLink, Trash2, GripVertical, ChevronRight, Copy, Mail, MapPin, Globe } from 'lucide-react'
 
 const LABEL = 'text-[10px] font-medium tracking-[0.16em] uppercase text-ink-40 mb-2 block'
 const INPUT = 'w-full px-3 py-2 border border-input rounded-md text-sm text-ink placeholder-ink-40 focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-black/[0.06] transition-colors'
@@ -163,6 +163,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [showClosed, setShowClosed] = useState(view === 'agent')
+  const [openCards, setOpenCards] = useState<Record<string, boolean>>({})
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
   const [templates, setTemplates] = useState<EmailTemplate[]>(DEFAULT_TEMPLATES)
@@ -397,58 +398,64 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
     )
   }
 
-  /** Tarjeta del Prospect agent: lo justo para decidir; el detalle, en la ficha */
+  /** Tarjeta del Prospect agent: compacta (quién, de dónde, web y ángulo); los motivos se despliegan */
   function card(p: Prospect) {
-    const shown = p.reasons.slice(0, 2)
-    const more = p.reasons.length - shown.length
+    const expanded = !!openCards[p.id]
     return (
-      <article key={p.id} className="flex flex-col rounded-lg border border-line bg-paper hover:border-input transition-colors">
-        <button onClick={() => setOpenId(p.id)} className="flex-1 text-left px-4 pt-4 pb-3" title="Abrir la ficha completa">
-          <div className="flex items-start gap-2.5 mb-3">
+      <article key={p.id} className="break-inside-avoid mb-3 rounded-lg border border-line bg-paper hover:border-input transition-colors">
+        <div className="px-3.5 pt-3.5 pb-3">
+          <button onClick={() => setOpenId(p.id)} className="w-full flex items-start gap-2.5 text-left" title="Abrir la ficha completa">
             {p.url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={`https://www.google.com/s2/favicons?domain=${hostOf(p.url)}&sz=64`} alt="" className="w-6 h-6 rounded shrink-0 mt-px" />
+              <img src={`https://www.google.com/s2/favicons?domain=${hostOf(p.url)}&sz=64`} alt="" className="w-5 h-5 rounded shrink-0 mt-px" />
             ) : (
-              <span className="block w-6 h-6 rounded bg-surface border border-line shrink-0" />
+              <span className="block w-5 h-5 rounded bg-surface border border-line shrink-0" />
             )}
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-1.5 text-sm font-medium text-ink">
-                <span className="truncate">{p.name}</span>
-                {p.region && <span className="shrink-0 px-1 py-px rounded border border-line text-[10px] font-normal text-ink-40">{p.region === 'us' ? 'EE. UU.' : 'ES'}</span>}
-              </span>
-              <span className="block text-xs text-ink-40 truncate">{p.url ? hostOf(p.url) : 'Sin web'}</span>
-            </span>
+            <span className="min-w-0 flex-1 text-sm font-medium text-ink leading-snug">{p.name}</span>
+            {p.region && <span className="shrink-0 px-1 py-px rounded border border-line text-[10px] text-ink-40">{p.region === 'us' ? 'EE. UU.' : 'ES'}</span>}
+          </button>
+          <div className="mt-1.5 pl-[1.875rem] flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-60">
+            {p.location && (
+              <span className="inline-flex items-center gap-1 min-w-0"><MapPin size={11} strokeWidth={1.75} className="shrink-0 text-ink-40" /><span className="truncate">{p.location}</span></span>
+            )}
+            {p.url ? (
+              <a href={hrefOf(p.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 min-w-0 underline decoration-line underline-offset-2 hover:text-ink" title={`Abrir ${hostOf(p.url)}`}>
+                <Globe size={11} strokeWidth={1.75} className="shrink-0 text-ink-40" /><span className="truncate">{hostOf(p.url)}</span>
+              </a>
+            ) : <span className="text-ink-40">Sin web</span>}
           </div>
-          {shown.length > 0 && (
-            <ul className="space-y-1.5 text-[13px] text-ink-60 leading-snug">
-              {shown.map((r, i) => (
-                <li key={i} className="grid grid-cols-[0.75rem_minmax(0,1fr)]">
-                  <span className="block mt-[7px] w-1 h-1 rounded-full bg-ink-40" />
-                  <span className="line-clamp-3">{r}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {more > 0 && <span className="block mt-1.5 pl-3 text-xs text-ink-40">{more === 1 ? '1 motivo más' : `${more} motivos más`}</span>}
           {p.angle && (
-            <span className="block mt-3 rounded-md bg-surface px-3 py-2 text-[13px] text-ink leading-snug">
-              <span className="block text-[10px] font-medium tracking-[0.14em] uppercase text-ink-40 mb-0.5">Ángulo</span>
-              <span className="line-clamp-3">{p.angle}</span>
-            </span>
+            <button onClick={() => setOpenId(p.id)} className={`block w-full mt-2.5 pl-[1.875rem] text-left text-[13px] text-ink leading-snug ${expanded ? '' : 'line-clamp-2'}`}>
+              {p.angle}
+            </button>
           )}
-        </button>
-        {p.url && (
-          <div className="px-4 pb-3 -mt-1">
-            <a href={hrefOf(p.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-ink-60 underline decoration-line underline-offset-2 hover:text-ink">
-              Ver la web<ExternalLink size={10} strokeWidth={1.75} />
-            </a>
-          </div>
-        )}
+          {p.reasons.length > 0 && (
+            <div className="mt-2 pl-[1.875rem]">
+              {expanded && (
+                <ul className="mb-2 space-y-1.5 text-[13px] text-ink-60 leading-snug">
+                  {p.reasons.map((r, i) => (
+                    <li key={i} className="grid grid-cols-[0.75rem_minmax(0,1fr)]">
+                      <span className="block mt-[7px] w-1 h-1 rounded-full bg-ink-40" />
+                      <span>{r}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                onClick={() => setOpenCards((o) => ({ ...o, [p.id]: !expanded }))}
+                className="inline-flex items-center gap-1 text-xs text-ink-40 hover:text-ink"
+              >
+                <ChevronRight size={11} strokeWidth={2} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+                {expanded ? 'Ocultar motivos' : `Ver motivos (${p.reasons.length})`}
+              </button>
+            </div>
+          )}
+        </div>
         <div className="grid grid-cols-3 border-t border-line divide-x divide-line text-xs">
           <button
             onClick={() => patch(p.id, { stage: 'detectado', stageDate: madridToday(), doubts: undefined })}
             title="Elegir: pasa a Elegidos"
-            className="flex items-center justify-center gap-1.5 h-9 font-medium text-ink hover:bg-surface rounded-bl-lg transition-colors"
+            className="flex items-center justify-center gap-1.5 h-8 font-medium text-ink hover:bg-surface rounded-bl-lg transition-colors"
           >
             <Target size={12} strokeWidth={2} style={{ color: STAGE_LOOK.detectado.color }} />Elegir
           </button>
@@ -456,7 +463,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
             onClick={() => patch(p.id, { doubts: !p.doubts })}
             aria-pressed={!!p.doubts}
             title={p.doubts ? 'Quitar la marca de dudas' : 'Revisado, se queda en Prospect agent pero con dudas'}
-            className={`flex items-center justify-center gap-1.5 h-9 transition-colors ${p.doubts ? 'bg-surface text-ink font-medium' : 'text-ink-60 hover:bg-surface hover:text-ink'}`}
+            className={`flex items-center justify-center gap-1.5 h-8 transition-colors ${p.doubts ? 'bg-surface text-ink font-medium' : 'text-ink-60 hover:bg-surface hover:text-ink'}`}
           >
             <CircleHelp size={12} strokeWidth={2} style={{ color: '#6366F1' }} />Dudas
             {p.doubts && <Check size={11} strokeWidth={2.5} className="text-ink" />}
@@ -464,7 +471,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
           <button
             onClick={() => patch(p.id, { stage: 'descartado', stageDate: madridToday() })}
             title="Descartar (queda en descartados y el agente no lo vuelve a proponer)"
-            className="flex items-center justify-center gap-1.5 h-9 text-ink-60 hover:bg-surface hover:text-ink rounded-br-lg transition-colors"
+            className="flex items-center justify-center gap-1.5 h-8 text-ink-60 hover:bg-surface hover:text-ink rounded-br-lg transition-colors"
           >
             <CircleX size={12} strokeWidth={2} style={{ color: STAGE_LOOK.descartado.color }} />Descartar
           </button>
@@ -524,7 +531,7 @@ function ProspeccionContent({ view }: { view: 'pipeline' | 'agent' }) {
               <span className="text-[10px] text-ink-40 tabular-nums">{g.list.length}</span>
               <span className="text-xs text-ink-40">{g.hint}</span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="columns-1 md:columns-2 xl:columns-3 2xl:columns-4 gap-3">
               {g.list.map(card)}
             </div>
           </section>
@@ -697,7 +704,8 @@ function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
             </section>
           )}
 
-          <section>
+          <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
             <span className={LABEL}>Mercado</span>
             <div className="flex gap-1.5">
               {REGIONS.map((x) => (
@@ -710,6 +718,17 @@ function ProspectSheet({ p, templates, onPatch, onDelete, onClose }: {
                 </button>
               ))}
             </div>
+          </div>
+          <label>
+            <span className={LABEL}>De dónde son</span>
+            <input
+              key={p.id}
+              className={INPUT}
+              defaultValue={p.location || ''}
+              placeholder="Donostia, Derio (Bizkaia), Austin…"
+              onBlur={(e) => { const v = e.target.value.trim(); if (v !== (p.location || '')) onPatch({ location: v || undefined }) }}
+            />
+          </label>
           </section>
 
           <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">

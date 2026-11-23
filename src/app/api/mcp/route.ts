@@ -404,6 +404,7 @@ const TOOLS = [
         etapa: { type: 'string', enum: ['agente', 'detectado', 'rediseno', 'enviado', 'conversacion', 'rechazado', 'ganado', 'descartado'], description: 'agente = Prospect agent (propuesto por Claude, pendiente de aceptar); enviado = sin respuesta aún; conversacion = Respondido: han contestado y seguimos hablando; rechazado = han contestado que no (de momento); descartado = lo descartamos nosotros' },
         mercado: { type: 'string', enum: ['es', 'us'], description: 'es = España (tono cálido); us = EE. UU. (tono directo)' },
         angulo: { type: 'string', description: 'Ángulo del rediseño de 15h: qué contaría visualmente la home nueva' },
+        ubicacion: { type: 'string', description: 'De dónde son: ciudad y, si ayuda, provincia o estado ("Donostia", "Derio, Bizkaia", "Austin, TX"). Rellénalo siempre al proponer una empresa; cadena vacía lo borra' },
         respuesta: { type: 'string', description: 'Qué respondieron (va aparte de los motivos, que son el porqué los elegimos); cadena vacía la borra. Si estaba en Enviado, pasa solo a Respondido (etapa conversacion)' },
         primero: { type: 'boolean', description: 'Subirlo al primer puesto de su etapa' },
         quitar_motivos: { type: 'array', items: { type: 'string' }, description: 'Motivos a eliminar (coincidencia parcial)' },
@@ -681,7 +682,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     if (!cid) return { text: 'No se pudo resolver la empresa.', isError: true }
     const ref = db().collection('prospects').doc(cid)
     const snap = await ref.get()
-    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[]; doubts?: boolean; doubtsNote?: string; doubtComments?: Array<{ id: string; by?: string; date: string; text: string }> }
+    type P = { id: string; name: string; url?: string; contact?: string; reasons: string[]; links?: string[]; stage: string; priority?: string; response?: string; notes?: string; angle?: string; region?: string; location?: string; date: string; by?: string; stageDate?: string; email?: string; proposalUrl?: string; hook?: string; sentDate?: string; touches?: ProspectTouch[]; doubts?: boolean; doubtsNote?: string; doubtComments?: Array<{ id: string; by?: string; date: string; text: string }> }
     const items: P[] = snap.exists ? ((snap.data()!.items as P[]) ?? []) : []
     const STG: Record<string, string> = { agente: 'Prospect agent', detectado: 'Elegidos', rediseno: 'Rediseñando', enviado: 'Enviado', conversacion: 'Respondido', rechazado: 'Rechazado', ganado: 'Ganado', descartado: 'Descartado' }
     if (name === 'ver_prospectos') {
@@ -692,7 +693,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
         if (!list.length) continue
         out.push(`## ${STG[k]}`)
         for (const x of list) {
-          out.push(`${list.indexOf(x) + 1}. ${x.name}${x.doubts ? ' (revisado, con dudas)' : ''}${x.region ? ` {${x.region === 'us' ? 'EE. UU.' : 'España'}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
+          out.push(`${list.indexOf(x) + 1}. ${x.name}${x.doubts ? ' (revisado, con dudas)' : ''}${x.region ? ` {${x.location ? `${x.location}, ` : ''}${x.region === 'us' ? 'EE. UU.' : 'España'}}` : x.location ? ` {${x.location}}` : ''}${x.url ? ` (${x.url})` : ''}${x.contact ? ` — ${x.contact}` : ''}`)
           for (const r of x.reasons) out.push(`    · ${r}`)
           if (x.angle) out.push(`    ángulo: ${x.angle}`)
           if (x.doubts) {
@@ -748,6 +749,7 @@ async function callTool(name: string, args: ToolArgs): Promise<{ text: string; i
     }
     if (args.notas !== undefined) p.notes = String(args.notas).trim()
     if (args.angulo !== undefined) p.angle = String(args.angulo).trim() || undefined
+    if (typeof args.ubicacion === 'string') p.location = args.ubicacion.trim() || undefined
     if (args.mercado === 'es' || args.mercado === 'us') p.region = String(args.mercado)
     if (args.respuesta !== undefined) p.response = String(args.respuesta).trim() || undefined
     // Si contestan, sale de Enviado: pasa a Respondido (salvo que se haya pedido otra etapa)
