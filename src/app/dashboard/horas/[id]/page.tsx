@@ -317,12 +317,13 @@ function HorasProjectContent() {
         Horas
       </Link>
 
-      <div className="flex items-center justify-between mb-2">
+      {/* Cabecera */}
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-3">
         <EditableTitle value={project.name} onSave={handleRename} />
         <div className="flex items-center gap-2">
           <button
             onClick={copyPublicLink}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm border border-line rounded-md hover:border-input transition-colors text-ink"
+            className="flex items-center gap-1.5 h-9 px-3.5 text-sm border border-line rounded-md hover:border-input transition-colors text-ink"
           >
             {copied ? <Check size={14} strokeWidth={2} /> : <Copy size={14} strokeWidth={1.5} />}
             {copied ? 'Copiado' : 'Copiar enlace'}
@@ -331,126 +332,127 @@ function HorasProjectContent() {
             href={`/h/${project.slug}`}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 px-4 py-2 text-sm border border-line rounded-md hover:border-input transition-colors text-ink"
+            className="flex items-center gap-1.5 h-9 px-3.5 text-sm border border-line rounded-md hover:border-input transition-colors text-ink"
           >
             <ExternalLink size={14} strokeWidth={1.5} />
             Vista cliente
           </a>
         </div>
       </div>
-      <div className="flex items-center gap-3 mb-10">
-        <span className="text-xs uppercase tracking-widest text-ink-40">Vista cliente</span>
-        <div className="flex items-center border border-line rounded-md overflow-hidden">
-          {(['es', 'en'] as const).map((lang) => {
-            const isActive = (project.language ?? 'es') === lang
-            return (
-              <button
-                key={lang}
-                onClick={() => handleSetLanguage(lang)}
-                className={`px-2.5 py-1 text-xs font-medium uppercase transition-colors ${
-                  isActive ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover'
-                }`}
-              >
-                {lang}
-              </button>
-            )
-          })}
-        </div>
+
+      {/* Ajustes en una línea: idioma, tarifa y subproyectos */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-8 text-xs text-ink-60">
+        <span className="flex items-center gap-2">
+          Idioma
+          <span className="flex items-center border border-line rounded-md overflow-hidden">
+            {(['es', 'en'] as const).map((lang) => {
+              const isActive = (project.language ?? 'es') === lang
+              return (
+                <button
+                  key={lang}
+                  onClick={() => handleSetLanguage(lang)}
+                  className={`px-2 h-6 text-[11px] font-medium uppercase transition-colors ${
+                    isActive ? 'bg-accent text-on-accent' : 'text-ink-60 hover:bg-surface-hover'
+                  }`}
+                >
+                  {lang}
+                </button>
+              )
+            })}
+          </span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          Tarifa
+          <input
+            className="w-16 h-6 px-1.5 border border-line rounded-md text-xs text-right text-ink focus:outline-none focus:border-accent transition-colors"
+            value={rateInput}
+            inputMode="decimal"
+            onChange={(e) => setRateInput(e.target.value)}
+            onBlur={handleRateBlur}
+            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            placeholder="0"
+          />
+          €/h
+        </span>
+        <SubprojectsEditor value={subs} onChange={saveSubprojects} />
       </div>
 
-      <SubprojectsEditor value={subs} onChange={saveSubprojects} />
-
-      {/* New entry: fecha + persona + (subproyecto) + concepto + horas */}
-      <div className={`grid grid-cols-2 ${subs.length ? 'sm:grid-cols-[10rem_11rem_10rem_1fr_6rem_auto]' : 'sm:grid-cols-[10rem_11rem_1fr_6rem_auto]'} gap-3 items-end mb-10`}>
-        <div>
-          <label className={FIELD_LABEL}>Fecha</label>
-          <DatePicker value={date} onChange={setDate} />
+      {/* Apuntar horas: una barra compacta */}
+      <div className="flex flex-wrap sm:flex-nowrap items-stretch rounded-lg border border-input bg-paper mb-10 focus-within:border-accent focus-within:ring-[3px] focus-within:ring-black/[0.06] transition-colors">
+        <div className="w-32 shrink-0 border-r border-line" title="Fecha">
+          <DatePicker value={date} onChange={setDate} className="h-11 flex items-center pl-3.5 pr-9 text-sm" />
         </div>
-        <div>
-          <label className={FIELD_LABEL}>Persona</label>
-          <Select value={person} onChange={(e) => setPerson(e.target.value)} className={INPUT}>
+        <div className="w-40 shrink-0 border-r border-line">
+          <Select value={person} onChange={(e) => setPerson(e.target.value)} aria-label="Persona" className="w-full h-11 px-3.5 text-sm text-ink">
             {PEOPLE.map((p) => <option key={p} value={p}>{p}</option>)}
           </Select>
         </div>
         {subs.length > 0 && (
-          <div>
-            <label className={FIELD_LABEL}>Subproyecto</label>
-            <Select value={sub || subs[0]} onChange={(e) => setSub(e.target.value)} className={INPUT}>
+          <div className="w-36 shrink-0 border-r border-line">
+            <Select value={sub || subs[0]} onChange={(e) => setSub(e.target.value)} aria-label="Subproyecto" className="w-full h-11 px-3.5 text-sm text-ink font-medium">
               {subs.map((s2) => <option key={s2} value={s2}>{s2}</option>)}
             </Select>
           </div>
         )}
-        <div className="col-span-2 sm:col-span-1">
-          <label className={FIELD_LABEL}>Concepto</label>
-          <input
-            className={INPUT} value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
-            placeholder="Diseño de la home"
-          />
+        <input
+          className="flex-1 min-w-[12rem] h-11 px-3.5 bg-transparent text-sm text-ink placeholder-ink-40 focus:outline-none"
+          value={description}
+          aria-label="Concepto"
+          onChange={(e) => setDescription(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+          placeholder="Qué se ha hecho"
+        />
+        <input
+          className="w-20 shrink-0 h-11 px-3 border-l border-line bg-transparent text-sm text-right text-ink placeholder-ink-40 focus:outline-none"
+          value={hours}
+          aria-label="Horas"
+          inputMode="decimal"
+          onChange={(e) => setHours(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
+          placeholder="0 h"
+        />
+        <div className="p-1 shrink-0">
+          <button
+            onClick={handleAddEntry}
+            disabled={savingEntry || !parseFloat(hours.replace(',', '.'))}
+            className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Plus size={14} strokeWidth={2} />
+            Añadir
+          </button>
         </div>
-        <div>
-          <label className={FIELD_LABEL}>Horas</label>
-          <input
-            className={INPUT} value={hours} inputMode="decimal"
-            onChange={(e) => setHours(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAddEntry()}
-            placeholder="2,5"
-          />
-        </div>
-        <button
-          onClick={handleAddEntry}
-          disabled={savingEntry || !parseFloat(hours.replace(',', '.'))}
-          className="flex items-center gap-1.5 px-4 py-3 text-sm font-medium bg-accent text-on-accent rounded-md hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Plus size={14} strokeWidth={2} />
-          Añadir
-        </button>
       </div>
 
-      {subs.length > 0 && entries.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 mb-5">
-          {[['', 'Todos', entries.reduce((t, e) => t + (e.hours || 0), 0)] as const,
-            ...subs.map((s2) => [s2, s2, subTotals.get(s2) || 0] as const),
-            ...(subTotals.get('__none') ? [['__none', 'Sin asignar', subTotals.get('__none') || 0] as const] : []),
-          ].map(([key, label, h]) => (
-            <button
-              key={key || 'all'}
-              onClick={() => setSubFilter(key)}
-              className={`flex items-center gap-2 h-8 px-3 rounded-md border text-sm transition-colors ${
-                subFilter === key ? 'border-accent bg-accent text-on-accent' : 'border-line text-ink-60 hover:border-input hover:text-ink'
-              }`}
-            >
-              {label}
-              <span className={`text-xs tabular-nums ${subFilter === key ? 'opacity-70' : 'text-ink-40'}`}>{formatHours(h)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Totals + rate */}
-      <div className="flex items-center gap-6 mb-6">
-        <p className={SECTION_LABEL}>Registro</p>
-        <div className="ml-auto flex items-center gap-4 text-sm text-ink-60">
-          <span className="flex items-center gap-1.5">
-            Tarifa
-            <input
-              className="w-20 px-2 py-1 border border-input rounded-md text-sm text-right text-ink focus:outline-none focus:border-accent transition-colors"
-              value={rateInput}
-              inputMode="decimal"
-              onChange={(e) => setRateInput(e.target.value)}
-              onBlur={handleRateBlur}
-              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-              placeholder="—"
-            />
-            €/h
-          </span>
-          {totals.byPerson.length > 1 && totals.byPerson.map(([name, h]) => (
-            <span key={name}>{name}: <span className="text-ink font-medium">{formatHours(h)}</span></span>
-          ))}
-          <span className="text-ink font-medium">Total: {formatHours(totals.total)}</span>
+      {/* Resumen: filtros por subproyecto a la izquierda, total a la derecha */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
+        {subs.length > 0 && entries.length > 0 ? (
+          <div className="inline-flex flex-wrap rounded-md border border-line bg-paper p-0.5 text-[13px]">
+            {[['', 'Todos', entries.reduce((t, e) => t + (e.hours || 0), 0)] as const,
+              ...subs.map((s2) => [s2, s2, subTotals.get(s2) || 0] as const),
+              ...(subTotals.get('__none') ? [['__none', 'Sin asignar', subTotals.get('__none') || 0] as const] : []),
+            ].map(([key, label, h]) => (
+              <button
+                key={key || 'all'}
+                onClick={() => setSubFilter(key)}
+                className={`flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] transition-colors ${
+                  subFilter === key ? 'bg-surface text-ink font-medium' : 'text-ink-60 hover:text-ink'
+                } ${key === '__none' && subFilter !== key ? 'text-[#B45309]' : ''}`}
+              >
+                {label}
+                <span className="text-[11px] tabular-nums text-ink-40 font-normal">{formatHours(h)}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className={SECTION_LABEL}>Registro</p>
+        )}
+        <div
+          className="flex items-baseline gap-3"
+          title={totals.byPerson.map(([n, h]) => `${n}: ${formatHours(h)}`).join('\n')}
+        >
+          <span className="text-xl font-medium tracking-tight text-ink tabular-nums">{formatHours(totals.total)}</span>
           {project.hourlyRate ? (
-            <span className="text-ink font-medium">{formatMoney(totals.total * project.hourlyRate)}</span>
+            <span className="text-sm text-ink-60 tabular-nums">{formatMoney(totals.total * project.hourlyRate)}</span>
           ) : null}
         </div>
       </div>
@@ -654,10 +656,10 @@ function SubprojectsEditor({ value, onChange }: { value: string[]; onChange: (ne
     setAdding(false)
   }
   return (
-    <div className="flex flex-wrap items-center gap-2 -mt-6 mb-10">
-      <span className="text-xs uppercase tracking-widest text-ink-40 mr-1">Subproyectos</span>
+    <span className="flex flex-wrap items-center gap-1.5">
+      <span className="mr-0.5">Subproyectos</span>
       {value.map((s) => (
-        <span key={s} className="group inline-flex items-center gap-1 h-7 pl-2.5 pr-1.5 rounded-md border border-line text-xs text-ink">
+        <span key={s} className="group inline-flex items-center gap-0.5 h-6 pl-2 pr-1 rounded-md border border-line text-xs text-ink">
           {s}
           <button
             onClick={() => { if (confirm(`¿Quitar el subproyecto ${s}? Sus horas se quedan, sin asignar.`)) onChange(value.filter((x) => x !== s)) }}
@@ -676,13 +678,13 @@ function SubprojectsEditor({ value, onChange }: { value: string[]; onChange: (ne
           onBlur={add}
           onKeyDown={(e) => { if (e.key === 'Enter') add(); if (e.key === 'Escape') { setDraft(''); setAdding(false) } }}
           placeholder="Wisable"
-          className="h-7 w-32 px-2.5 rounded-md border border-input text-xs text-ink focus:outline-none focus:border-accent"
+          className="h-6 w-28 px-2 rounded-md border border-input text-xs text-ink focus:outline-none focus:border-accent"
         />
       ) : (
-        <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs text-ink-40 hover:text-ink hover:bg-surface-hover">
+        <button onClick={() => setAdding(true)} className="inline-flex items-center gap-1 h-6 px-1.5 rounded-md text-xs text-ink-40 hover:text-ink hover:bg-surface-hover">
           <Plus size={12} strokeWidth={2} />{value.length ? 'Añadir' : 'Separar en subproyectos'}
         </button>
       )}
-    </div>
+    </span>
   )
 }
