@@ -241,13 +241,11 @@ function HorasContent() {
                 <th className="px-4 py-3 font-medium text-right">Tarifa</th>
                 <th className="pl-8 pr-4 py-3 font-medium text-right">Este mes</th>
                 <th className="px-4 py-3 font-medium text-right">Importe mes</th>
-                <th className="pl-12 pr-4 py-3 font-medium text-right">Total</th>
-                <th className="px-4 py-3 font-medium text-right">Importe total</th>
                 <th className="px-2 py-3 w-8" />
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ project: p, total, month }, i) => (
+              {rows.map(({ project: p, month }, i) => (
                 <tr
                   key={p.id}
                   onClick={() => router.push(`/dashboard/horas/${p.id}`)}
@@ -263,10 +261,6 @@ function HorasContent() {
                   </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap font-medium">
                     {month > 0 && p.hourlyRate ? formatMoney(month * p.hourlyRate) : <span className="text-ink-40 font-normal">—</span>}
-                  </td>
-                  <td className="pl-12 pr-4 py-3 text-right whitespace-nowrap text-ink-60">{formatHours(total)}</td>
-                  <td className="px-4 py-3 text-right whitespace-nowrap text-ink-60">
-                    {p.hourlyRate ? formatMoney(total * p.hourlyRate) : '—'}
                   </td>
                   <td className="px-2 py-3 text-ink-40"><ChevronRight size={14} strokeWidth={1.5} /></td>
                 </tr>
